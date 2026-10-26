@@ -11,6 +11,51 @@ export function formatCue(value) {
   return `${String(Math.floor(ms / 60000)).padStart(2,'0')}:${String(Math.floor(ms % 60000 / 1000)).padStart(2,'0')}.${String(ms % 1000).padStart(3,'0')}`;
 }
 export const wordsFor = text => (text.match(/\S+\s*/gu) || []).map(text => ({text, time:null, end:null}));
+/** Start-inclusive, next-start-exclusive intervals on the full recording clock.
+ * Missing/invalid starts are never inferred. Last source row wins equal starts.
+ * Word ends and stanza spacing do not shorten a phrase. Unknown duration holds
+ * the final phrase until the actual clock/recording becomes unavailable.
+ */
+export function activeLyricIndex(lines,time,{duration=null}={}) {
+  if(!isTime(time)||(isTime(duration)&&duration>0&&time>=duration))return -1;
+  let active=-1,start=-1;
+  for(let index=0;index<(lines?.length||0);index++){
+    const cue=lines[index].time;
+    if(isTime(cue)&&cue<=time&&cue>=start){active=index;start=cue;}
+  }
+  return active;
+}
+/** Display/rehearsal end is the next strictly later start, bounded by the
+ * recording duration when known. An unknown final end remains null.
+ */
+export function lyricInterval(lines,index,duration=null) {
+  const start=lines?.[index]?.time;if(!isTime(start))return null;
+  let end=isTime(duration)&&duration>0?duration:null;
+  for(const line of lines)if(isTime(line.time)&&line.time>start&&(end===null||line.time<end))end=line.time;
+  return {start,end};
+}
+/** Preserve unchanged rows through text edits, splits, merges and deletions.
+ * Prefix/suffix anchors keep repeated choruses attached to their occurrence.
+ * The bounded middle uses a stable longest common subsequence; changed rows
+ * require retiming, while neighbors retain their existing line and word cues.
+ */
+export function reconcileLyricLines(previous,next) {
+  const result=next.map(line=>({...line}));
+  const keep=(oldIndex,newIndex)=>{result[newIndex]={...previous[oldIndex],gapBefore:next[newIndex].gapBefore};};
+  let first=0,oldEnd=previous.length,newEnd=next.length;
+  while(first<oldEnd&&first<newEnd&&previous[first].text===next[first].text){keep(first,first);first++;}
+  while(oldEnd>first&&newEnd>first&&previous[oldEnd-1].text===next[newEnd-1].text){keep(--oldEnd,--newEnd);}
+  const height=oldEnd-first,width=newEnd-first;
+  if(height>2000||width>2000)return result;
+  const table=Array.from({length:height+1},()=>new Uint16Array(width+1));
+  for(let i=height-1;i>=0;i--)for(let j=width-1;j>=0;j--){table[i][j]=previous[first+i].text===next[first+j].text?table[i+1][j+1]+1:Math.max(table[i+1][j],table[i][j+1]);}
+  let i=0,j=0;
+  while(i<height&&j<width){
+    if(previous[first+i].text===next[first+j].text){keep(first+i++,first+j++);}
+    else if(table[i+1][j]>=table[i][j+1])i++;else j++;
+  }
+  return result;
+}
 export function decodeLyrics(value = '') {
   const source = typeof value === 'string' ? value : '';
   if (source.length > MAX_LYRIC_LENGTH) return {lines:[],error:'Lyrics exceed the supported size.'};
@@ -53,7 +98,7 @@ export function timingErrors(model,{requireReference=false,duration=model.durati
   if(model.error)errors.push(model.error);
   if(!model.lines.length)errors.push('Add at least one lyric line.');
   if(model.lines.length>2000)errors.push('At most 2000 lyric lines are supported.');
-  if(requireReference && !/^[a-f0-9]{64}$/.test(model.reference||''))errors.push('Load the recording reference before applying timing.');
+  if(requireReference && !/^[a-f0-9]{64}$/.test(model.reference||''))errors.push('Wait for this recording to be ready before applying timing.');
   if(!isTime(duration)||duration<=0)errors.push('Load a valid recording duration.');
   model.lines.forEach((line,i)=>{
     if(typeof line.text!=='string'||!line.text.trim())errors.push(`Line ${i+1} needs text.`);

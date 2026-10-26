@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useCallback, useState, memo } from "react";
-import TimedLyricWords from "@/components/lyrics/TimedLyricWords";
+import { useMemo, useCallback, memo } from "react";
+import LyricTranscript from "@/components/lyrics/LyricTranscript";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { parseLrc, getActiveLrcIndex } from "@/lib/lrc";
-import {decodeLyrics,plainLyrics} from "@/lib/lyrics/timing";
+import {decodeLyrics,plainLyrics,activeLyricIndex,isTime} from "@/lib/lyrics/timing";
 
 const ExpandIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -105,25 +104,19 @@ function shareLyricCard({ lineText, albumTitle, artist, accentColor = "#9b5de5" 
 function GlyphLyricsPanel({
   open, lrcText, onClose, onSeek, isMobile = false, status = "ready", onRetry,
   fullscreen = false, onFullscreenChange,
-  albumTitle, artist, accentColor, playbackTime = null, syncStatus = "legacy",
+  albumTitle, artist, accentColor, playbackTime = null, syncStatus = "legacy", recordingKey,
 }) {
   const currentTime = playbackTime;
-  const canSeek = typeof onSeek === "function" && Number.isFinite(currentTime);
+  const canSeek = typeof onSeek === "function" && isTime(currentTime);
   const reducedMotion = useReducedMotion();
-  const [follow, setFollow] = useState(true);
-  const lines = useMemo(() => parseLrc((decodeLyrics(lrcText).draft || (decodeLyrics(lrcText).reference && syncStatus !== 'verified')) ? plainLyrics(lrcText) : lrcText), [lrcText, syncStatus]);
-  const activeIndex = open ? getActiveLrcIndex(lines, currentTime) : -1;
-  const scrollRef = useRef(null);
-  const lineRefs = useRef([]);
-
-  useEffect(() => {
-    if (!open || !follow || activeIndex < 0) return;
-    const el = lineRefs.current[activeIndex];
-    const container = scrollRef.current;
-    if (!el || !container) return;
-    const top = el.offsetTop - container.clientHeight * 0.38;
-    container.scrollTo({ top: Math.max(0, top), behavior: reducedMotion ? "auto" : "smooth" });
-  }, [activeIndex, open, follow, reducedMotion]);
+  const model = useMemo(() => {
+    const decoded = decodeLyrics(lrcText);
+    return decoded.draft || decoded.error || (decoded.reference && syncStatus !== 'verified')
+      ? decodeLyrics(plainLyrics(lrcText)) : decoded;
+  }, [lrcText, syncStatus]);
+  const lines = model.lines;
+  const synchronized = lines.some(line => Number.isFinite(line.time) && line.time >= 0);
+  const activeIndex = open ? activeLyricIndex(lines, currentTime, {duration:model.duration}) : -1;
 
   const handleShareLyric = useCallback(() => {
     const activeLine = lines[activeIndex];
@@ -140,10 +133,10 @@ function GlyphLyricsPanel({
       {open ? (
         <motion.div
           key={fullscreen ? "glyphs-full" : "glyphs"}
-          initial={{ opacity: 0, y: fullscreen ? 0 : 24 }}
+          initial={{ opacity: 0, y: fullscreen || reducedMotion ? 0 : 24 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: fullscreen ? 0 : 16 }}
-          transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+          exit={{ opacity: 0, y: fullscreen || reducedMotion ? 0 : 16 }}
+          transition={{ duration: reducedMotion ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }}
           role="region"
           aria-label="Lyrics"
           data-artwork-gesture-ignore
@@ -165,7 +158,7 @@ function GlyphLyricsPanel({
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              padding: isMobile ? "10px 12px 8px" : "14px 18px 8px",
+              padding: fullscreen ? "max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left))" : isMobile ? "10px 12px 8px" : "14px 18px 8px",
               flexShrink: 0,
               gap: 10,
             }}
@@ -183,6 +176,7 @@ function GlyphLyricsPanel({
                 fontWeight: 700,
                 letterSpacing: isMobile ? 1.5 : 2,
                 padding: isMobile ? "8px 14px" : "6px 12px",
+                minHeight: 44,
                 cursor: "pointer",
                 textTransform: "uppercase",
                 flexShrink: 0,
@@ -202,7 +196,7 @@ function GlyphLyricsPanel({
                   type="button"
                   aria-label="Share lyric card"
                   onClick={handleShareLyric}
-                  style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "50%", width: isMobile ? 34 : 32, height: isMobile ? 34 : 32, color: "rgba(255,255,255,0.7)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "50%", width: 44, height: 44, color: "rgba(255,255,255,0.7)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
                   <ShareIcon />
                 </button>
@@ -212,7 +206,7 @@ function GlyphLyricsPanel({
                   type="button"
                   aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen lyrics"}
                   onClick={() => onFullscreenChange(!fullscreen)}
-                  style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "50%", width: isMobile ? 34 : 32, height: isMobile ? 34 : 32, color: "rgba(255,255,255,0.7)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "50%", width: 44, height: 44, color: "rgba(255,255,255,0.7)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
                   {fullscreen ? <CollapseIcon /> : <ExpandIcon />}
                 </button>
@@ -221,14 +215,15 @@ function GlyphLyricsPanel({
                 type="button"
                 aria-label="Close glyphs"
                 onClick={onClose}
-                style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "50%", width: isMobile ? 34 : 32, height: isMobile ? 34 : 32, color: "rgba(255,255,255,0.85)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                style={{ background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "50%", width: 44, height: 44, color: "rgba(255,255,255,0.85)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
                 ✕
               </button>
             </div>
           </div>
 
-          {!follow && activeIndex >= 0 ? <button type="button" onClick={() => setFollow(true)}>Back to current lyric</button> : null}
+          {lines.length && !synchronized ? <p role="status" style={{margin:"0 20px 8px",fontSize:12,color:"#b8bbc6"}}>Lyrics · not synchronized yet</p> : null}
+          {synchronized && !isTime(currentTime) ? <p role="status" style={{margin:"0 20px 8px",fontSize:12,color:"#b8bbc6"}}>Playback position unavailable for this recording.</p> : null}
           {['audio_changed','unavailable','invalid'].includes(syncStatus) ? <p role="status">{syncStatus === 'audio_changed' ? 'The recording changed; lyric timing needs review.' : 'Timing could not be verified. Showing lyric text.'}</p> : null}
           {!lines.length && status === "loading" ? <p role="status">Loading lyrics…</p> : null}
           {!lines.length && status === "error" ? <p role="alert">Lyrics could not be loaded. {onRetry ? <button type="button" onClick={onRetry}>Retry</button> : null}</p> : null}
@@ -239,53 +234,10 @@ function GlyphLyricsPanel({
             </div>
           ) : null}
 
-          <div
-            ref={scrollRef}
-            onWheel={() => setFollow(false)} onTouchMove={() => setFollow(false)}
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-              padding: fullscreen ? "24px max(24px, env(safe-area-inset-left)) 48px" : "18px 24px 32px",
-              WebkitOverflowScrolling: "touch",
-              maskImage: "linear-gradient(to bottom, #000 0%, #000 92%, transparent 100%)",
-            }}
-          >
-            {lines.length ? (
-              lines.map((line, i) => {
-                const active = i === activeIndex;
-                return (
-                  <p
-                    key={`${line.time}-${i}`}
-                    ref={(el) => { lineRefs.current[i] = el; }}
-                    data-lyric-line
-                    aria-current={active ? "true" : undefined}
-                    role={canSeek && line.time != null ? "button" : undefined}
-                    tabIndex={canSeek && line.time != null ? 0 : undefined}
-                    onKeyDown={e => { if (canSeek && line.time != null && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSeek(line.time); } }}
-                    onClick={() => canSeek && line.time != null && onSeek(line.time)}
-                    style={{
-                      margin: "0 0 22px",
-                      fontSize: fullscreen ? "clamp(28px, 4vw, 44px)" : "clamp(22px, 3.4vw, 30px)",
-                      lineHeight: 1.45,
-                      textAlign: "left",
-                      color: line.time == null || active ? "#fff" : i < activeIndex ? "rgba(255,255,255,0.52)" : "rgba(255,255,255,0.72)",
-                      textShadow: "0 2px 12px rgba(0,0,0,0.8)",
-                      transition: "color 0.2s ease",
-                      fontWeight: 800,
-                      cursor: canSeek && line.time != null ? "pointer" : "default",
-                    }}
-                  >
-                    {line.words?.length ? <TimedLyricWords words={line.words} currentTime={currentTime} /> : line.text}
-                  </p>
-                );
-              })
-            ) : status === "ready" ? (
-              <p style={{ textAlign: "center", color: "rgba(255,255,255,0.45)", fontSize: 13, lineHeight: 1.7, marginTop: "28%", letterSpacing: 0.3, fontStyle: "italic" }}>
-                No lyrics have been added yet.
-              </p>
-            ) : null}
-          </div>
+          {lines.length ? <LyricTranscript key={recordingKey || lrcText} lines={lines} activeIndex={activeIndex}
+            onSeek={canSeek ? onSeek : undefined} reducedMotion={!!reducedMotion} fullscreen={fullscreen}/>
+            : status === "ready" ? <p style={{textAlign:"center",color:"#b8bbc6",fontSize:13,lineHeight:1.7,marginTop:"28%"}}>No lyrics have been added yet.</p> : null}
+
         </motion.div>
       ) : null}
     </AnimatePresence>

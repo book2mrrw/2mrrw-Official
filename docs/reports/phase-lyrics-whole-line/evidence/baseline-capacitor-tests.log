@@ -1,0 +1,13 @@
+
+> tomorrow-mobile@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.5 /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/tomorrow-mobile
+
+
+ Test Files  6 passed (6)
+      Tests  54 passed (54)
+   Start at  15:16:24
+   Duration  271ms (tests 61%, import 21%, transform 13%, worker 5%)
+

@@ -497,6 +497,11 @@ function ReleaseListView({ onDeleted, deletionNotice, releases, loading, error, 
 // ── Release Editor Panel ─────────────────────────────────────────────────────────
 export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const { currentUser } = useAuth();
+  return <ReleaseEditorBody key={`${currentUser?.id || ""}:${relStub?.id || ""}`} release={relStub} onBack={onBack} onSaved={onSaved} />;
+}
+
+function ReleaseEditorBody({ release: relStub, onBack, onSaved }) {
+  const { currentUser } = useAuth();
   const [detail,     setDetail]     = useState(null);
   const [loading,    setLoading]    = useState(true);
   const [loadError,  setLoadError]  = useState(null);
@@ -524,6 +529,18 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   // Lyrics (keyed by track id)
   const [trackLyrics, setTrackLyrics] = useState({});
   const [lyricRecordingId, setLyricRecordingId] = useState(null);
+  const [lyricDraftSafety, setLyricDraftSafety] = useState({});
+
+  const unsavedLyrics = !!detail && (detail.lyric_recordings || detail.tracks || []).some(track => (trackLyrics[track.id] ?? "") !== (track.lyrics || "") && lyricDraftSafety[track.id] !== trackLyrics[track.id]);
+  useEffect(() => {
+    if (!unsavedLyrics) return;
+    const warn = event => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsavedLyrics]);
+  const leaveLyrics = () => {
+    if (!unsavedLyrics || window.confirm("Leave without saving lyric edits? Your changes in this release will be discarded.")) onBack();
+  };
 
   // Static cover upload state — seeded "done" when the release already has a
   // cover, so reopening never implies a re-upload is required.
@@ -663,7 +680,9 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       });
       const json = await res.json();
       if (!res.ok || json.ok === false) throw new Error(json.error || json.errors?.[0] || "Save failed");
-      setDetail(previous => ({ ...previous, revision: json.revision || previous.revision }));
+      setDetail(previous => ({ ...previous, revision: json.revision || previous.revision,
+        lyric_recordings: (previous.lyric_recordings || previous.tracks).map(track => ({ ...track, lyrics: trackLyrics[track.id] ?? track.lyrics ?? "" })),
+      }));
       signalCatalogMutation("release_lyrics_updated");
       showMsg("Lyrics saved");
     } catch (err) {
@@ -925,7 +944,7 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     <div style={{ padding: "28px 0 80px", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
       {/* Header with inline cover art thumbnail */}
       <div style={{ marginBottom: 22 }}>
-        <button onClick={onBack} style={backBtnStyle}>← My Releases</button>
+        <button onClick={leaveLyrics} style={backBtnStyle}>← My Releases</button>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 10, flexWrap: "wrap" }}>
           <div style={{
             width: 60, height: 60, borderRadius: 10, overflow: "hidden", flexShrink: 0,
@@ -1258,7 +1277,8 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
             {lyricTrack ? <LyricTimingEditor
               key={lyricTrack.id} value={trackLyrics[lyricTrack.id] || ""}
               onChange={lyrics => setTrackLyrics(previous => ({ ...previous, [lyricTrack.id]: lyrics }))}
-              releaseId={detail.release.id} recordingId={lyricTrack.id} title={lyricTrack.title || "Recording"} disabled={saving} coverUrl={coverPreview}
+              releaseId={detail.release.id} recordingId={lyricTrack.id} title={lyricTrack.title || "Recording"} disabled={saving} coverUrl={coverPreview} savedValue={lyricTrack.lyrics || ""} draftOwnerId={currentUser?.id}
+              onDraftState={state => setLyricDraftSafety(previous => ({ ...previous, [lyricTrack.id]: state.cachedLyrics }))}
             /> : null}
 
             {(detail.lyric_recordings || detail.tracks).length > 0 && (

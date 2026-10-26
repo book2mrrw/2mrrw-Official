@@ -1302,7 +1302,7 @@ function TrackDetailsStep({ data, tracks, setTracks, onNext, onBack }) {
 }
 
 // ── Step 4/5: Artwork + Lyrics ───────────────────────────────────────────────────
-export function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlug, isMultiTrack, tracks, setTracks }) {
+export function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlug, isMultiTrack, tracks, setTracks, onSaveDraft, draftState }) {
   const [coverState, setCoverState] = useState({ status: data.cover_key ? "ready" : "idle", error: null });
   const [videoState, setVideoState] = useState({ status: data.cover_video_key ? "ready" : "idle", error: null });
   const [openLyricsId, setOpenLyricsId] = useState(null);
@@ -1530,7 +1530,7 @@ export function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, d
               {openLyricsId === track.tempId && (
                 <div id={`lyrics-${track.tempId}`} style={{ padding: "0 14px 14px", borderTop: `1px solid ${C.border}` }}>
                   <div style={{ height: 10 }} />
-                  <LyricTimingEditor value={track.lyrics || ""} onChange={lyrics => updateTrackLyrics(track.tempId, lyrics)} releaseId={releaseId} recordingId={track.track_id || track.id} title={track.title || `Track ${track.position}`} coverUrl={data.cover_preview_url || null} saveContext="upload" />
+                  <LyricTimingEditor value={track.lyrics || ""} onChange={lyrics => updateTrackLyrics(track.tempId, lyrics)} releaseId={releaseId} recordingId={track.track_id || track.id} title={track.title || `Track ${track.position}`} coverUrl={data.cover_preview_url || null} saveContext="upload" onSaveDraft={onSaveDraft} draftState={draftState} />
                 </div>
               )}
             </div>
@@ -1538,7 +1538,7 @@ export function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, d
         </div>
       ) : (
         <Field label="Lyrics" hint="Optional — preserves line breaks and verse structure.">
-          <LyricTimingEditor value={data.lyrics || ""} onChange={lyrics => onChange("lyrics", lyrics)} releaseId={releaseId} recordingId={data.track_id} title={data.title || "Recording"} coverUrl={data.cover_preview_url || null} saveContext="upload" />
+          <LyricTimingEditor value={data.lyrics || ""} onChange={lyrics => onChange("lyrics", lyrics)} releaseId={releaseId} recordingId={data.track_id} title={data.title || "Recording"} coverUrl={data.cover_preview_url || null} saveContext="upload" onSaveDraft={onSaveDraft} draftState={draftState} />
         </Field>
       )}
 
@@ -2084,7 +2084,7 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, c
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const stepName    = STEPS[step];
-  const commonProps = { data, onChange: setField, onNext: next, onBack: back, releaseId, draftSlug, contentKind, onPreparePublish: preparePublish, onPublishSettled: settlePublish };
+  const commonProps = { data, onChange: setField, onNext: next, onBack: back, releaseId, draftSlug, contentKind, onPreparePublish: preparePublish, onPublishSettled: settlePublish, onSaveDraft: flushPendingDraftSave, draftState: draftSaveState };
 
   return (
     <div style={{ maxWidth: 700, margin: "0 auto", padding: "32px 20px 60px", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>

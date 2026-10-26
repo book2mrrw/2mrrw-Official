@@ -1,0 +1,17 @@
+▲ Next.js 16.2.4
+- Local:         http://127.0.0.1:3118
+- Network:       http://127.0.0.1:3118
+✓ Ready in 108ms
+[@sentry/nextjs] DEPRECATION WARNING: disableLogger is deprecated and will be removed in a future version. Use webpack.treeshake.removeDebugLogging instead.
+[@sentry/nextjs] DEPRECATION WARNING: automaticVercelMonitors is deprecated and will be removed in a future version. Use webpack.automaticVercelMonitors instead.
+(node:44837) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/static-asset-manifest.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+⚠ Unsupported metadata themeColor is configured in metadata export in /admin/upload. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /admin/upload. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+{"schema":"2mrrw.server-event.v1","event":"admin_authority_denied","severity":"info","timestamp":"2026-10-26T00:09:16.714Z","service":"web","code":"ADMIN_AUTH_NO_SESSION","actorId":null}
+{"schema":"2mrrw.server-event.v1","event":"admin_authority_denied","severity":"info","timestamp":"2026-10-26T00:09:16.721Z","service":"web","code":"ADMIN_AUTH_NO_SESSION","actorId":null}
+{"schema":"2mrrw.server-event.v1","event":"admin_authority_denied","severity":"info","timestamp":"2026-10-26T00:09:16.727Z","service":"web","code":"ADMIN_AUTH_NO_SESSION","actorId":null}

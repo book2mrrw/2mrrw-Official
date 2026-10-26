@@ -20,5 +20,6 @@ await db.exec(await fs.readFile('supabase/migrations/20261021010000_release_cred
 await db.exec(await fs.readFile('supabase/migrations/20261021020000_atomic_credit_publication.sql','utf8'));
 
 await db.exec(await fs.readFile('supabase/migrations/20261022010000_atomic_lyric_timing_edits.sql','utf8'));
+await db.exec(await fs.readFile('supabase/migrations/20261024010000_private_lyric_working_drafts.sql','utf8'));
 return db;
 }

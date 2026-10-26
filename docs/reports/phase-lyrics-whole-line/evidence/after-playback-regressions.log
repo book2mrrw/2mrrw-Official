@@ -1,0 +1,912 @@
+
+> artist-platform@0.1.0 test:listening-continuity
+> node --no-experimental-webstorage --experimental-test-module-mocks --import ./scripts/register-alias.mjs --test src/lib/playback/__tests__/*.test.js
+
+✔ the pre-hydration empty state is not a session (0.962167ms)
+✔ play time lifts a stale preview stamp for an owner onto the full stream of the right track (0.562625ms)
+✔ play time respects a deliberate release-lifecycle lock (owned preorder before release day) (0.071709ms)
+✔ play time does nothing before the session hydrates (0.049875ms)
+✔ play time never downgrades — revocation is Effect 5's job, not a play intent's (0.078792ms)
+✔ entitlement sync (Effect 5) still downgrades a lapsed track back to its preview (0.073875ms)
+✔ an entitled track that was built without a src gets the full stream (0.081583ms)
+✔ an unchanged track is returned by identity (no new objects, no re-render churn) (0.06125ms)
+✔ a release requested without a track resolves to its first track (0.654709ms)
+(node:31997) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/access-reconciliation.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:01.250Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[stream-client] library stream 403 for slug=album
+[2mrrw:signed_url_expired] {
+  event: 'signed_url_expired',
+  ts: 0,
+  domain: 'telemetry',
+  type: 'signed.url.expired',
+  assetId: 'album',
+  context: 'library_stream',
+  status: 403
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[2MRRW Storefront] NEXT_PUBLIC_CONTROL_SYSTEM_API_URL is not set — release catalog will fall back to hardcoded data only.
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'album',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+✔ album error recovery retains song three, position, queue and authenticated request (15.748375ms)
+✔ album retry rejects a wrong-track response before applying it (0.690834ms)
+✔ album retry rejects a missing-track response before applying it (0.45375ms)
+✔ album retry rejects a wrong-release response before applying it (0.495166ms)
+✔ album retry rejects a opaque response before applying it (0.434875ms)
+✔ repeated resolution failures stop at three requests, including repeated error events (0.955833ms)
+✔ server entitlement denial remains terminal and never calls play (56.937334ms)
+✔ a late album response cannot replace different-song-same-album (0.806625ms)
+✔ a late album response cannot replace same-song-new-request (0.497542ms)
+✔ a late album response cannot replace pause (0.494291ms)
+✔ a rejected next-track handoff stays on the ended occurrence with an explicit retry state (1.3505ms)
+✔ missing album recording identity cannot silently request track one (0.597084ms)
+✔ an unresponsive resolver is aborted and stops at the same three-request bound (58.579083ms)
+✔ a first play with no prior selection resolves its exact recording (3.260042ms)
+✔ hard source recovery keeps the failed recording and its saved position (1.02725ms)
+✔ hard recovery cannot overlap a pending recording retry (0.428833ms)
+(node:32000) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/album-recovery.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2MRRW Storefront] NEXT_PUBLIC_R2_PUBLIC_URL is not set — using documented public CDN fallback for catalog media.
+✔ a track from a motion-cover release keeps coverArtType video (3.236792ms)
+✔ cover and baseCover stay distinct, so the player can show animated art (0.246875ms)
+✔ the static layer never receives a video URL (0.268875ms)
+✔ pressing play on the release card carries the same identity (0.17075ms)
+✔ a string track title inherits the identity too (0.273541ms)
+✔ a static-cover release is unaffected and never claims to be animated (0.20075ms)
+✔ the release's art wins over a track's own when played from its track list (0.243708ms)
+✔ an album track that is also a single uses the ALBUM's cover, not the single's (0.188458ms)
+✔ same track as a bare title string also uses the album's cover (0.18525ms)
+✔ every track in a release resolves the same cover identity (0.417708ms)
+(node:32002) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/album-track-cover-identity.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Core bounds false across convergence passes and permits a new intent (4.032292ms)
+✔ Core bounds reject across convergence passes and permits a new intent (1.191125ms)
+✔ Core bounds no-progress across convergence passes and permits a new intent (0.764833ms)
+(node:32004) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/bounded-convergence.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ installed hls.js excludes cached measurements but retains ABR bookkeeping and network sampling (22.826083ms)
+✔ aborting or destroying before the cache microtask prevents late delivery (0.186834ms)
+✔ an upstream exception cannot leave subsequent network measurement disabled (0.313709ms)
+(node:32005) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/cache-aware-abr.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ queue completion preserves progression and lifecycle guards with trace=0 (991.152292ms)
+✔ queue completion preserves progression and lifecycle guards with trace=1 (751.861042ms)
+(node:32006) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/completion-diagnostics.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ encrypted song survives a new store instance; token renewal reuses bytes but replacement version cannot (21.608875ms)
+✔ readiness is recomputed after eviction; missing one segment never advertises a complete song (1.638709ms)
+✔ bounded storage protects active bytes, rejects excess and never destroys playback on quota failure (1.263ms)
+✔ legacy addresses remain memory-only and never qualify a persistent replay (0.204ms)
+✔ playlist validation excludes live, plaintext, unsupported init/ranges and resolves relative encrypted URLs (9.032792ms)
+✔ scheduler finishes the selected song, then next opening, then warms high without swapping active media (84.524167ms)
+✔ buffer exhaustion, pause, and foreground decoder requests suspend background work (1.445292ms)
+✔ decoder demand aborts an in-flight warm request and a stopped generation cannot write late bytes (0.322708ms)
+✔ repeated warm failures are bounded and never fall through to higher-quality traffic (0.23775ms)
+✔ stalled response bodies abort at the download deadline and release the scheduler (0.546583ms)
+✔ concurrent cache owners enforce the shared budget under the browser write lock (0.67875ms)
+(node:32008) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/full-song-download.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[HLSEngine] ABR downgraded to low bitrate { level: 2, bitrateKbps: 160, levels: 4 }
+(node:32009) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:32009) DeprecationWarning: mock.module(): options.defaultExport is deprecated. Use options.exports.default instead.
+✔ 2g startup seeds a rendition without locking before playback (6.788166ms)
+✔ 3g startup seeds a rendition without locking before playback (0.33975ms)
+✔ 4g startup seeds a rendition without locking before playback (0.479458ms)
+✔ an explicit quality pin remains manual and clearing it restores auto (0.488875ms)
+✔ automatic quality is held at the selected startup rendition after the buffer gate (0.845084ms)
+✔ the first buffered rendition is the fallback when hls.js has no current level (0.27025ms)
+✔ a token refresh reloads the same rendition during the active play (0.187667ms)
+✔ an old async load cannot attach over a successor after detach (0.169792ms)
+✔ native HLS counts as loaded and unsupported browsers fall back (0.259334ms)
+(node:32009) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/hls-adaptation.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ key renewal remains bounded after manifest-only success (4.226459ms)
+✔ decrypt renewal remains bounded after manifest-only success (0.872125ms)
+✔ only active buffered media restores the renewal budget (0.2645ms)
+✔ a renewal cancelled by a track change cannot invoke fallback on its successor (0.506542ms)
+✔ a complete highest rendition seeds replay even on a weak link; eviction returns to the network hint (1.893958ms)
+✔ standby HLS initialization cannot steal the download lease; a committed deck swap transfers ownership (0.989709ms)
+[stream-client] library stream 403 for slug=album
+✔ post-startup HLS fallback preserves recording and saved position, coalesces errors and confirms advancement (12.582541ms)
+✔ a deliberate pause during fallback never resumes audio (0.694542ms)
+✔ an old HLS callback cannot replace a newer track or play request (0.358917ms)
+✔ a new selection during source readiness blocks stale seek and resume (0.586875ms)
+✔ failed fallback becomes an explicit retryable error without skipping a song (0.571292ms)
+✔ fresh authorization denial during fallback is terminal and never resumes cached audio (115.5205ms)
+(node:32010) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/hls-fallback.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a network decoder load retains encrypted bytes before transfer; a later loader reads persistent storage (89.341333ms)
+✔ aborting during persistent lookup prevents late cache delivery and network fallback (0.722458ms)
+(node:32017) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/hls-persistent-loader.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ decoder transfer cannot detach retained segment bytes (1.003583ms)
+✔ cache owns a snapshot independent of the prefetch producer (0.153167ms)
+✔ separate readers cannot mutate each other or the retained cache (0.121709ms)
+✔ empty, detached, and over-budget segments remain cache misses (0.134666ms)
+✔ cache retains its size bound and clearing removes owned bytes (4.553042ms)
+✔ real prefetch loader delivers intact bytes on repeated decoder consumption and falls back on empty input (1.242542ms)
+(node:32018) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/hls-segment-ownership.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[playback-diagnostic] {
+  code: 'AUDIO_RESUME_FAILED',
+  command: 'RECOVER',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: 'interaction required',
+  errorCode: null,
+  errorStatus: null,
+  source: 'output_change',
+  lightweight: true,
+  attempt: 0,
+  at: '1970-01-01T00:00:00.000Z'
+}
+[2MRRW Storefront] NEXT_PUBLIC_CONTROL_SYSTEM_API_URL is not set — release catalog will fall back to hardcoded data only.
+PLAYBACK INTERRUPTION CLASSIFICATION: {
+  likelyCause: 'A',
+  confidence: 'low',
+  evidence: [],
+  scores: { A: 0, B: 0, C: 0, D: 0 }
+}
+✔ interrupted isPlaying=false resumes existing media and confirms advancement before success (46.781208ms)
+✔ recovery never reports PLAYING when play reject (42.927209ms)
+✔ recovery never reports PLAYING when play resolve-paused (0.556416ms)
+✔ recovery never reports PLAYING when play resolve-no-progress (0.566709ms)
+✔ a deliberate pause is never resumed by recovery (0.256708ms)
+✔ overlapping recovery requests share one lightweight media operation (0.344416ms)
+✔ pending recovery cannot overwrite a newer pause (0.807417ms)
+✔ pending recovery cannot overwrite a newer track (1.159125ms)
+✔ pending recovery cannot overwrite a newer same-track-new-generation (0.495042ms)
+✔ stale recovery result cannot overwrite newer orchestration (0.189542ms)
+✔ an unsettled context promise has a deadline and cannot strand recovery (0.748292ms)
+✔ an unsettled play promise has a deadline and cannot strand recovery (0.791459ms)
+✔ a deliberate pause cancels a late play promise even after its command revision changes (0.309ms)
+✔ native play during recovery does not publish PLAYING before progress is confirmed (1.805959ms)
+✔ pause/canplay interruption callbacks coalesce with route recovery (1.278458ms)
+(node:32031) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/interruption-recovery.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2MRRW Storefront] NEXT_PUBLIC_CONTROL_SYSTEM_API_URL is not set — release catalog will fall back to hardcoded data only.
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-10-24T15:42:49.945Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-1',
+  at: '2026-10-24T15:42:49.948Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-2',
+  at: '2026-10-24T15:42:49.949Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-3',
+  at: '2026-10-24T15:42:49.949Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-4',
+  at: '2026-10-24T15:42:49.949Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-10-24T15:42:49.951Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-1',
+  at: '2026-10-24T15:42:49.952Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-2',
+  at: '2026-10-24T15:42:49.952Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-3',
+  at: '2026-10-24T15:42:49.955Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-4',
+  at: '2026-10-24T15:42:49.959Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-1',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-2',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-3',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-4',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'ending',
+  isPlaying: true,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'ending',
+  isPlaying: true,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-1',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'ending',
+  isPlaying: true,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-2',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'ending',
+  isPlaying: true,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-3',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'ending',
+  isPlaying: true,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-4',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-10-24T15:42:49.960Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-10-24T15:42:49.961Z'
+}
+✔ shuffle visits every track once from index 0, then stops (0.748583ms)
+✔ shuffle visits every track once from index 2, then stops (0.09975ms)
+✔ shuffle visits every track once from index 4, then stops (0.05725ms)
+✔ shuffle repeat-all preloads the same track it advances to across repeated cycles (0.105833ms)
+✔ locked-screen completion plays an entire ordered album queue (68.57725ms)
+✔ locked-screen completion plays an entire shuffled album queue (5.428209ms)
+✔ late ended during a source swap never rewinds or stops the successor (0.178833ms)
+✔ preview completion never advances to the full queue (0.165792ms)
+✔ network hints seed startup without selecting manual bitrate, on weak and strong links (2.947333ms)
+✔ quality preference maps actual bitrate ordering and returning to Auto clears the pin (0.788667ms)
+✔ preloading uses real contiguous runway even without Network Information API (0.292792ms)
+✔ locking during buffer startup releases the gate without a timer tick (0.297417ms)
+✔ repeated canplay events recheck runway and abort removes listeners (1.113084ms)
+✔ duplicate ended events cannot advance twice while the next source is loading (0.234416ms)
+✔ completion respects userPausedRef instead of resuming the queue (0.107125ms)
+✔ completion respects userIntentPausedRef instead of resuming the queue (17.957667ms)
+✔ sleep after current track stops queue advancement (0.187708ms)
+✔ natural completion does not register interruption recovery (visible, ordered) (1.12025ms)
+✔ natural completion does not register interruption recovery (visible, shuffle) (0.298791ms)
+✔ natural completion does not register interruption recovery (locked, ordered) (0.21ms)
+✔ natural completion does not register interruption recovery (locked, shuffle) (0.622458ms)
+✔ metadata refresh during completion does not cancel the next track (0.147083ms)
+✔ automatic playback preserves repeated playlist occurrences through Core selection (0.392834ms)
+✔ a replacement play request wins even when it selects the same track (0.110708ms)
+✔ a queue that starts with preview access can continue after access upgrades (0.157959ms)
+✔ home_single_card advances its full queue then stops on the final selection with repeat off (32.653333ms)
+✔ home_feature_card advances its full queue then stops on the final selection with repeat off (10.213667ms)
+✔ feature_card advances its full queue then stops on the final selection with repeat off (0.522166ms)
+✔ explicit repeat-all wraps the queue without completing transport (0.398333ms)
+✔ stopAfterEachTrack ends through the authoritative completion contract (0.145041ms)
+✔ sleepAfterCurrentTrack ends through the authoritative completion contract (0.1165ms)
+(node:32053) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/listening-continuity.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebAudio] resume failed: Error: route negotiating
+    at h.context.resume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:33:83)
+    at resumeWebAudioContextIfSuspended (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/audio/web-audio-context-utils.js:54:15)
+    at run (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/PlaybackHelperService.js:1296:38)
+    at Object.attemptLightweightPlaybackResume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/PlaybackHelperService.js:1334:25)
+    at resume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:9:30)
+    at run (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/output-route-recovery.js:30:24)
+    at MockTimers.tick (node:internal/test_runner/mock/mock_timers:704:7)
+    at TestContext.<anonymous> (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:34:66)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1306:25)
+[WebAudio] resume failed: Error: route negotiating
+    at h.context.resume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:33:83)
+    at resumeWebAudioContextIfSuspended (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/audio/web-audio-context-utils.js:54:15)
+    at run (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/PlaybackHelperService.js:1296:38)
+    at Object.attemptLightweightPlaybackResume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/PlaybackHelperService.js:1334:25)
+    at resume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:9:30)
+    at run (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/output-route-recovery.js:30:24)
+    at MockTimers.tick (node:internal/test_runner/mock/mock_timers:704:7)
+    at TestContext.<anonymous> (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:35:17)
+    at async Test.run (node:internal/test_runner/test:1313:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:897:7)
+[playback-diagnostic] {
+  code: 'AUDIO_RESUME_FAILED',
+  command: 'RECOVER',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: 'gesture required',
+  errorCode: null,
+  errorStatus: null,
+  source: 'output_change',
+  lightweight: true,
+  attempt: 0,
+  at: '1970-01-01T00:00:00.150Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_RESUME_FAILED',
+  command: 'RECOVER',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: 'gesture required',
+  errorCode: null,
+  errorStatus: null,
+  source: 'output_change',
+  lightweight: true,
+  attempt: 0,
+  at: '1970-01-01T00:00:00.400Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_RESUME_FAILED',
+  command: 'RECOVER',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: 'gesture required',
+  errorCode: null,
+  errorStatus: null,
+  source: 'output_change',
+  lightweight: true,
+  attempt: 0,
+  at: '1970-01-01T00:00:01.150Z'
+}
+✔ Bluetooth device/context hint storms coalesce without element, source, queue or position reset (2.8065ms)
+✔ already playing route changes verify progress without a redundant play or seek (0.742333ms)
+✔ delayed connect/disconnect readiness succeeds within three attempts (1.373542ms)
+✔ route failure reaches a bounded terminal state; repeated hints during cooldown do not loop (120.271125ms)
+✔ queued device recovery respects pause (20.956458ms)
+✔ queued device recovery respects new-track (0.336458ms)
+✔ queued device recovery respects loading (0.232958ms)
+✔ queued device recovery respects ended (0.211542ms)
+✔ queued device recovery respects dispose (0.270291ms)
+✔ a supported sinkchange reaches the same reconciliation callback without context recreation (0.214166ms)
+(node:32054) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ decoder reuses an exact in-flight segment, including while buffering, without a duplicate request (16.243709ms)
+✔ a slow borrowed transfer is abandoned once and falls back to the normal decoder loader (1.271209ms)
+✔ abort during a borrowed transfer never delivers stale bytes or starts fallback (0.546541ms)
+✔ a primed known miss bypasses disk, while an unknown urgent lookup falls back at 40 ms (1.296709ms)
+✔ readiness checks run in groups of eight and still reject a missing or replaced segment (2.499209ms)
+(node:32055) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/playback-polish.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:32057) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/queue-completion.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ negative control: physical pause alone allows Core to replay an ended song (219.413458ms)
+✔ completed queue remains stopped across later Core reconciliation (247.662208ms)
+✔ stale completion cannot stop a newly selected track (89.887208ms)
+✔ owned stalled position repositions once and restores gain (1.6225ms)
+✔ delayed recovery does not reposition after source (0.194833ms)
+✔ delayed recovery does not reposition after seek (0.146209ms)
+✔ delayed recovery does not reposition after pause (0.140333ms)
+✔ delayed recovery does not reposition after graph (0.146791ms)
+✔ delayed recovery does not reposition after suspend (0.156584ms)
+✔ resetForNewTrack cancels pending reposition through the shared owner (0.168459ms)
+✔ notifyStreamUpgrade cancels pending reposition through the shared owner (0.133542ms)
+✔ onPlaybackResumed cancels pending reposition through the shared owner (0.133083ms)
+✔ superseding a faded operation retains the original restoration target (0.2195ms)
+(node:32058) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/reposition-lifecycle.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ home_single_card: start and explicit restart retain the whole section queue (0.923833ms)
+✔ home_single_card: tapping an active song toggles only its own section queue (0.125542ms)
+✔ home_feature_card: start and explicit restart retain the whole section queue (0.067542ms)
+✔ home_feature_card: tapping an active song toggles only its own section queue (0.051333ms)
+✔ feature_card: start and explicit restart retain the whole section queue (0.0645ms)
+✔ feature_card: tapping an active song toggles only its own section queue (0.046958ms)
+✔ filtering unavailable songs preserves the clicked song index (0.085542ms)
+(node:32062) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/playback/__tests__/section-queue.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 164
+ℹ suites 0
+ℹ pass 164
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2370.29475

@@ -1,0 +1,289 @@
+✔ published detail hydrates title artist credits UPC lyrics and recording ISRC (1.798125ms)
+✔ legacy catalog-only release is editable by product identity without inventing a release row (0.224833ms)
+✔ missing release returns null rather than an empty editor (0.105458ms)
+✔ unknown storage capability disables writes while preserving readable legacy credits (0.687542ms)
+✔ public or incomplete capability cannot enable private allocation persistence (0.116958ms)
+✔ invalid allocations and invalid identifier types fail before invoking storage (0.19ms)
+✔ revision conflict is returned without a success response or a retry that overwrites data (0.202083ms)
+✔ transaction failure does not fall back to independent table writes (0.187666ms)
+✔ transaction receives omitted versus explicit clear exactly as supplied (0.152875ms)
+✔ malformed and duplicate recording targets are rejected (0.149667ms)
+✔ private stored allocations override name-only projection without changing target scope (0.255833ms)
+(node:23855) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/credits/__tests__/admin-store.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[normalizeReleaseType] missing release_type
+[canonical-paths] missing or unknown release_type { releaseType: undefined }
+[normalizeReleaseType] missing release_type
+[canonical-paths] missing or unknown release_type { releaseType: undefined }
+[normalizeReleaseType] missing release_type
+[canonical-paths] missing or unknown release_type { releaseType: undefined }
+[normalizeReleaseType] missing release_type
+[canonical-paths] missing or unknown release_type { releaseType: undefined }
+(node:23856) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23856) DeprecationWarning: mock.module(): options.namedExports is deprecated. Use options.exports instead.
+✔ fresh single detail retrieves the saved recording attribution independently (1.870666ms)
+✔ an explicit empty recording attribution does not resurrect release names (0.578542ms)
+✔ legacy single product attribution remains available when no recording attribution was stored (0.209333ms)
+✔ hidden legacy products and lifecycle-hidden drafts remain unavailable (1.764666ms)
+✔ catalog track explicit clear remains separate from stale source writer fields (1.036958ms)
+✔ database failure rejects rather than masquerading as empty credits (0.282417ms)
+✔ fresh single lyrics come from the saved source recording (0.409083ms)
+✔ album catalog lyrics remain paired with their canonical recording identity (0.317125ms)
+✔ an explicit recording lyric clear suppresses older product text (0.189083ms)
+(node:23856) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/credits/__tests__/catalog-detail.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ reads publisher object (1.708292ms)
+✔ reads role arrays (0.104458ms)
+✔ reads top-level fields (0.075833ms)
+✔ reads nested metadata object (0.057375ms)
+✔ reads nested metadata array (0.0715ms)
+✔ release and recording attribution remain separate (0.22675ms)
+✔ empty credits never invent attribution (0.074917ms)
+✔ an explicit scoped clear suppresses stale nested values (0.04925ms)
+✔ all rows and extended roles survive normalization (0.103875ms)
+✔ contributor order and separate same-name identities survive (0.124625ms)
+✔ public projection strips allocations, emails and linked users (0.14375ms)
+✔ catalog mapper preserves publisher credits (0.628875ms)
+✔ control-system mapper preserves recording credits and scope (0.588875ms)
+✔ exact complete total 70.00+30.00 (0.24225ms)
+✔ exact complete total 33.33+33.33+33.34 (0.0395ms)
+✔ exact complete total 100 (0.036542ms)
+✔ reject completed total 99.99 (0.03925ms)
+✔ reject completed total 100.01 (0.0485ms)
+✔ reject percentage -1 (0.099375ms)
+✔ reject percentage NaN (0.028333ms)
+✔ reject percentage Infinity (0.027042ms)
+✔ reject percentage 1.001 (0.028375ms)
+✔ reject percentage 1e2 (0.027875ms)
+✔ reject percentage 100.01 (0.027833ms)
+✔ reject percentage  (0.025708ms)
+✔ reject percentage null (0.02675ms)
+✔ reject percentage NaN (0.038375ms)
+✔ reject percentage Infinity (0.0365ms)
+✔ reject percentage  10 (0.026125ms)
+✔ reject percentage 0x10 (0.025875ms)
+✔ incomplete drafts and legacy names are valid without fabricated percentages (0.154292ms)
+✔ a completed percentage without a contributor fails (0.056583ms)
+✔ malformed category and entry structures return errors rather than throw (0.06925ms)
+✔ producer category is optional and independent (0.179417ms)
+✔ selected UUID is preserved while the historical display name changes (0.096125ms)
+✔ same-name contributors may have separate UUIDs; duplicate UUID allocation is rejected (0.174792ms)
+✔ editing preserves extended object credits (0.193791ms)
+✔ editing preserves extended array credits (0.083959ms)
+✔ partial publication preserves attribution and unrelated metadata (0.125583ms)
+✔ empty defaults from older publisher clients cannot erase credits (0.038792ms)
+✔ versioned explicit clear removes only the selected category (0.060291ms)
+✔ unversioned structured publication is rejected (0.047459ms)
+✔ identifiers preserve leading zeros and historical text with explicit clearing (0.132333ms)
+(node:23857) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/credits/__tests__/contract.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ queued snapshots serialize and use the revision returned by the previous write (0.85725ms)
+✔ duplicate flushes do not resave a snapshot or advance its revision (0.135875ms)
+✔ a failed request preserves values and does not claim they were saved (0.337375ms)
+✔ a conflict prevents automatic retries from overwriting another editor (0.148708ms)
+✔ publication pause prevents an unmount flush from resurrecting a saved draft (0.143834ms)
+(node:23858) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/credits/__tests__/draft-save-queue.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ ordinary untimed lyrics retain all lines and never acquire invented timestamps (1.256375ms)
+✔ LRC timestamps retain ordering, repeats and decimal precision (0.13ms)
+✔ metadata-only and missing lyrics produce an actual empty state (0.089ms)
+✔ saved empty lyrics suppress stale metadata and text fallbacks (0.076375ms)
+✔ recordings resolve source UUID, catalog UUID and slug without first-track fallback (0.101917ms)
+(node:23859) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/credits/__tests__/lyrics.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23860) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23860) DeprecationWarning: mock.module(): options.namedExports is deprecated. Use options.exports instead.
+✔ catalog attribution and contributor editing retain their distinct authentication boundaries (0.900667ms)
+✔ unauthenticated and non-admin callers cannot search or create directory records (2.915667ms)
+✔ unverified directory permissions prevent both reads and creation (0.602667ms)
+✔ directory search requests only the safe suggestion columns (1.277875ms)
+✔ explicit same-name creation inserts rather than upserts or merges (0.391458ms)
+✔ invalid creation and failed searches return accurate failure statuses (0.577959ms)
+✔ attribution endpoint rejects unauthenticated callers before database access even without middleware (0.165459ms)
+✔ draft autosave preserves unfinished names and invalid intermediate percentages for correction (0.300083ms)
+(node:23860) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/credits/__tests__/routes.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[publish] SUCCESS releaseId=11111111-1111-4111-8111-111111111111 slug=release productId=product status=published
+[publish] SUCCESS releaseId=11111111-1111-4111-8111-111111111111 slug=release productId=product status=published
+[publish] SUCCESS releaseId=11111111-1111-4111-8111-111111111111 slug=release productId=product status=published
+[publish] SUCCESS releaseId=11111111-1111-4111-8111-111111111111 slug=release productId=product status=published
+(node:23861) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23861) DeprecationWarning: mock.module(): options.namedExports is deprecated. Use options.exports instead.
+✔ publish uses a unique canonical source, preserves draft input, and records exact playback pointer (76.099334ms)
+✔ a publish retry keeps the same canonical source and does not recopy worker input (2.03675ms)
+✔ encoding conflict blocks publication without deleting source or updating public catalog (0.786084ms)
+✔ a body-only audio key cannot bypass durable upload completion and encoding (0.448625ms)
+✔ album publication records each exact source on the track projection (0.802166ms)
+✔ a revision conflict does not expose partially committed catalog or metadata (0.44775ms)
+(node:23861) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/hls/__tests__/publish-audio-contract.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23862) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23862) DeprecationWarning: mock.module(): options.namedExports is deprecated. Use options.exports instead.
+✔ owned source audio resolves and exposes only an opaque reference identity to callers (1.477959ms)
+✔ foreign, removed and deleted targets fail before any audio object read (0.389375ms)
+✔ master changes reject timed saves and public display falls back to plain text (1.177208ms)
+✔ recording-copy rebinding preserves every cue and changes only the opaque reference (0.214125ms)
+✔ plain lyrics need no storage lookup and unfinished drafts cannot publish (0.27725ms)
+✔ legacy audio discovery rejects ambiguity instead of choosing a different master (0.246417ms)
+✔ preview clips and streaming outputs cannot serve as authoring master references (0.144416ms)
+✔ a promoted master uses its own verified HLS duration rather than the previous track duration (0.3075ms)
+✔ revision duration cannot be borrowed from another entity, key or inactive revision (0.155209ms)
+✔ an active revision without its committed manifest never falls back to an older duration (0.138833ms)
+✔ historical duration without a master binding cannot block a newer copied recording (0.132083ms)
+✔ projects without the optional replacement table still use the exact native audio reference (0.197959ms)
+✔ legacy product and catalog recording duration use their own entity-scoped revision (0.183ms)
+(node:23862) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/lyrics/__tests__/audio-source.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23863) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23863) DeprecationWarning: mock.module(): options.namedExports is deprecated. Use options.exports instead.
+✔ non-admin callers cannot resolve, sign or fetch recording reference audio (3.046417ms)
+✔ metadata exposes no object key or external media URL (1.73825ms)
+✔ reference changes and invalid memberships fail before signing bytes (0.485542ms)
+✔ every audio request retains range, current authorization, no-store and an object precondition (0.447125ms)
+✔ rate limits are enforced before resolving the recording (0.182709ms)
+(node:23863) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/lyrics/__tests__/routes.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ enhanced LRC round-trips real word start/end cues including silence between words (2.0075ms)
+✔ unfinished drafts retain exact partial and invalid input without becoming publishable (0.535875ms)
+✔ line and word validations reject missing, negative, unordered, overlapping and out-of-duration cues (0.176791ms)
+✔ line-only lyrics and plain text remain supported without invented word times (0.243041ms)
+✔ word progress is derived from audio position and responds to seeking backwards (0.087916ms)
+✔ bulk offset never mutates the original and invalid negative shifts cannot publish (0.107459ms)
+✔ a different playing recording never drives the lyric clock (0.101792ms)
+✔ preview clock uses a known recording offset and fails closed when the offset is unknown (0.071042ms)
+(node:23864) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/lyrics/__tests__/timing.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ admin upload MIME authority
+  ✔ server maps every supported extension to a canonical MIME (0.557084ms)
+  ✔ unsupported extensions and invalid sizes fail closed (0.172291ms)
+  ✔ the exact server MIME is signed, returned, and sent (0.124542ms)
+✔ admin upload MIME authority (2.336625ms)
+▶ one upload transport and one storefront invalidator
+  ✔ normal assets use the shared transport and master replacements use the staged transport (1.92975ms)
+  ✔ cover selection uses a persistent input and validates completion (0.795666ms)
+  ✔ single and multi-track audio pickers persist through first selection (0.51125ms)
+  ✔ cover video selection shares MP4, MOV, WebM and seven-minute rules (0.67675ms)
+  ✔ My Releases reports success only after the staged revision becomes active (0.372125ms)
+  ✔ replace-master commits by copying to the canonical key, not by staging into a table that was never deployed (0.662584ms)
+  ✔ the abandoned audio_master_revisions cleanup cron stays fully retired (1.845833ms)
+  ✔ catalog DB has no explicit cache beneath ISR (0.420042ms)
+✔ one upload transport and one storefront invalidator (7.5925ms)
+▶ release upload database contract
+  ✔ tracks supplies every field shared by complete, publish, edit, and replace-master (0.109208ms)
+  ✔ the publish linkage column is present even when the earlier migration was skipped (0.079125ms)
+  ✔ live routes tolerate the pre-migration tracks table (1.644ms)
+  ✔ Next 16 release routes await dynamic params (0.855333ms)
+  ✔ draft identity persists and draft creation is idempotent (1.020792ms)
+✔ release upload database contract (3.830792ms)
+▶ publish cannot silently half-succeed
+  ✔ Supabase builders are awaited and inspected instead of treated like native Promises (0.155167ms)
+  ✔ a failed tracklist write blocks publish instead of leaving a live release with no tracks (0.3565ms)
+  ✔ a failed lifecycle status transition is returned as an error, never told to the admin as success (0.23175ms)
+✔ publish cannot silently half-succeed (0.830167ms)
+▶ reopening a draft never re-requires an already-uploaded asset
+  ✔ single/feature audio step seeds ready state from the persisted key, not idle (0.362792ms)
+  ✔ My Releases editor seeds cover/animated-cover state from persisted keys (0.232792ms)
+  ✔ My Releases editor never clobbers a legitimate $0 price with an empty string (0.148375ms)
+  ✔ draft autosave never nulls a previously-saved release_date or cover on a partial payload (0.421667ms)
+  ✔ draft PUT merges onto the prior snapshot instead of blind-replacing it (0.638375ms)
+✔ reopening a draft never re-requires an already-uploaded asset (2.028084ms)
+▶ draft-list rows are openable without hitting a precise Edit target
+  ✔ the My Releases card row is a real interactive element that opens the release (0.686042ms)
+  ✔ row actions stop propagation so they never also open the release (0.590541ms)
+✔ draft-list rows are openable without hitting a precise Edit target (1.431709ms)
+▶ a pending autosave is flushed on soft navigation away from the wizard, not just on tab close
+  ✔ the wizard flushes the latest draft snapshot on unmount, not only on pagehide (1.063875ms)
+✔ a pending autosave is flushed on soft navigation away from the wizard, not just on tab close (1.146208ms)
+▶ release type cannot change mid-draft into a shape existing tracks don't fit
+  ✔ switching single-track <-> multi-track categories is blocked once tracks exist (0.153708ms)
+  ✔ an invalid release_type value is rejected rather than silently stored (0.074042ms)
+  ✔ same-category type changes (Single<->Feature, Album<->EP<->Mixtape) remain allowed (0.073833ms)
+✔ release type cannot change mid-draft into a shape existing tracks don't fit (0.355917ms)
+▶ removing a track in the wizard cannot let it silently reappear at publish
+  ✔ removeTrack calls the server for any track that already has a persisted id (0.096958ms)
+  ✔ a failed server-side removal keeps the track in the list and surfaces the error, never silently drops it (0.111375ms)
+  ✔ the admin route uses the release-scoped atomic removal RPC (0.035792ms)
+  ✔ removal preserves track/media rows and future publish filters removed rows (0.515708ms)
+  ✔ the management editor requires confirmation and retains a visible accessible action (0.345042ms)
+  ✔ release readiness and Broadcast project enumeration exclude removed tracks (0.407875ms)
+✔ removing a track in the wizard cannot let it silently reappear at publish (1.618541ms)
+▶ scheduled-release activation cannot split-brain releases.status and products.active
+  ✔ the cron calls one atomic RPC instead of two independent table updates (0.504208ms)
+  ✔ the atomic activation function exists as a migration, is idempotent, and is locked to service_role (0.2745ms)
+  ✔ a products update matching zero (or more than one) rows rolls back the whole activation instead of committing split-brained (0.260875ms)
+  ✔ the cron already treats any RPC error as a per-release failure that retries next tick, with no change needed there (0.15425ms)
+✔ scheduled-release activation cannot split-brain releases.status and products.active (1.331125ms)
+▶ the two vercel.json cron manifests cannot silently disagree
+  ✔ both files declare the same schedule for every cron path (0.662208ms)
+✔ the two vercel.json cron manifests cannot silently disagree (0.709708ms)
+▶ Albums and Mixtapes & EPs render from the live catalog, not a hardcoded fallback
+  ✔ PageStorefront receives the DB-backed catalog and shadows the module-level fallback constants (0.2185ms)
+  ✔ effectiveAlbums/effectiveMixtapes preserve authoritative empty arrays after deletion (0.310292ms)
+✔ Albums and Mixtapes & EPs render from the live catalog, not a hardcoded fallback (0.5725ms)
+▶ unpublishing a release is as immediate as publishing it
+  ✔ archiving a release revalidates the storefront instead of waiting out the ISR window (0.154542ms)
+✔ unpublishing a release is as immediate as publishing it (0.201667ms)
+▶ the public singles API is a bounded projection of canonical Supabase truth
+  ✔ the route cannot fall back to the independent Control System catalog (0.093125ms)
+  ✔ the bounded DB query has an exact count and reuses the canonical mapper (0.077625ms)
+  ✔ lifecycle-invisible projection mismatches fail closed per row (0.065292ms)
+  ✔ healthy empty catalogs and database failures are observably different (0.035875ms)
+  ✔ web tracks and mobile releases retain compatible response keys (0.052458ms)
+✔ the public singles API is a bounded projection of canonical Supabase truth (0.391625ms)
+▶ draft mutations never bust the public storefront cache
+  ✔ draft-scoped upload/complete and replace-master calls are gated on release status (0.470417ms)
+  ✔ the release PATCH route revalidates using the post-update status, not the pre-fetch one (0.185625ms)
+✔ draft mutations never bust the public storefront cache (0.69425ms)
+(node:23865) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/media/__tests__/admin-upload-hardening.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ canonical product mapper emits the shared release identity aliases (3.250125ms)
+✔ canonical product mapper delegates scheduled visibility to releaseAvailability (0.308917ms)
+(node:23866) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/media/__tests__/catalog-db.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ canonical page one replaces stale rows so archives propagate (0.790166ms)
+✔ an authoritative empty page one remains empty (0.068709ms)
+✔ later pages append unique identities without replacing page one (0.092417ms)
+✔ catalog mutation revisions notify synchronously and unsubscribe cleanly (2.610917ms)
+✔ the pinned storefront snapshot accepts authoritative empty and metadata changes (4.529625ms)
+✔ successful admin mutations refresh the mounted catalog without an RSC reload (1.09325ms)
+(node:23867) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/storefront/__tests__/catalog-refresh-contract.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 172
+ℹ suites 15
+ℹ pass 172
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 641.042958

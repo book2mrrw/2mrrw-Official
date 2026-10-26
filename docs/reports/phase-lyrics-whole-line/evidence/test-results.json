@@ -1,0 +1,159 @@
+{
+  "time_utc": "2026-10-26T00:11:28.984007+00:00",
+  "baseline_feature_passed": 250,
+  "final_feature_passed": 332,
+  "feature_checks": [
+    {
+      "name": "contracts",
+      "cwd": "apps/web",
+      "command": "node --experimental-test-module-mocks --import ./scripts/register-alias.mjs --test src/lib/lyrics/__tests__/*.test.js src/lib/credits/__tests__/*.test.js src/lib/hls/__tests__/publish-audio-contract.test.js src/lib/media/__tests__/admin-upload-hardening.test.js src/lib/media/__tests__/catalog-db.test.js src/lib/storefront/__tests__/catalog-refresh-contract.test.js src/lib/hls/__tests__/audio-source.test.js",
+      "passed": 209,
+      "failed": 0,
+      "log": "after-contracts.log",
+      "evidence_kind": "Local source/DOM/fixture/PostgreSQL tests; not authenticated browser or real media"
+    },
+    {
+      "name": "studio",
+      "cwd": "apps/web",
+      "command": "node scripts/test-lyric-studio-dom.mjs",
+      "passed": 22,
+      "failed": 0,
+      "log": "after-studio.log",
+      "evidence_kind": "Local source/DOM/fixture/PostgreSQL tests; not authenticated browser or real media"
+    },
+    {
+      "name": "authoring",
+      "cwd": "apps/web",
+      "command": "node scripts/test-lyric-timing-dom.mjs",
+      "passed": 13,
+      "failed": 0,
+      "log": "after-authoring.log",
+      "evidence_kind": "Local source/DOM/fixture/PostgreSQL tests; not authenticated browser or real media"
+    },
+    {
+      "name": "forms",
+      "cwd": "apps/web",
+      "command": "node --experimental-test-module-mocks --import ./scripts/register-alias.mjs scripts/test-lyric-forms-dom.mjs",
+      "passed": 17,
+      "failed": 0,
+      "log": "after-forms.log",
+      "evidence_kind": "Local source/DOM/fixture/PostgreSQL tests; not authenticated browser or real media"
+    },
+    {
+      "name": "modals",
+      "cwd": "apps/web",
+      "command": "node scripts/test-modal-editorial-dom.mjs",
+      "passed": 23,
+      "failed": 0,
+      "log": "after-modals.log",
+      "evidence_kind": "Local source/DOM/fixture/PostgreSQL tests; not authenticated browser or real media"
+    },
+    {
+      "name": "publication-postgres",
+      "cwd": "apps/web",
+      "command": "node --experimental-test-module-mocks --import ./scripts/register-alias.mjs scripts/test-lyric-timing-postgres.mjs",
+      "passed": 10,
+      "failed": 0,
+      "log": "after-postgres.log",
+      "evidence_kind": "Local source/DOM/fixture/PostgreSQL tests; not authenticated browser or real media"
+    },
+    {
+      "name": "recording-readiness",
+      "cwd": "apps/web",
+      "command": "node scripts/test-lyric-recording-ready-dom.mjs",
+      "passed": 11,
+      "failed": 0,
+      "log": "after-recording-readiness.log",
+      "evidence_kind": "Local source/DOM/fixture/PostgreSQL tests; not authenticated browser or real media"
+    },
+    {
+      "name": "whole-line-dom",
+      "cwd": "apps/web",
+      "command": "node scripts/test-lyric-lines-dom.mjs",
+      "passed": 15,
+      "failed": 0,
+      "log": "after-whole-line-dom.log",
+      "evidence_kind": "Local source/DOM/fixture/PostgreSQL tests; not authenticated browser or real media"
+    },
+    {
+      "name": "private-draft-postgres",
+      "cwd": "apps/web",
+      "command": "node scripts/test-lyric-drafts-postgres.mjs",
+      "passed": 12,
+      "failed": 0,
+      "log": "after-working-draft-postgres.log",
+      "evidence_kind": "Local source/DOM/fixture/PostgreSQL tests; not authenticated browser or real media"
+    }
+  ],
+  "broader": [
+    {
+      "command": "npm run test:listening-continuity",
+      "passed": 164,
+      "failed": 0,
+      "log": "after-playback-regressions.log"
+    },
+    {
+      "command": "npm run test:core-invariants",
+      "passed": 156,
+      "failed": 0,
+      "log": "after-core-invariants.log"
+    },
+    {
+      "command": "npm run test:auth-security",
+      "passed": 254,
+      "failed": 2,
+      "log": "after-auth-security.log",
+      "baseline_log": "baseline-auth-security.log",
+      "baseline_same_failures": true,
+      "failures": [
+        "INV-MFA-4",
+        "F0-ADMIN-1"
+      ],
+      "scope": "Existing four broadcast route inventory/authority classification failures; no new API route added."
+    }
+  ],
+  "lint": {
+    "command": "./node_modules/.bin/eslint src/components/lyrics/LyricTranscript.js src/components/preview/GlyphLyricsPanel.js src/components/preview/ImmersivePreviewModal.js src/components/admin/lyrics/LyricTimingEditor.js src/components/admin/lyrics/useLyricWorkingDraft.js src/components/admin/InlineReleasesManager.js src/components/admin/UploadWizard.js src/lib/lyrics/timing.js src/lib/lyrics/working-draft.js src/lib/lyrics/draft-store.js src/lib/lrc.js 'src/app/api/admin/releases/[id]/route.js' --format json",
+    "log": "after-lint.json",
+    "errors": 2,
+    "all_errors_preexisting": true,
+    "locations": [
+      "UploadWizard.js:894",
+      "UploadWizard.js:896"
+    ],
+    "baseline_log": "baseline-lint.json",
+    "existing_warnings_retained": true
+  },
+  "build": {
+    "command": "node_modules/next/dist/bin/next build --webpack",
+    "runner": "Node child process after loadEnvConfig(process.cwd()); process-only NEXT_PUBLIC_SUPABASE_URL ||= SUPABASE_URL. No environment file changed.",
+    "exit_code": 0,
+    "log": "after-production-build.log"
+  },
+  "capacitor": {
+    "modified": false,
+    "baseline_commands": [
+      "npm run typecheck",
+      "npm test"
+    ],
+    "baseline_typecheck": "passed",
+    "baseline_tests_passed": 54,
+    "logs": [
+      "baseline-capacitor-typecheck.log",
+      "baseline-capacitor-tests.log"
+    ],
+    "native_build_or_device_test": false
+  },
+  "runtime": {
+    "http_evidence": "local-runtime-http.json",
+    "cleanup": "runtime-cleanup.json",
+    "signed_in_or_real_audio_verified": false
+  },
+  "unavailable": [
+    "Connected browser: No browser is available; browser list empty.",
+    "Physical device touch, audible synchronization, codecs, screen rotation/fold and background media.",
+    "Current Capacitor playback interface absent.",
+    "Existing-release private draft remote migration and rollout not performed."
+  ],
+  "no_commit_push_deploy_remote_migration": true
+}

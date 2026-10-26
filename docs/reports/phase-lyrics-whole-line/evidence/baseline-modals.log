@@ -1,0 +1,36 @@
+▲ [WARNING] Duplicate key "border" in object literal [duplicate-object-key]
+
+    src/components/preview/ImmersivePreviewModal.js:2244:256:
+      2244 │ ...: ".06em", borderRadius: 8, border: `1px solid ${playbackSpee...
+           ╵                                ~~~~~~
+
+  The original key "border" is here:
+
+    src/components/preview/ImmersivePreviewModal.js:2244:47:
+      2244 │ ...tyle={{ background: "none", border: "none", padding: "2px 5px...
+           ╵                                ~~~~~~
+
+PASS single editorial buttons occupy a separate normal-flow row above playback
+PASS single Credits opens with scoped saved data and closes
+PASS single Lyrics opens ordinary saved text and closes
+PASS default lyrics stay inside artwork with a dark scrim and large white text
+PASS slow-locked artwork does not capture button presses
+PASS artwork presses retain gesture ownership
+PASS Escape dismisses the lyric panel
+PASS closing and reopening a persistent modal resets panels
+PASS album editorial buttons share the non-overlapping bounded control stack
+PASS album Credits switches release and recording scope
+PASS the recorded timestamp activates its lyric against the playback clock
+PASS album Lyrics resolves canonical recording identity, fullscreen and Back
+PASS an explicit empty recording never borrows another recording lyrics
+PASS release changes reset both album panels
+PASS failed requests expose Retry in both panels and recover
+PASS pending lyric reads distinguish loading from truly empty text
+PASS verified word cues sweep from the actual supplied recording clock
+PASS manual scrolling pauses follow and the current-lyric control resumes it
+PASS seeking backwards resets word progress without a wall-clock timer
+PASS lyrics cannot seek an unrelated currently playing recording
+PASS preview playback restrictions remain authoritative when the modal says full access
+PASS matching full recording lyrics retain seeking
+PASS opening, closing and scoping editorial panels sends no playback commands
+23 simulated DOM checks passed; layout, browser hit testing, authentication and physical devices remain unverified.

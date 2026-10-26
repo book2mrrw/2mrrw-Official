@@ -1,0 +1,29 @@
+(node:32356) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/lyrics/__tests__/working-draft.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ typing writes a synchronous device recovery copy before any server debounce (14.86ms)
+✔ Save draft writes the exact unfinished document with the known revision (0.383417ms)
+✔ refresh restores the saved device copy with its line breaks and partial cue string intact (0.2025ms)
+✔ server drafts resume after leaving or on another device without a local copy (0.217958ms)
+✔ server errors never claim cloud durability and keep recovery available (0.166542ms)
+✔ device storage failure remains explicit until a real server acknowledgement (0.368375ms)
+✔ offline recovery syncs after reconnection without replacing the current text (0.75975ms)
+✔ another editor cannot be overwritten by an old CAS token (0.548542ms)
+✔ conflict recovery can explicitly restore the newer saved draft (0.273333ms)
+✔ a save accepted just before refresh reconciles its lost acknowledgement without a false conflict (0.241416ms)
+✔ a server acknowledgement for an older snapshot cannot label newer work as synced (2.584125ms)
+✔ recovery identities are separated by account, release and recording (0.061125ms)
+✔ Strict Mode restart aborts stale loading and can still hydrate the current draft (0.163125ms)
+✔ opening and closing the editor without changes creates no draft writes (1.198042ms)
+✔ autosave coalesces nearby edits into the latest complete working copy (20.513667ms)
+✔ a changed published baseline requires reopening instead of silently rebasing private work (0.23525ms)
+✔ a generic OK response without the draft revision never claims that the working copy was saved (0.231208ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 107.968

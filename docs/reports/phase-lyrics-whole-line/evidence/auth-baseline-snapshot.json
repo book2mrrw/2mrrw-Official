@@ -1,0 +1,16 @@
+{
+  "source_commit": "56636d21bdc233aabdd20a04e338926c7d532aed",
+  "copied_paths": [
+    "apps/web/src",
+    "apps/web/supabase",
+    "apps/web/scripts",
+    "apps/web/package.json",
+    "apps/web/docs",
+    "apps/web/middleware.js",
+    "apps/web/public/sw.js"
+  ],
+  "temporary_copy": "/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd",
+  "command": "npm run test:auth-security",
+  "exit_code": 1,
+  "explanation": "Captured committed source, unchanged dependencies, local tests only. No checkout, reset, commit or remote mutation."
+}

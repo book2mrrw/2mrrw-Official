@@ -1,0 +1,10 @@
+{
+  "migration_count": 126,
+  "duplicate_version_identifiers": {},
+  "new_migrations_in_this_phase": [
+    "20261024010000_private_lyric_working_drafts.sql"
+  ],
+  "local_test": "Captured-schema PGlite application and 12 private draft regression checks passed.",
+  "remote_applied": false,
+  "decision": "Whole-line display uses existing formats. Separate private existing-release unfinished drafts require an additive table/RPC because release_drafts accepts only draft releases and cannot represent legacy products. Existing migrations unchanged."
+}

@@ -739,6 +739,9 @@
   color:#ffcfb3;
 }
 .reviewArt {
+  display:flex;
+  flex-direction:column;
+  height:clamp(330px,60cqi,470px);
   position:relative;
   isolation:isolate;
   overflow:hidden;
@@ -748,6 +751,15 @@
   background:radial-gradient(ellipse at 15% 0,#245653,#101321 65%);
   margin-bottom:16px;
 }
+.draftStatus {
+  display:grid;
+  gap:6px;
+  margin-bottom:14px;
+  color:var(--cyan);
+  font-size:12px;
+  line-height:1.7;
+}
+.draftStatus span {color:var(--muted);}
 .coverImage {
   position:absolute;
   inset:0;

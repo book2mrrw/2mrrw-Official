@@ -1,0 +1,18 @@
+(node:54844) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/lyrics/timing.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS plain lyric text preserves stanza breaks in the shared editor
+PASS reference audio uses the authenticated same-origin revision-bound route and capture waits for audio metadata
+PASS line capture retains a non-publishable timing draft
+PASS applied line cues round-trip with text and paragraph structure
+PASS word hold/release captures independent real start and end positions
+PASS invalid word timing is blocked and undo/redo preserves the previous valid document
+PASS precise global offset shifts line and word cues together
+PASS master-reference changes require an explicit timing review before rebinding
+PASS Enhanced LRC export contains the saved applied document
+PASS import restores Enhanced LRC and its recorded audio reference
+PASS leaving the timing workspace pauses reference audio and restores the selected speed
+PASS losing focus cancels an unfinished word capture without changing saved cues
+PASS removing timing retains lyric words without synthetic timestamps
+13 authoring DOM checks passed. These use fixture audio positions and do not prove actual browser audio, native touch or production authentication.

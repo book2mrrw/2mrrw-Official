@@ -1,0 +1,16 @@
+PASS whole-line illumination is the default even for precise word-timed documents
+PASS the entire held phrase remains active after its last word ends and through its following interval
+PASS the exact next boundary changes active, previous and upcoming states together
+PASS seeks, exact starts and the known final recording boundary remain deterministic
+PASS an unavailable playback position is explicit and recovers from the next real position
+PASS repeated playback samples within a phrase do not mutate or re-illuminate its rendered lines
+PASS follow scrolls only when a new active line leaves the comfortable viewport, respecting reduced motion
+PASS manual touch scrolling suspends follow; Back to current lyric resumes positioning without seeking or autoplay
+PASS layout changes reposition the current phrase without accumulating layout subscriptions
+PASS accessible lyric navigation sends one seek command per keyboard action
+PASS close/reopen cleans up subscriptions and restores the actual line with fresh follow state
+PASS recording changes cannot retain the previous transcript or follow state
+PASS unsynchronized text retains line order, repeated phrases and stanza spacing without invented cues
+PASS unverified changed-audio timing falls back to readable text without navigation timestamps
+PASS loading, retryable error and unavailable lyrics remain separate states
+15 whole-line presentation checks passed. Simulated geometry, animation and playback samples; no browser/device visual or audio claim.

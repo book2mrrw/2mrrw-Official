@@ -1,0 +1,426 @@
+
+> artist-platform@0.1.0 test:auth-security
+> node --import ./scripts/register-alias.mjs --test src/lib/auth/__tests__/*.test.js
+
+✔ no_session maps to ADMIN_AUTH_NO_SESSION/401 (0.642083ms)
+✔ guest_principal maps to ADMIN_AUTH_NOT_ADMIN/403 (0.071542ms)
+✔ not_admin maps to ADMIN_AUTH_NOT_ADMIN/403 (0.051917ms)
+✔ custom_mfa_configuration_missing maps to ADMIN_AUTH_MFA_CONFIGURATION_ERROR/403 (0.03975ms)
+✔ custom_mfa_configuration_invalid maps to ADMIN_AUTH_MFA_CONFIGURATION_ERROR/403 (0.0495ms)
+✔ custom_mfa_disabled_in_production maps to ADMIN_AUTH_MFA_CONFIGURATION_ERROR/403 (0.035917ms)
+✔ custom_mfa_required maps to ADMIN_AUTH_MFA_REQUIRED/403 (0.039375ms)
+✔ custom_mfa_expired maps to ADMIN_AUTH_MFA_EXPIRED/403 (0.036625ms)
+✔ recent_custom_mfa_required maps to ADMIN_AUTH_MFA_EXPIRED/403 (0.054625ms)
+✔ custom_mfa_session_mismatch maps to ADMIN_AUTH_MFA_INVALID/403 (0.084708ms)
+✔ custom_mfa_invalid maps to ADMIN_AUTH_MFA_INVALID/403 (0.046875ms)
+(node:25607) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/admin-authority-diagnostics.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Supabase URLs strip invisible-prefix deployment corruption centrally (0.506792ms)
+✔ CONSUMER_ACCESS_INVARIANT protects every consumer page by default (0.497166ms)
+✔ anonymous auth, registration, and recovery pages remain reachable (0.081166ms)
+✔ consumer APIs are 401 by default, including legacy public namespaces (0.079125ms)
+✔ possession-proof and machine routes remain explicit (0.088041ms)
+✔ return paths are same-origin, non-looping, and normalized (0.124083ms)
+✔ middleware and server components enforce authority before protected reads (0.38325ms)
+✔ service worker cannot replay authenticated catalog or media after sign-out (0.13425ms)
+✔ release metadata and detail rendering are dynamically server-gated (0.291041ms)
+✔ admin show scheduling, pricing, inventory, Stripe checkout, and sign-out remain wired (1.279709ms)
+(node:25608) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/consumer-access-invariant.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ INV-ENT-9: admin authority never binds to a mutable attribute
+  ✔ B1.1 constants.js no longer matches on email for authority (0.601708ms)
+  ✔ B1.2 admin-authority.js does not consult ADMIN_EMAIL (0.203ms)
+  ✔ B1.3 hasTrustedAdminClaim accepts only id and app_metadata (0.234042ms)
+  ✔ B1.4 no server route gates admin on an email comparison (0.466542ms)
+  ✔ B1.5 those routes no longer trust getSession() for identity (0.265917ms)
+  ✔ B1.6 an email-only bootstrap exists as an operator SQL path (0.13625ms)
+✔ INV-ENT-9: admin authority never binds to a mutable attribute (2.491542ms)
+▶ INV-ENT-11: admin revocation is immediate
+  ✔ B2.1 cached admin decisions are generation-stamped (0.106417ms)
+  ✔ B2.2 the cache is not consulted when the generation is unknown (0.111375ms)
+  ✔ B2.3 revoking admin bumps the generation (0.091834ms)
+  ✔ B2.4 granting admin bumps the generation (0.108208ms)
+  ✔ B2.5 admin shares the entitlement generation (one capability substrate) (0.053333ms)
+✔ INV-ENT-11: admin revocation is immediate (0.61575ms)
+▶ INV-ENT-7: capabilityVersion moves iff rights move
+  ✔ B3.1 identical rights → identical fingerprint (0.52375ms)
+  ✔ B3.2 ownedSlugs order does not affect the fingerprint (0.089083ms)
+  ✔ B3.3 duplicate slugs do not affect the fingerprint (0.063542ms)
+  ✔ B3.4 a rights-neutral rewrite produces NO fingerprint change (0.065166ms)
+  ✔ B3.5 gaining admin DOES change the fingerprint (0.073125ms)
+  ✔ B3.6 losing subscriber DOES change the fingerprint (0.051458ms)
+  ✔ B3.7 acquiring a slug DOES change the fingerprint (0.048084ms)
+  ✔ B3.8 vault tier and playback policy are rights-bearing (0.058542ms)
+  ✔ B3.9 canonicalize is key-order independent (0.042542ms)
+  ✔ B3.10 the document is frozen and carries a schema version (0.191583ms)
+  ✔ B3.11 fingerprint is a stable sha256 hex digest (0.069041ms)
+  ✔ B3.12 account state emits document, fingerprint and version (0.224875ms)
+  ✔ B3.13 version only advances on a fingerprint delta (0.11325ms)
+✔ INV-ENT-7: capabilityVersion moves iff rights move (1.76825ms)
+▶ INV-ENT-10: ownership authority is explicit
+  ✔ B4.1 DUAL_VERIFY unions both sources — the ENT-06 fix (0.290708ms)
+  ✔ B4.2 DUAL_VERIFY reports divergence (0.413083ms)
+  ✔ B4.3 DUAL_VERIFY reports no divergence when sources agree (0.06075ms)
+  ✔ B4.4 LEGACY_LIBRARY ignores entitlements (0.051833ms)
+  ✔ B4.5 ENTITLEMENTS_CANONICAL ignores library_items (0.045333ms)
+  ✔ B4.6 a MISSING entitlements table can never be canonical (0.04775ms)
+  ✔ B4.7 getOwnedSlugs routes through the authority resolver (0.207875ms)
+  ✔ B4.8 the state table is server-only and defaults to DUAL_VERIFY (0.138834ms)
+✔ INV-ENT-10: ownership authority is explicit (1.364541ms)
+▶ Guard trigger: all three execution contexts
+  ✔ B5.1 the E0-A predicate defect is corrected (0.066334ms)
+  ✔ B5.2 direct SQL (no JWT claim) is treated as privileged (0.03375ms)
+  ✔ B5.3 the guard raises 42501 for client roles (0.0345ms)
+  ✔ B5.4 the function is SECURITY DEFINER with a pinned search_path (0.06175ms)
+  ✔ B5.5 an executable four-context harness ships with the migration (0.063541ms)
+  ✔ B5.6 the harness also proves the operator is not locked out (0.034083ms)
+✔ Guard trigger: all three execution contexts (0.372ms)
+(node:25609) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/e0b-final-authority.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[capability-version] atomic resolve failed ECONNREFUSED (simulated)
+[capability-version] atomic resolve failed ECONNREFUSED (simulated)
+[ownership-authority] ENTITLEMENTS_CANONICAL requested but parity is not attested at zero — refusing and falling back to DUAL_VERIFY { parityVerifiedAt: null, parityLibraryOnly: null, source: 'table' }
+[ownership-authority] ENTITLEMENTS_CANONICAL requested but parity is not attested at zero — refusing and falling back to DUAL_VERIFY {
+  parityVerifiedAt: '2026-08-22T00:00:00Z',
+  parityLibraryOnly: 17,
+  source: 'table'
+}
+[ownership-authority] ENTITLEMENTS_CANONICAL requested but parity is not attested at zero — refusing and falling back to DUAL_VERIFY { parityVerifiedAt: null, parityLibraryOnly: null, source: 'env' }
+▶ INV-ENT-12: one rights transition → exactly one version transition
+  ✔ C1.10 10 concurrent resolvers advance the version exactly once (1.3785ms)
+  ✔ C1.100 100 concurrent resolvers advance the version exactly once (1.399417ms)
+  ✔ C1.1000 1000 concurrent resolvers advance the version exactly once (9.742291ms)
+  ✔ C1.reads no-op: 500 concurrent resolvers of UNCHANGED rights never advance (4.838833ms)
+  ✔ C1.sequential three real transitions advance by exactly three (0.268375ms)
+  ✔ C1.interleaved alternating documents never lose or double-count (1.7205ms)
+  ✔ C1.consistency fingerprint and version are never observed mismatched (1.59575ms)
+  ✔ C1.atomicity the CAS is a single eval, not read-then-write (0.178167ms)
+  ✔ C1.control NEGATIVE CONTROL — the E0-B read-then-write DOES race here (1.127875ms)
+  ✔ C1.source the implementation uses eval and has no read-then-INCR path (0.344083ms)
+✔ INV-ENT-12: one rights transition → exactly one version transition (23.398125ms)
+▶ INV-ENT-11: revocation is visible with no stale window
+  ✔ C2.1 a bump invalidates a positive slug grant on the very next read (0.3305ms)
+  ✔ C2.2 a bump invalidates a cached tier immediately (0.158208ms)
+  ✔ C2.3 the generation is never served from a local cache (0.251959ms)
+  ✔ C2.4 generation and value are read in ONE atomic call (0.073875ms)
+  ✔ C2.5 concurrent revocation during resolution never yields a stale grant (0.089833ms)
+  ✔ C2.6 100 concurrent readers after a revoke all miss (0.5555ms)
+  ✔ C2.7 the generation bump is itself atomic (INCR+EXPIRE in one script) (0.054ms)
+  ✔ C2.8 concurrent bumps are all counted (0.297416ms)
+✔ INV-ENT-11: revocation is visible with no stale window (1.924292ms)
+▶ INV-ENT-8: store failure never defaults to allow
+  ✔ C3.1 unreachable store → slug grant is a MISS, not an allow (1.018625ms)
+  ✔ C3.2 unreachable store → tier is a MISS (0.092667ms)
+  ✔ C3.3 absent store client → MISS (0.048875ms)
+  ✔ C3.4 unreachable store → capability version is null, never 'unchanged' (0.511625ms)
+  ✔ C3.5 recovery after a reconnect resumes correct behaviour (0.145166ms)
+  ✔ C3.6 a failed bump does not leave a poisoned local cache (0.116917ms)
+  ✔ C3.7 duplicate identical resolves during retries do not double-advance (0.112708ms)
+✔ INV-ENT-8: store failure never defaults to allow (2.137833ms)
+▶ INV-ENT-13/14: ownership authority cutover
+  ✔ C4.1 CANONICAL is REFUSED when parity is unattested (0.374167ms)
+  ✔ C4.2 CANONICAL is REFUSED when parity is attested but non-zero (0.139625ms)
+  ✔ C4.3 CANONICAL is HONOURED when parity is attested at zero (0.064458ms)
+  ✔ C4.4 an env override cannot bypass the parity gate (0.115959ms)
+  ✔ C4.5 no in-process state cache — every call re-reads (0.13675ms)
+  ✔ C4.6 a cutover is observed by the next call, deterministically (0.108041ms)
+  ✔ C4.7 an unreadable state degrades to DUAL_VERIFY (0.110875ms)
+  ✔ C4.8 the DB cutover function refuses CANONICAL with non-zero parity (0.131667ms)
+  ✔ C4.9 admin recovery exists and is denied to client roles (0.125708ms)
+✔ INV-ENT-13/14: ownership authority cutover (1.416208ms)
+▶ Static audit: authority resolution is centralized
+  ✔ C5.0 the audit actually scans a meaningful number of routes (14.937834ms)
+  ✔ C5.1 no API route compares an email for authorization (19.268667ms)
+  ✔ C5.2 no API route uses getSession() for an authorization decision (15.316625ms)
+  ✔ C5.3 no route feeds a DB-sourced role into isAdminUser (13.209375ms)
+  ✔ C5.3b complete-profile cannot let the request body set role (0.182042ms)
+  ✔ C5.3c no route derives admin from a role read out of profiles (12.522ms)
+  ✔ C5.4 isAdminUser has exactly one definition (0.114792ms)
+  ✔ C5.5 no privilege table gains a client write policy (9.841084ms)
+✔ Static audit: authority resolution is centralized (85.593958ms)
+(node:25610) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/e0c-atomic-authority.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ INV-ADMIN-1: a guest identity is never administrative
+  ✔ F1.1 a guest carrying the admin user id is rejected (1.080459ms)
+  ✔ F1.2 a guest with isAdmin:true is still rejected (0.067083ms)
+  ✔ F1.3 a guest with an admin app_metadata claim is still rejected (0.0535ms)
+  ✔ F1.4 a real session with isAdmin:true is still accepted (0.044208ms)
+  ✔ F1.5 a real session with an app_metadata claim is still accepted (0.044208ms)
+  ✔ F1.6 the guard precedes every other branch in the source (0.220125ms)
+✔ INV-ADMIN-1: a guest identity is never administrative (2.118292ms)
+▶ INV-ID-1: contact details cannot mint an identity
+  ✔ F2.1 the guest endpoint is read/clear only (0.246875ms)
+  ✔ F2.2 guest identity creation helpers are absent (0.234208ms)
+  ✔ F2.3 the caller-less legacy gift redemption route is deleted (0.080209ms)
+  ✔ F2.4 no route creates a new guest cookie (25.637625ms)
+✔ INV-ID-1: contact details cannot mint an identity (26.369667ms)
+▶ INV-SEC-2: signing domains are separated
+  ✔ F3.1 guest cookies no longer fall back to ADMIN_SEED_SECRET (0.23525ms)
+  ✔ F3.2 gift reminder links no longer fall back to ADMIN_SEED_SECRET (0.109ms)
+  ✔ F3.3 collector IP hashing no longer falls back to ADMIN_SEED_SECRET (0.17075ms)
+  ✔ F3.4 guest cookie signing supports dual-key rotation (0.081292ms)
+  ✔ F3.5 cookie verification cannot throw on a length mismatch (0.1105ms)
+  ✔ F3.6 signing fails closed with no secret configured (0.249167ms)
+✔ INV-SEC-2: signing domains are separated (1.05975ms)
+▶ INV-ADMIN-3: privileged routes authorise by actor or service credential
+  ✔ F4.1 no API route reads ADMIN_SEED_SECRET directly (14.221959ms)
+  ✔ F4.2 no CLIENT file handles the admin secret (17.313875ms)
+  ✔ F4.3 no window.prompt collects a secret anywhere (24.483833ms)
+  ✔ F4.4 the guard compares in constant time and tolerates length mismatch (0.151208ms)
+  ✔ F4.5 there is NO universal admin bearer secret (0.17725ms)
+  ✔ F4.6 an unconfigured capability grants nothing (fails closed) (0.117583ms)
+  ✔ F4.7 each rewired route names its own capability (0.484542ms)
+  ✔ F4.8 admin/gifts is human-administrator only (0.092083ms)
+  ✔ F4.9 the three caller-less routes are RETIRED, not re-blessed as admin (0.248291ms)
+  ✔ F4.10 retirement defaults to blocked (0.114ms)
+✔ INV-ADMIN-3: privileged routes authorise by actor or service credential (57.577292ms)
+▶ INV-AUTH-1/2: custom MFA is durable, session-bound, and fail-closed
+  ✔ F6.1 opaque authority is hashed and server-backed (0.062ms)
+  ✔ F6.2 authority binds immutable user and Supabase session (0.047791ms)
+  ✔ F6.3 missing production policy fails closed (0.079625ms)
+  ✔ F6.4 canonical admin boundary requires custom authority, not AAL (0.111792ms)
+  ✔ F6.5 only successful login-step2 commits authority (0.096333ms)
+  ✔ F6.6 sign-out revokes server authority before Supabase sign-out (0.111209ms)
+✔ INV-AUTH-1/2: custom MFA is durable, session-bound, and fail-closed (0.580792ms)
+▶ INV-ID-2: only registered identities are admitted
+  ✔ F7.1 no guest possession-proof surface remains (0.12625ms)
+  ✔ F7.2 a principal assurance vocabulary exists (0.091167ms)
+✔ INV-ID-2: only registered identities are admitted (0.252208ms)
+▶ AUTH-02: OTP consumption is atomic and rate limited
+  ✔ F5.1 login-step2 now rate limits (0.072625ms)
+  ✔ F5.2 the JS read-modify-write is gone (0.042458ms)
+  ✔ F5.3 verification goes through the atomic function (0.032333ms)
+  ✔ F5.4 the function increments in place and locks the row (0.038625ms)
+  ✔ F5.5 the function burns the code on success and on lockout (0.076541ms)
+  ✔ F5.6 login_otp is now under source control with RLS and no policies (0.084583ms)
+  ✔ F5.8 consumption binds to the exact challenge id (0.052083ms)
+  ✔ F5.8b p_challenge_id is REQUIRED — no nullable fallback survives (0.071542ms)
+  ✔ F5.8c the newest-row-for-user branch is gone entirely (0.087209ms)
+  ✔ F5.8d every production caller supplies an explicit challenge id (0.225458ms)
+  ✔ F5.8e login-step2 rejects a cookie with no challenge id (0.042ms)
+  ✔ F5.9 the unsafe 3-argument overload is dropped (0.039542ms)
+  ✔ F5.10 the live login call site passes a challenge id (0.124042ms)
+  ✔ F5.11 the function revokes from PUBLIC, not just the named roles (0.035291ms)
+✔ AUTH-02: OTP consumption is atomic and rate limited (1.161125ms)
+(node:25611) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/e1-identity-hardening.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ INV-MFA-3/6 authority is opaque, server-only, user and session bound (0.59ms)
+✔ INV-MFA-8 generation revocation is atomic and immediate (0.079125ms)
+✔ INV-MFA-9 OTP replay cannot reach mint boundary (0.251833ms)
+✔ INV-MFA-10/13 raw password and missing config cannot authorize admin (0.138041ms)
+✔ INV-MFA-7 sign-out revokes cookie and durable authority (0.065917ms)
+✔ INV-MFA diagnostics are structured and internal reasons stay server-side (0.2915ms)
+✔ INV-MFA admin release recovery renews authority without leaving the storefront (0.488792ms)
+✔ INV-MFA every admin sign-out surface uses canonical revocation (1.740458ms)
+✖ INV-MFA-4 every repository API route is classified exactly once (14.445625ms)
+✔ INV-MFA-4 privileged guard symbols are explicitly imported (6.018625ms)
+✔ INV-MFA-1/4 canonical human guard has no Supabase AAL policy fallback (0.198625ms)
+✔ INV-MFA-8 password reset and admin revocation advance MFA generation (0.19125ms)
+✔ INV-MFA expiration has a controlled service-only production proof (0.155916ms)
+(node:25612) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/e1m-custom-mfa.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ INV-ENT-1/2: admin authority comes only from server-controlled state
+  ✔ E1.1 isAdminUser does NOT accept a bare user.role === 'admin' (1.334833ms)
+  ✔ E1.2 isAdminUser accepts the server-resolved isAdmin flag (0.164083ms)
+  ✔ E1.3 isAdminUser still honours app_metadata.role (service-role only) (0.088792ms)
+  ✔ E1.4 session-user NEVER reads user_metadata.role (0.138209ms)
+  ✔ E1.5 session-user no longer selects profiles.role (0.114958ms)
+  ✔ E1.6 session-user resolves admin through admin-authority (0.082333ms)
+  ✔ E1.7 entitlement resolver no longer derives admin from profiles.role (0.054166ms)
+  ✔ E1.8 admin-authority does not consult any user-writable source (0.228041ms)
+✔ INV-ENT-1/2: admin authority comes only from server-controlled state (2.822958ms)
+▶ INV-ENT-1: schema prevents self-promotion
+  ✔ E2.1 admin_principals exists with RLS enabled (0.1065ms)
+  ✔ E2.2 admin_principals grants nothing to client roles (0.15275ms)
+  ✔ E2.3 blanket UPDATE on profiles is revoked from authenticated (0.063959ms)
+  ✔ E2.4 a guard trigger rejects client-originated role changes (0.066875ms)
+  ✔ E2.5 the update policy states an explicit WITH CHECK (0.076ms)
+  ✔ E2.6 existing admins are backfilled so the operator is not locked out (0.068166ms)
+✔ INV-ENT-1: schema prevents self-promotion (0.690666ms)
+▶ INV-ENT-3/4/8: generation-based cache invalidation
+  ✔ E3.1 a generation counter exists and can be bumped (0.104416ms)
+  ✔ E3.2 tier invalidation bumps the generation, not just the tier key (0.079334ms)
+  ✔ E3.3 full invalidation bumps the generation regardless of named slugs (0.061666ms)
+  ✔ E3.4 slug entries are written WITH a generation stamp (0.055333ms)
+  ✔ E3.5 slug GRANTS are generation-validated on read (0.053ms)
+  ✔ E3.6 legacy un-stamped slug entries are treated as stale (0.037375ms)
+  ✔ E3.7 tier entries are generation-stamped and validated (0.074416ms)
+  ✔ E3.8 INV-ENT-8 — unreachable Redis denies cache use rather than allowing (0.080333ms)
+  ✔ E3.9 denials may still be served from L1 (fail-closed direction) (0.03825ms)
+✔ INV-ENT-3/4/8: generation-based cache invalidation (0.688417ms)
+▶ INV-ENT-5: webhook delivery never depends on redirects
+  ✔ E4 app/api/webhook/route.js invokes the handler directly (0.136833ms)
+  ✔ E4 app/api/stripe/webhook/route.js invokes the handler directly (0.100875ms)
+  ✔ E4 app/api/webhooks/stripe/route.js invokes the handler directly (0.151167ms)
+  ✔ E4.1 idempotency authority failure is retryable and fail-closed (0.171541ms)
+✔ INV-ENT-5: webhook delivery never depends on redirects (0.613917ms)
+▶ INV-ENT-6: catalog naming cannot grant capability
+  ✔ E5.1 collector authority is resolved from the typed column (0.09025ms)
+  ✔ E5.2 getCollectorAccessState no longer prefix-matches owned slugs directly (0.066333ms)
+  ✔ E5.3 with no admin client, collector access is denied not inferred (0.04475ms)
+  ✔ E5.4 the typed column is created, backfilled and made NOT NULL (0.042125ms)
+✔ INV-ENT-6: catalog naming cannot grant capability (0.297667ms)
+(node:25613) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/entitlement-authority.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ F0-LIFE-B1 envelope encryption round-trips and rejects ciphertext tampering (2.340125ms)
+✔ F0-LIFE-B2 completed, deferred, and failed outcomes use distinct fenced RPCs (0.628959ms)
+✔ F0-LIFE-B3 missing processors retry and batches obey their work bound (0.222083ms)
+(node:25614) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/f0-account-lifecycle-behavior.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ F0-LIFE-1 deletion is a durable leased saga, never a request-time cascade (0.975417ms)
+✔ F0-LIFE-5 worker claims are atomic, ordered, fenced, and service-role only (0.195708ms)
+✔ F0-LIFE-6 retries are bounded and use durable exponential backoff (0.074625ms)
+✔ F0-LIFE-7 lifecycle evidence survives terminal Auth identity deletion (0.099458ms)
+✔ F0-LIFE-8 coordinator is bounded, fenced, and never advances unknown work (0.774ms)
+✔ F0-LIFE-9 execution is disabled by default and processors fail closed (0.103833ms)
+✔ F0-LIFE-10 retention policy separates erasure from retained evidence (0.105833ms)
+✔ F0-LIFE-11 exports require envelope-encryption metadata and expiry (0.053583ms)
+✔ F0-LIFE-12 destructive and external operations have durable idempotency receipts (0.078416ms)
+✔ F0-LIFE-13 certified processors replace fail-closed placeholders explicitly (0.150041ms)
+✔ F0-LIFE-14 account exports use per-artifact envelope encryption (0.077292ms)
+✔ F0-LIFE-15 export delivery is authenticated, integrity checked, and non-cacheable (0.174125ms)
+✔ F0-LIFE-16 delivery evidence and key destruction are service-role atomic operations (0.052334ms)
+✔ F0-LIFE-17 scheduled deferral is fenced and does not consume retry budget (0.051959ms)
+✔ F0-LIFE-18 expiry deletes ciphertext before destroying its wrapped key (0.118666ms)
+✔ F0-LIFE-19 financial and collector evidence survives auth deletion pseudonymously (0.16875ms)
+✔ F0-LIFE-20 destructive database processors require the active fenced step lease (0.09625ms)
+✔ F0-LIFE-21 auth deletion has a database-enforced zero-live-reference preflight (0.06625ms)
+✔ F0-LIFE-22 subscription cancellation and capability revocation are durable (0.083625ms)
+✔ F0-LIFE-23 personal storage deletion is exact-key, referenced, and lease fenced (0.063041ms)
+✔ F0-LIFE-24 referenced or unsupported storage fails closed (0.060833ms)
+✔ F0-LIFE-25 evidence sealing is immutable and atomic with saga completion (0.077334ms)
+✔ F0-LIFE-26 Stripe customer identifiers are anonymized with durable receipts (0.129667ms)
+✔ F0-LIFE-2 export and deletion have distinct step graphs (0.109333ms)
+✔ F0-LIFE-3 users have cooling-off cancellation but cannot execute the saga (0.102958ms)
+✔ F0-LIFE-4 lifecycle requests are rate-limited fail-closed and correlated (0.063417ms)
+(node:25615) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/f0-account-lifecycle.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ F0-RATE-1 bulk gifts use the canonical AAL-aware admin actor (0.62925ms)
+✔ F0-RATE-2 bulk gifts use a durable fail-closed limiter (0.2175ms)
+✔ F0-RATE-3 the shared limiter supports explicit fail-closed behavior (0.202416ms)
+✖ F0-ADMIN-1 every /api/admin route declares a canonical authority boundary (11.043292ms)
+✔ F0-ADMIN-2 admin routes cannot bypass the canonical boundary (6.817084ms)
+(node:25616) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/f0-privileged-boundaries.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ missing MFA policy is a distinct fail-closed configuration error (0.555292ms)
+✔ malformed MFA policy "" is invalid, never missing (0.070583ms)
+✔ malformed MFA policy "   " is invalid, never missing (0.044917ms)
+✔ malformed MFA policy "1" is invalid, never missing (0.038542ms)
+✔ malformed MFA policy "0" is invalid, never missing (0.052625ms)
+✔ malformed MFA policy "yes" is invalid, never missing (0.042958ms)
+✔ malformed MFA policy "no" is invalid, never missing (0.0505ms)
+✔ malformed MFA policy "on" is invalid, never missing (0.036625ms)
+✔ malformed MFA policy "off" is invalid, never missing (0.068916ms)
+✔ malformed MFA policy "bogus" is invalid, never missing (0.0845ms)
+✔ MFA policy "true" requires authority (0.066375ms)
+✔ MFA policy " TRUE " requires authority (0.03725ms)
+✔ MFA policy "TrUe" requires authority (0.031834ms)
+✔ explicit false is accurately disabled only outside production (0.045625ms)
+✔ explicit false cannot disable production MFA (0.046958ms)
+✔ policy results are immutable (0.055375ms)
+(node:25617) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/mfa-policy.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ complimentary collector without purchase-library items gets owner badge and Inner Circle access (1.097459ms)
+✔ canonical collector signals use the existing shared owner predicate (0.139542ms)
+✔ community participation does not replace the collector owner identity (0.092917ms)
+✔ pending, paused and revoked ownerships do not display an owner badge (0.085125ms)
+✔ a collector-looking product slug alone cannot confer identity or section access (0.062375ms)
+✔ subscribers and administrators retain section access without becoming collector owners (0.067416ms)
+✔ ordinary community badges and byline counting are preserved without unlocking Inner Circle (0.077416ms)
+✔ signed-out and switched-account snapshots cannot retain another user collector identity (0.066042ms)
+✔ sidebar, mobile header, and account/community bridge show the same badge after grant and clear it after revocation (3.125292ms)
+✔ Inner Circle display uses the resolved permission rather than matching badge copy (0.734625ms)
+(node:25618) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/profile-status.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ new Auth user profile provisioning
+  ✔ keeps the Auth principal only after its profile commits (0.793334ms)
+  ✔ removes the Auth principal when profile persistence fails (0.130666ms)
+  ✔ reports a failed compensation instead of claiming rollback succeeded (0.102167ms)
+✔ new Auth user profile provisioning (1.558917ms)
+(node:25619) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/provision-new-user.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 256
+ℹ suites 23
+ℹ pass 254
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 242.251958
+
+✖ failing tests:
+
+test at src/lib/auth/__tests__/e1m-custom-mfa.test.js:83:1
+✖ INV-MFA-4 every repository API route is classified exactly once (14.445625ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  156 !== 186
+  
+      at TestContext.<anonymous> (file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/e1m-custom-mfa.test.js:90:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 156,
+    expected: 186,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at src/lib/auth/__tests__/f0-privileged-boundaries.test.js:39:1
+✖ F0-ADMIN-1 every /api/admin route declares a canonical authority boundary (11.043292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + [
+  +   'app/api/admin/broadcast/projects/[kind]/[id]/artwork/route.js',
+  +   'app/api/admin/broadcast/projects/route.js',
+  +   'app/api/admin/broadcast/sessions/[id]/route.js',
+  +   'app/api/admin/broadcast/sessions/route.js'
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///private/var/folders/w1/x_8cmtyx72q4f8ht37djncfm0000gn/T/lyrics-auth-baseline-55f_8cvd/apps/web/src/lib/auth/__tests__/f0-privileged-boundaries.test.js:45:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'app/api/admin/broadcast/projects/[kind]/[id]/artwork/route.js', 'app/api/admin/broadcast/projects/route.js', 'app/api/admin/broadcast/sessions/[id]/route.js', 'app/api/admin/broadcast/sessions/route.js' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

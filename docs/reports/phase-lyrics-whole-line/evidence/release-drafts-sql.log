@@ -1,0 +1,17 @@
+(node:54840) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/lyrics/draft-store.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS an existing release starts with no private draft and the exact published baseline
+PASS unfinished text and partial timing round-trip without changing listener lyrics
+PASS drafts remain isolated by administrator and exact recording identity
+PASS stale or first-insert CAS revisions cannot overwrite a newer draft
+PASS a changed published baseline blocks a stale draft write atomically
+PASS discarding to published lyrics clears recovery while retaining the current CAS token
+PASS legacy singles without canonical release rows use the same private working-draft contract
+PASS legacy catalog recordings persist drafts without borrowing release-level or first-track lyrics
+PASS foreign, removed and obsolete virtual recording identities cannot read or save drafts
+PASS malformed draft documents and oversized text fail safely
+PASS deleted releases do not expose retained private working copies
+PASS anonymous and authenticated client roles cannot read, write or execute private draft RPCs
+12 PostgreSQL draft checks passed. Local captured-schema fixture only; no remote migration or production write.

@@ -1420,7 +1420,7 @@ export function SingleModal({
           </FloatingPlayer>
           {/* Lyrics overlay — takes priority inside the artwork area */}
           <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen ? "auto" : "none" }}>
-            <GlyphLyricsPanel playbackTime={lyricTime} syncStatus={lyricRecording?.sync_status} open={lyricsOpen} status={creditRequest.status} onRetry={creditRequest.retry} lrcText={lyricsText} onClose={() => setLyricsOpen(false)} isMobile />
+            <GlyphLyricsPanel recordingKey={lyricRecording?.id || track?.slug} playbackTime={lyricTime} syncStatus={lyricRecording?.sync_status} onSeek={isPreview || engineTrack?.metadata?.access?.previewOnly === true ? undefined : seek} open={lyricsOpen} status={creditRequest.status} onRetry={creditRequest.retry} lrcText={lyricsText} onClose={() => setLyricsOpen(false)} isMobile />
           </div>
         </div>
 
@@ -2178,7 +2178,7 @@ function AlbumModalView({
           {/* Lyrics overlay — fullscreen version portals to fixed overlay via GlyphLyricsPanel */}
           <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen && !lyricsFullscreen ? "auto" : "none" }}>
             <GlyphLyricsPanel
-              playbackTime={lyricTime} syncStatus={lyricRecording?.sync_status}
+              recordingKey={lyricRecording?.id || activeTrack?.id} playbackTime={lyricTime} syncStatus={lyricRecording?.sync_status}
               open={lyricsOpen}
               lrcText={lyricsText}
               status={creditRequest.status} onRetry={creditRequest.retry}

@@ -1,0 +1,41 @@
+{
+  "time_utc": "2026-10-26T00:09:16.728627+00:00",
+  "base_url": "http://127.0.0.1:3118",
+  "checks": [
+    {
+      "method": "GET",
+      "path": "/admin/upload",
+      "status": 200,
+      "expected": 200,
+      "body": "HTML delivered; no UI interaction performed"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/releases/11111111-1111-4111-8111-111111111111/tracks/22222222-2222-4222-8222-222222222222/lyrics-audio?metadata=1",
+      "status": 401,
+      "expected": 401,
+      "body": {
+        "error": "Unauthorized"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/releases/11111111-1111-4111-8111-111111111111?lyric_draft=22222222-2222-4222-8222-222222222222&draft_owner=33333333-3333-4333-8333-333333333333",
+      "status": 401,
+      "expected": 401,
+      "body": {
+        "error": "Unauthorized"
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/releases/11111111-1111-4111-8111-111111111111",
+      "status": 401,
+      "expected": 401,
+      "body": {
+        "error": "Unauthorized"
+      }
+    }
+  ],
+  "scope": "Local production build only. Anonymous HTTP delivery/authentication gates. No signed-in UI, media playback, touch, or remote write."
+}

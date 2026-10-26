@@ -1,0 +1,26 @@
+(node:44431) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:44431) DeprecationWarning: mock.module(): options.namedExports is deprecated. Use options.exports instead.
+(node:44431) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/lyrics/draft-store.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS existing Upload Manager song captures, saves and reopens canonical timing through the actual editor and PostgreSQL
+PASS Save draft survives leaving and reopening an existing release without publishing unfinished lyrics
+PASS unfinished current-song timing survives Save draft and reopen while published lyrics remain unchanged
+PASS an immediate refresh without pressing Save preserves the latest timing through device recovery
+PASS discarding a recovered working copy is explicit and reversible
+PASS storage failure preserves the exit warning until the current text is durably saved
+PASS existing albums automatically prepare the exact selected recording while preserving edits on the other recording
+PASS saving an existing album persists separate per-recording lyrics and refreshes the shared saved baseline
+PASS existing legacy single without a track row uses the same timing editor and atomic save
+PASS future single upload captures timing into the wizard data with its real uploaded track ID
+PASS upload autosave payload retains the exact Enhanced LRC for later resume
+PASS the full UploadWizard resumes unfinished cue drafts without applying or discarding them
+PASS the full UploadWizard restores saved timing from the server snapshot and retains it during unmount flush
+PASS first publication rejects unfinished and stale-reference timing before storage copies or release writes
+[publish] SUCCESS releaseId=55555555-5555-4555-8555-555555555555 slug=future productId=34768820-284c-493d-97ce-2ef61e63ca12 status=published
+PASS the actual publication handler preserves timing from upload data through first publication and reopen
+PASS future album upload keeps per-recording timing separate from release lyric defaults
+PASS single and album Final Review block unfinished timing and allow applied timing using the shared server validation contract
+17 PostgreSQL-backed form checks passed. Fixture authorization, storage and audio clocks; no production login or playback claimed.

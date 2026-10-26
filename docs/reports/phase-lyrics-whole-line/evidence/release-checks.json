@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-26",
+  "base_commit": "9685c0bdfe18d197d857710d911f132a4deb5ec3",
+  "preserved_live_pricing_fix": true,
+  "focused_passed": 336,
+  "focused_logs": {
+    "release-contracts.log": 213,
+    "release-studio.log": 22,
+    "release-authoring.log": 13,
+    "release-forms.log": 17,
+    "release-readiness.log": 11,
+    "release-lines.log": 15,
+    "release-modals.log": 23,
+    "release-publication.log": 10,
+    "release-drafts-sql.log": 12
+  },
+  "playback_passed": 164,
+  "core_passed": 156,
+  "production_webpack_build": "passed",
+  "runtime_database": "live migration applied and rollback probes passed; 0 retained probe rows; catalog counts unchanged",
+  "known_baseline_failures": "Two lint errors and two auth-inventory failures documented in PHASE_REPORT; no new failure claim.",
+  "fixture_environment": {
+    "MODAL_JSDOM_MODULE": "temporary jsdom@26.1.0",
+    "CREDITS_PGLITE_MODULE": "temporary @electric-sql/pglite@0.3.14",
+    "app_dependency_changes": false
+  },
+  "browser_or_physical_audio_proof": false
+}

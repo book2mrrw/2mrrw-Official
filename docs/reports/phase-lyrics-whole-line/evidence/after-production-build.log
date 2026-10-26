@@ -1,0 +1,265 @@
+[@sentry/nextjs] DEPRECATION WARNING: disableLogger is deprecated and will be removed in a future version. Use webpack.treeshake.removeDebugLogging instead.
+[@sentry/nextjs] DEPRECATION WARNING: automaticVercelMonitors is deprecated and will be removed in a future version. Use webpack.automaticVercelMonitors instead.
+(node:44446) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/static-asset-manifest.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▲ Next.js 16.2.4 (webpack)
+- Environments: .env.local
+- Experiments (use with caution):
+  · clientTraceMetadata
+
+  Creating an optimized production build ...
+[@sentry/nextjs] Could not find `onRequestError` hook in instrumentation file. This indicates outdated configuration of the Sentry SDK. Use `Sentry.captureRequestError` to instrument the `onRequestError` hook: https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/#errors-from-nested-react-server-components
+[@sentry/nextjs] It seems like you don't have a global error handler set up. It is recommended that you add a 'global-error.js' file with Sentry instrumentation so that React rendering errors are reported to Sentry. Read more: https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/#react-render-errors-in-app-router (you can suppress this warning by setting SENTRY_SUPPRESS_GLOBAL_ERROR_HANDLER_FILE_WARNING=1 as environment variable)
+[@sentry/nextjs] DEPRECATION WARNING: It is recommended renaming your `sentry.client.config.js` file, or moving its content to `instrumentation-client.ts`. When using Turbopack `sentry.client.config.js` will no longer work. Read more about the `instrumentation-client.ts` file: https://nextjs.org/docs/app/api-reference/file-conventions/instrumentation-client
+✓ Compiled successfully in 14.3s
+  Running TypeScript ...
+  Finished TypeScript in 84ms ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/64) ...
+  Generating static pages using 9 workers (16/64) 
+  Generating static pages using 9 workers (32/64) 
+  Generating static pages using 9 workers (48/64) 
+✓ Generating static pages using 9 workers (64/64) in 464ms
+⚠ Unsupported metadata themeColor is configured in metadata export in /_not-found. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /collector/activate. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /forgot-password. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /collectors-cards. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /join. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /reset-password. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /subscribe. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /success. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /verify-otp. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ƒ /admin
+├ ƒ /admin/analytics
+├ ƒ /admin/broadcast
+├ ƒ /admin/gifts
+├ ƒ /admin/media
+├ ƒ /admin/podcast
+├ ƒ /admin/releases
+├ ƒ /admin/shows
+├ ƒ /admin/upload
+├ ƒ /admin/visual-layer
+├ ƒ /album/[slug]
+├ ƒ /api/access/[token]
+├ ƒ /api/account/lifecycle
+├ ƒ /api/account/lifecycle/[requestId]/download
+├ ƒ /api/account/state
+├ ƒ /api/admin/analytics
+├ ƒ /api/admin/analytics/funnels
+├ ƒ /api/admin/analytics/global
+├ ƒ /api/admin/analytics/revenue
+├ ƒ /api/admin/analytics/timing
+├ ƒ /api/admin/apply-r2-cors
+├ ƒ /api/admin/audio-visual/draft
+├ ƒ /api/admin/audio-visual/seriez
+├ ƒ /api/admin/audio-visual/seriez/[id]/next-episode
+├ ƒ /api/admin/audio-visual/upload/complete
+├ ƒ /api/admin/audio-visual/upload/presigned
+├ ƒ /api/admin/audio-visuals
+├ ƒ /api/admin/audio-visuals/[id]
+├ ƒ /api/admin/backfill-playback-keys
+├ ƒ /api/admin/broadcast/projects
+├ ƒ /api/admin/broadcast/projects/[kind]/[id]/artwork
+├ ƒ /api/admin/broadcast/sessions
+├ ƒ /api/admin/broadcast/sessions/[id]
+├ ƒ /api/admin/catalog/hls-sync-trigger
+├ ƒ /api/admin/catalog/ingest-trigger
+├ ƒ /api/admin/catalog/r2-ingest
+├ ƒ /api/admin/catalog/revalidate
+├ ƒ /api/admin/collector-cards
+├ ƒ /api/admin/contributors
+├ ƒ /api/admin/diagnostics/entitlements-parity
+├ ƒ /api/admin/diagnostics/mfa-expiration
+├ ƒ /api/admin/fulfill-recovery
+├ ƒ /api/admin/genres
+├ ƒ /api/admin/geo/backfill
+├ ƒ /api/admin/gifts
+├ ƒ /api/admin/hls/complete
+├ ƒ /api/admin/hls/queue
+├ ƒ /api/admin/hls/status
+├ ƒ /api/admin/live/vods
+├ ƒ /api/admin/live/vods/[id]
+├ ƒ /api/admin/livestream
+├ ƒ /api/admin/livestream/studio/session
+├ ƒ /api/admin/media-diagnostics
+├ ƒ /api/admin/media/extract-poster
+├ ƒ /api/admin/media/reconcile-catalog
+├ ƒ /api/admin/media/refresh-track
+├ ƒ /api/admin/media/validate
+├ ƒ /api/admin/printful/sync
+├ ƒ /api/admin/releases
+├ ƒ /api/admin/releases/[id]
+├ ƒ /api/admin/releases/[id]/draft
+├ ƒ /api/admin/releases/[id]/publish
+├ ƒ /api/admin/releases/[id]/replace-master
+├ ƒ /api/admin/releases/[id]/replace-master/stage
+├ ƒ /api/admin/releases/[id]/status
+├ ƒ /api/admin/releases/[id]/tracks/[trackId]
+├ ƒ /api/admin/releases/[id]/tracks/[trackId]/lyrics-audio
+├ ƒ /api/admin/releases/draft
+├ ƒ /api/admin/seed-products
+├ ƒ /api/admin/shows
+├ ƒ /api/admin/sync/catalog
+├ ƒ /api/admin/sync/drop-notification
+├ ƒ /api/admin/track-visuals
+├ ƒ /api/admin/twitch/authorization
+├ ƒ /api/admin/twitch/register
+├ ƒ /api/admin/upload/complete
+├ ƒ /api/admin/upload/presigned
+├ ƒ /api/admin/vault/audio/complete
+├ ƒ /api/admin/vault/audio/presigned
+├ ƒ /api/admin/vault/audio/status
+├ ƒ /api/admin/vault/complete
+├ ƒ /api/admin/vault/item-cover
+├ ƒ /api/admin/vault/item-cover/presigned
+├ ƒ /api/admin/vault/list
+├ ƒ /api/admin/vault/presigned
+├ ƒ /api/admin/vault/section-cover
+├ ƒ /api/admin/vault/section-cover/presigned
+├ ƒ /api/admin/vault/slug
+├ ƒ /api/admin/vault/video/status
+├ ƒ /api/admin/visual-assets
+├ ƒ /api/audio-visual/[videoId]/key
+├ ƒ /api/audio-visual/[videoId]/manifest
+├ ƒ /api/audio-visual/[videoId]/peek
+├ ƒ /api/audio-visual/[videoId]/variant
+├ ƒ /api/audio-visual/browse
+├ ƒ /api/audio-visual/seriez/[id]
+├ ƒ /api/auth/complete-profile
+├ ƒ /api/auth/login-step1
+├ ƒ /api/auth/login-step2
+├ ƒ /api/auth/lookup-email
+├ ƒ /api/auth/lookup-phone
+├ ƒ /api/auth/mfa-session
+├ ƒ /api/auth/signup
+├ ƒ /api/broadcast/sessions/[id]
+├ ƒ /api/broadcast/sessions/[id]/media
+├ ƒ /api/catalog/deletions
+├ ƒ /api/catalog/exclusive-drops
+├ ƒ /api/catalog/hydrate
+├ ƒ /api/catalog/releases
+├ ƒ /api/catalog/releases/[slug]
+├ ƒ /api/collector-card/activate
+├ ƒ /api/collector-card/verify
+├ ƒ /api/collector/cards
+├ ƒ /api/collector/cards/claim
+├ ƒ /api/collector/cards/verify
+├ ƒ /api/community/circle
+├ ƒ /api/community/comments
+├ ƒ /api/create-payment-intent
+├ ƒ /api/cron/account-lifecycle
+├ ƒ /api/cron/expire-gifts
+├ ƒ /api/cron/finalize-draft-dumps
+├ ƒ /api/cron/gift-reminders
+├ ƒ /api/cron/hls-stale-jobs
+├ ƒ /api/cron/livestream-notifications
+├ ƒ /api/cron/publish-scheduled
+├ ƒ /api/cron/purge-stream-events
+├ ƒ /api/cron/twitch-live-reconcile
+├ ƒ /api/donations/create-payment-intent
+├ ƒ /api/get-purchases
+├ ƒ /api/gifts/bulk
+├ ƒ /api/gifts/claim-signup
+├ ƒ /api/gifts/claim/[token]
+├ ƒ /api/gifts/preview/[token]
+├ ƒ /api/gifts/purchase
+├ ƒ /api/gifts/send
+├ ƒ /api/gifts/sent
+├ ƒ /api/guest/session
+├ ƒ /api/library
+├ ƒ /api/library/hls
+├ ƒ /api/library/hls/key
+├ ƒ /api/library/hls/variant
+├ ƒ /api/library/stream
+├ ƒ /api/live/chat/history
+├ ƒ /api/live/chat/send
+├ ƒ /api/live/checkout
+├ ƒ /api/live/relay-auth
+├ ƒ /api/live/twitch-ingest
+├ ƒ /api/live/witness-peak
+├ ƒ /api/media/playback
+├ ƒ /api/media/preview
+├ ƒ /api/media/visual
+├ ƒ /api/media/visual-assets/[slug]
+├ ƒ /api/memberships/checkout
+├ ƒ /api/notifications
+├ ƒ /api/notifications/subscribe
+├ ƒ /api/notifications/unsubscribe
+├ ƒ /api/notifications/vapid-key
+├ ƒ /api/ownership/check
+├ ƒ /api/playback/events
+├ ƒ /api/playlists
+├ ƒ /api/playlists/[id]
+├ ƒ /api/playlists/[id]/tracks
+├ ƒ /api/printful/products
+├ ƒ /api/public/events
+├ ƒ /api/public/live-vods
+├ ƒ /api/public/livestream
+├ ƒ /api/public/vault
+├ ƒ /api/purchase/confirm
+├ ƒ /api/purchases
+├ ƒ /api/queue
+├ ƒ /api/refund
+├ ƒ /api/register-user
+├ ƒ /api/save-purchase
+├ ƒ /api/shows
+├ ƒ /api/signal/active
+├ ƒ /api/signal/state
+├ ƒ /api/stream/end
+├ ƒ /api/stripe/webhook
+├ ƒ /api/tickets/checkout
+├ ƒ /api/tickets/my
+├ ƒ /api/track-visuals
+├ ƒ /api/track-visuals/[versionId]/key
+├ ƒ /api/track-visuals/[versionId]/manifest
+├ ƒ /api/track-visuals/[versionId]/variant
+├ ƒ /api/vault/audio/key
+├ ƒ /api/vault/audio/manifest
+├ ƒ /api/vault/audio/variant
+├ ƒ /api/vault/content
+├ ƒ /api/vault/media
+├ ƒ /api/vault/progress
+├ ƒ /api/vault/video/captions
+├ ƒ /api/vault/video/key
+├ ƒ /api/vault/video/manifest
+├ ƒ /api/vault/video/variant
+├ ƒ /api/webhook
+├ ƒ /api/webhooks/stripe
+├ ƒ /api/webhooks/twitch
+├ ○ /collector/activate
+├ ○ /collectors-cards
+├ ƒ /feature/[slug]
+├ ○ /forgot-password
+├ ƒ /gift/[token]
+├ ○ /join
+├ ○ /login
+├ ○ /reset-password
+├ ƒ /sitemap.xml
+├ ƒ /song/[slug]
+├ ○ /subscribe
+├ ○ /success
+└ ○ /verify-otp
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

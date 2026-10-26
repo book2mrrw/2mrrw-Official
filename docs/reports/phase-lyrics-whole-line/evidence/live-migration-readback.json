@@ -1,0 +1,26 @@
+{
+  "verified_date": "2026-10-26",
+  "project_ref": "qvfbgkbgczyqrglvgyqr",
+  "migration": "20261024010000_private_lyric_working_drafts.sql",
+  "source_sha256": "84f609257a2a7934b9391a7629fb42a09dffa5b2b8ac22f1b55544f8cb78004a",
+  "transactional_probe": "Private draft save/read, actor isolation, stale revision rejection, published-baseline rejection, foreign-recording rejection, actual anon/authenticated RPC denial. All probe writes rolled back.",
+  "readback": {
+    "anon_select": false,
+    "authenticated_select": false,
+    "counts": {
+      "catalog_tracks": 30,
+      "products": 29,
+      "releases": 13,
+      "tracks": 8
+    },
+    "draft_rows_after_rollback": 0,
+    "migration_history": [
+      {
+        "name": "private_lyric_working_drafts",
+        "version": "20261024010000"
+      }
+    ],
+    "rls_enabled": true,
+    "service_execute": true
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "selector": "agent.browsers.getForUrl(https://www.2mrrw.com/)",
+  "selection_result": "No browser is available",
+  "troubleshooting": "Read browser bootstrap troubleshooting; reused runtime; agent.browsers.list() returned [].",
+  "available_browsers": [],
+  "substitute_browser_used": false,
+  "verification_not_available": [
+    "authenticated website interaction",
+    "desktop/mobile screenshots",
+    "real browser touch/hit testing",
+    "physical Android/iOS playback"
+  ]
+}

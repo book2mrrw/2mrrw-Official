@@ -1,0 +1,27 @@
+(node:31680) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/lyrics/timing.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS the studio starts with Write, Time, Preview guidance without interrupting background playback
+PASS plain-text preview remains an optional path without invented timing
+PASS capture is gated on the actual reference metadata even when the server has no bound duration
+PASS a line tap records touch-down time once and advances without a duplicate click stamp
+PASS horizontal swipes navigate in both directions without modifying cue data
+PASS vertical drag cancels capture so normal scrolling cannot stamp a lyric
+PASS hold/release captures real word bounds and provides active capture feedback
+PASS swiping or pointer cancellation during a word hold never commits a partial capture
+PASS keyboard word capture ignores key repeat and records the original hold start
+PASS arrow selection and 50 ms keyboard nudging move the selected word without shifting other cues
+PASS studio undo and redo preserve exact cue documents
+PASS typing and native audio shortcuts retain their own keyboard behavior
+PASS rehearsal looping follows the selected line window using the audio clock without changing lyrics
+PASS rehearsal uses two seconds of pre-roll and pauses background music only when reference playback starts
+PASS keyboard scrubbing and the accessible recording slider share the native reference clock
+PASS Preview preserves playback and renders the real artwork with the complete active line illuminated
+PASS applying valid cues keeps the existing encoding contract and explains the remaining upload save step
+PASS re-marking a line shifts its existing word cues together instead of erasing the detailed work
+PASS parent saving pauses the reference, blocks keyboard/native play, and retains cue data
+PASS failed background pause stops the reference and gives an actionable message without touching cue data
+PASS leaving timing pauses its audio and clearing all lyric text removes its timing cleanly
+PASS text-editor undo is not stolen by studio shortcuts
+22 simulated lyric studio checks passed. Fixture media, pointers and background bridge; native touch, codecs, layout and real audio remain unverified.

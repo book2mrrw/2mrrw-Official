@@ -1,0 +1,15 @@
+(node:31684) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/lyrics/timing.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS line and word cue text commits to canonical source and catalog projection together
+PASS current-song reopen restores exactly the applied document
+PASS legacy single products without track rows have an editable lyric owner
+PASS a linked product resolves to the canonical release and its recording identities
+PASS a stale save retains the previous committed lyric document
+PASS a bad later target rolls back every earlier recording edit in a batch
+PASS unfinished timing drafts cannot enter published recording storage
+PASS future release draft snapshots preserve unfinished timing for resume
+PASS first publication preserves the applied word timing across source and projection
+PASS ordinary authenticated and anonymous roles cannot call the new editing RPC
+10 PostgreSQL lyric workflow checks passed on captured-schema fixtures; no production write.

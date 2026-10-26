@@ -1,0 +1,24 @@
+✔ line starts are inclusive, next starts exclusive, with no early visual offset (0.6115ms)
+✔ a whole phrase outlives word endings and holds through the interval until its next real cue (0.081083ms)
+✔ unknown, negative and nonfinite positions never highlight a line (0.069333ms)
+✔ a final line holds to known recording duration, or indefinitely while the actual clock is valid (0.057542ms)
+✔ missing cues stay visible and do not prevent later real cues from activating (0.067083ms)
+✔ duplicate cues select the final source row at that exact timestamp (0.057959ms)
+✔ legacy unsorted rows select by time without mutating text order; invalid starts are ignored (0.402291ms)
+✔ forward/backward seeks, pauses and repeated samples are pure functions of the supplied clock (0.079625ms)
+✔ display intervals and rehearsal use the next strictly later cue, including duplicate starts (0.113375ms)
+✔ a known final duration bounds the last phrase; an unknown final duration is never guessed (0.111084ms)
+✔ text insertion and deletion preserve neighboring recording cues including repeated choruses (0.619542ms)
+✔ splitting and merging a line clear only changed rows, retaining exact following text and stanza gaps (0.138667ms)
+(node:25138) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/lyric-timing/apps/web/src/lib/lyrics/__tests__/line-intervals.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 167.787167

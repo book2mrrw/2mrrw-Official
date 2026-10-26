@@ -1,0 +1,9 @@
+{
+  "time_utc": "2026-10-26T00:11:00.856749+00:00",
+  "port": 3118,
+  "server_session": 45505,
+  "stopped_by": "Ctrl-C to the task-owned session",
+  "session_exit": 130,
+  "connect_ex_after_stop": 61,
+  "listening_after_stop": false
+}

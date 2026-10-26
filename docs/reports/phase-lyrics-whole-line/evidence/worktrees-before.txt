@@ -1,0 +1,13 @@
+/Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/2mrrw-Official-main                                                                9d7f06c8 [main]
+/private/tmp/2mrrw-audio-release-20261021                                                                                              31d7dcc4 [fix/audio-recovery-continuity]
+/private/tmp/2mrrw-production-candidate                                                                                                879b8b23 [codex/more-navigation-smoothness] prunable
+/private/tmp/claude-501/-Users-2mrrw-Desktop-2mrrw-Official-main---Copy--2-/fd92db09-8f10-43a7-9d56-96e25fa14f14/scratchpad/cover-live 9d5e2b19 (detached HEAD) prunable
+/private/tmp/claude-501/-Users-2mrrw-Desktop-2mrrw-Official-main---Copy--2-/fd92db09-8f10-43a7-9d56-96e25fa14f14/scratchpad/cover-ship 252c3f3f (detached HEAD) prunable
+/Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/credits-deployment                                                                 e7c5dafe [codex/credits-deployment]
+/Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/credits-implementation                                                             9d7f06c8 [codex/credits-metadata]
+/Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/credits-verification-baseline                                                      280b4524 (detached HEAD)
+/Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/lyric-timing                                                                       56636d21 [codex/lyric-timing]
+/Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/playlist-contract-fix                                                              74ceb04b [fix/playlist-contract]
+/Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/playlist-production-candidate                                                      e4f43ce2 [fix/playlist-production]
+/Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/playlist-release-candidate                                                         9d7f06c8 (detached HEAD)
+/Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/release-deletion-lifecycle                                                         280b4524 [fix/release-deletion-lifecycle]

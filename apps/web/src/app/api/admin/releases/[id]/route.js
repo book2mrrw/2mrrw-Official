@@ -1,4 +1,5 @@
 import { commitLyricEdit } from "@/lib/lyrics/admin-store";
+import { readLyricDraft, saveLyricDraft } from "@/lib/lyrics/draft-store";
 import { loadEditableRelease, commitCreditEdit } from "@/lib/credits/admin-store";
 import { NextResponse } from "next/server";
 import { getAdminSessionUser, requireAdminActor } from "@/lib/auth/admin-api-guard";
@@ -33,6 +34,13 @@ export async function GET(req, { params }) {
   if (!id) return NextResponse.json({ error: "Release ID required" }, { status: 400 });
 
   const admin = getAdminClient();
+
+  const draftRecording = new URL(req.url).searchParams.get("lyric_draft");
+  if (draftRecording) {
+    if (new URL(req.url).searchParams.get("draft_owner") !== user.id) return NextResponse.json({ error: "The editing account changed. Reopen this release; your device copy is retained." }, { status: 409 });
+    const outcome = await readLyricDraft(admin, user.id, id, draftRecording);
+    return NextResponse.json(outcome.body, { status: outcome.status, headers: { "Cache-Control": "private, no-store" } });
+  }
 
   try {
     const detail = await loadEditableRelease(admin, id);
@@ -80,6 +88,11 @@ export async function PATCH(req, { params }) {
   ];
 
   const admin = getAdminClient();
+  if (body.lyric_draft_version === 1) {
+    if (body.draft_owner_id !== user.id) return NextResponse.json({ error: "The editing account changed. Reopen this release; your device copy is retained." }, { status: 409 });
+    const outcome = await saveLyricDraft(admin, user.id, id, body);
+    return NextResponse.json(outcome.body, { status: outcome.status, headers: { "Cache-Control": "private, no-store" } });
+  }
   if (Object.hasOwn(body, "track_lyrics") && !body.revision) return NextResponse.json({error:"Reload the release before saving lyrics: a saved revision is required."},{status:409});
   if (body.lyric_edit_version === 1) {
     const outcome = await commitLyricEdit(admin, id, body);
