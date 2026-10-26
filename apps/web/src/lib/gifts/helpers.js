@@ -66,8 +66,7 @@ export async function expireGiftIfNeeded(gift) {
   return data;
 }
 
-export async function resolveProductForGift(gift) {
-  const admin = getAdminClient();
+export async function resolveProductForGift(gift, admin = getAdminClient()) {
   const { data: direct } = await admin
     .from("products")
     .select("id, slug, title, cover_url, product_type, content_type")
@@ -104,74 +103,50 @@ function isVaultGiftProduct(product, gift) {
   );
 }
 
-/**
- * Is this principal the rightful recipient of this gift?
- *
- * ── AUTHORITY MODEL ─────────────────────────────────────────────────────────
- *
- * `recipient_email` is CANONICAL. `recipient_id` is a CACHE, resolved at send
- * time by a profile lookup that may be wrong, absent, or point at a principal
- * that has since been superseded — and it is only corrected at claim time.
- *
- * Authorising on `recipient_id` is what stranded a real gift: it was bound to a
- * legacy principal, the recipient registered a proper account, and every later
- * request compared his real id against the stale one and returned
- * "already claimed" — permanently, to the person the gift was for.
- *
- * A gift belongs to whoever controls the address it was sent to. That is true
- * before the claim, after the claim, and after any number of principal changes.
- * So every authorisation decision in this file reads the email.
- */
+// Compatibility/display hint only. This comparison never creates ownership authority.
 export function isGiftRecipient(gift, user) {
   const giftEmail = normalizeEmail(gift?.recipient_email);
-  const userEmail = normalizeEmail(user?.email);
+  const userEmail = normalizeEmail(user?.authEmail || user?.email);
   if (!giftEmail || !userEmail) return false;
   return giftEmail === userEmail;
 }
 
-/**
- * Claim a gift for a user. IDEMPOTENT and SELF-HEALING.
- *
- * ── The failure this design removes ─────────────────────────────────────────
- *
- * The grant is not one transaction — it marks the gift claimed, then writes a
- * purchase, library items and entitlements through the entitlement engine.
- * If anything after the mark fails (engine throws, deploy mid-request, process
- * dies), the previous implementation left the gift permanently `claimed` while
- * the recipient owned NOTHING, and the only recovery path compared
- * `recipient_id`. A single transient error destroyed the gift.
- *
- * Making the whole thing one SQL transaction would mean reimplementing the
- * entitlement engine in plpgsql — a protected subsystem, and a far larger risk
- * than the bug. So the guarantee is obtained a different way:
- *
- *   MUTEX      a compare-and-set still ensures only ONE principal can win a
- *              contested gift. That is the only thing the CAS is for.
- *   REPAIR     if the CAS loses because the gift is already claimed BY THIS
- *              SAME RECIPIENT, that is not a conflict — it is an unfinished
- *              claim. Fall through and run the grant again.
- *   IDEMPOTENT the grant is safe to repeat: library_items upserts with
- *              ignoreDuplicates, entitlements are keyed per product.
- *
- * Net effect: a partially-applied claim heals itself the next time the rightful
- * recipient opens the link, and no ordering of failures can permanently
- * separate them from what they were given.
- */
-export async function claimGiftForUser(gift, user) {
-  const admin = getAdminClient();
+// Fresh claims and cross-principal repairs require a consumed email challenge.
+// Existing same-principal purchase provenance permits idempotent repair.
+export async function claimGiftForUser(gift, user, options = {}) {
+  const admin = options.admin || getAdminClient();
 
-  // AUTHORITY FIRST — before any state is touched.
+  // Display/profile email and a gift link are not evidence of inbox control.
+  const { requireOwnershipProof, OwnershipVerificationRequired } = await import("@/lib/commerce/ownership-proof");
   if (!isGiftRecipient(gift, user)) {
     const denied = new Error("Sign in with the email this gift was sent to.");
-    denied.code = "EMAIL_MISMATCH";
-    denied.status = 403;
-    throw denied;
+    denied.code = "EMAIL_MISMATCH"; denied.status = 403; throw denied;
   }
-
-  const product = await resolveProductForGift(gift);
-  if (!product) {
-    throw new Error("Gift item is not available in the catalog yet.");
+  if (giftPublicState(gift).state === "revoked" || giftPublicState(gift).state === "expired") {
+    throw new OwnershipVerificationRequired("gift_unavailable", 410);
   }
+  const { data: priorPurchase, error: priorError } = await admin.from("purchases").select("*")
+    .eq("user_id", user.id).eq("gift_id", gift.id).eq("status", "completed").maybeSingle();
+  if (priorError) throw priorError;
+  const established = gift.status === "claimed" && gift.recipient_id === user.id && priorPurchase;
+  const product = options.product || await resolveProductForGift(gift, admin);
+  if (!product) throw new Error("Gift item is not available in the catalog yet.");
+  if (established && !admin.transaction) {
+    // A completed same-principal claim is a read, never an opportunity to revive
+    // revoked rights. Incomplete legacy claims use the fresh, locked transaction.
+    const [library, ledger] = await Promise.all([
+      admin.from("library_items").select("id").eq("user_id", user.id).eq("product_id", product.id).maybeSingle(),
+      admin.from("entitlements").select("*").eq("user_id", user.id).eq("resource_type", "product").eq("resource_id", product.id).eq("source_id", priorPurchase.id).eq("status", "active"),
+    ]);
+    if (library.error || ledger.error) throw library.error || ledger.error;
+    const instant = Date.now();
+    if (library.data && (ledger.data || []).some(row => (!row.starts_at || new Date(row.starts_at).getTime() <= instant) && (!row.ends_at || new Date(row.ends_at).getTime() > instant))) {
+      return { gift, product, purchaseId: priorPurchase.id };
+    }
+  }
+  requireOwnershipProof(options.authority, { userId: user.id, purpose: "claim_gift", target: `gift:${gift.id}` });
+  requireOwnershipProof(options.authority, { userId: user.id, purpose: "claim_gift", target: `product:${product.slug}` });
+  if (!admin.transaction) throw new Error("Gift claim requires a transaction");
 
   const recipientEmail = normalizeEmail(user.email);
   const nowIso = new Date().toISOString();
@@ -270,9 +245,7 @@ export async function claimGiftForUser(gift, user) {
       .insert(purchaseRow)
       .select("id")
       .maybeSingle();
-    if (purchaseError) {
-      console.warn("[gift-claim] purchases insert failed (non-fatal):", purchaseError.message);
-    }
+    if (purchaseError) throw purchaseError;
     purchase = inserted || null;
   }
 
@@ -282,6 +255,7 @@ export async function claimGiftForUser(gift, user) {
     slugs: [product.slug],
     source: "gift",
     entitlementMetadata: { gift_id: gift.id },
+    admin, authority: options.authority,
   });
 
   const libraryPatch = {
@@ -296,7 +270,6 @@ export async function claimGiftForUser(gift, user) {
     .eq("product_id", product.id);
 
   if (isVaultGiftProduct(product, gift)) {
-    const admin = getAdminClient();
     await grantEntitlementFlag(admin, user.id, "vault_access", "gift_claim", {
       metadata: { gift_id: gift.id, product_slug: product.slug },
     });
@@ -321,7 +294,9 @@ export async function claimGiftForUser(gift, user) {
     },
   });
 
-  invalidateAccountStateCache(user.id).catch(() => {});
+  const invalidate = () => invalidateAccountStateCache(user.id).catch(() => {});
+  if (admin.transaction) admin.afterCommit.push(invalidate);
+  else invalidate();
 
   return {
     gift: updatedGift,

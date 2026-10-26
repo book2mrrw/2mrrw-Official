@@ -41,16 +41,8 @@ export async function POST(req, { params }) {
     }
 
     if (state === "claimed") {
-      // A claimed gift is NOT necessarily finished. The grant is several writes
-      // after the gift is marked, so a claim can be recorded while the recipient
-      // owns nothing. Re-entering claimGiftForUser repairs that: it re-checks
-      // authority by EMAIL, re-points a stale recipient_id, and re-runs the
-      // idempotent grant.
-      //
-      // The previous implementation compared `sessionUser.id === gift.recipient_id`
-      // and duplicated a partial recovery here. That comparison is what returned
-      // "already claimed" to the rightful recipient forever when the id was stale.
-      // One code path now, and email is the authority.
+      // Complete same-principal claims are read-only. Incomplete or cross-principal
+      // claims return a verification requirement from the shared writer.
       const sessionUser = await getFanSessionUser();
       if (!sessionUser) {
         return NextResponse.json({ requiresSignup: true, token }, { status: 401 });
@@ -88,10 +80,7 @@ export async function POST(req, { params }) {
       return NextResponse.json({ requiresSignup: true, token }, { status: 401 });
     }
 
-    // Authority is enforced inside claimGiftForUser (EMAIL_MISMATCH → 403), so
-    // this is a fast, friendly refusal rather than a second source of truth.
-    // Duplicated authorisation logic is how the two paths drifted apart in the
-    // first place — one comparing email, the other comparing recipient_id.
+    // Address compatibility is a hint. Only the shared proof boundary may grant.
     if (!isGiftRecipient(gift, user)) {
       return NextResponse.json(
         { error: "email_mismatch", message: "Sign in with the email this gift was sent to." },
@@ -116,6 +105,7 @@ export async function POST(req, { params }) {
       cover_art_type: freshCanonical?.coverArtType || null,
     });
   } catch (err) {
+    if (err?.code === "email_verification_required") return NextResponse.json({ error: err.code, message: "Verify your account email to claim this gift." }, { status: 409 });
     if (err?.code === "ALREADY_CLAIMED" || err?.status === 409) {
       return NextResponse.json({ error: "claimed", message: "This gift has already been claimed" }, { status: 409 });
     }

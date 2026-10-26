@@ -50,11 +50,11 @@ function emailShell(content) {
  * Non-fatal: if RESEND_API_KEY is absent or the request fails, logs and returns { sent: false }.
  * @param {{ to: string, subject: string, html: string, text?: string, from?: string }} opts
  */
-export async function sendTransactionalEmail({ to, subject, html, text, from }) {
+export async function sendTransactionalEmail({ to, subject, html, text, from, sensitive = false }) {
   if (!to) return { sent: false };
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) {
-    console.info("[email] no RESEND_API_KEY — logged only", { to, subject });
+    if (!sensitive) console.info("[email] no RESEND_API_KEY — logged only", { to, subject });
     return { sent: false, loggedOnly: true };
   }
   const sender = from || transactionalFrom();
@@ -75,12 +75,14 @@ export async function sendTransactionalEmail({ to, subject, html, text, from }) 
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      console.error("[email] send failed", res.status, body.slice(0, 400), { to, subject, from: sender });
-      return { sent: false, status: res.status, resendError: body.slice(0, 400) };
+      if (sensitive) console.error("[email] sensitive delivery failed", res.status);
+      else console.error("[email] send failed", res.status, body.slice(0, 400), { to, subject, from: sender });
+      return { sent: false, status: res.status, resendError: sensitive ? undefined : body.slice(0, 400) };
     }
     return { sent: true };
   } catch (err) {
-    console.error("[email] send error", err?.message, { to, subject });
+    if (sensitive) console.error("[email] sensitive delivery unavailable");
+    else console.error("[email] send error", err?.message, { to, subject });
     return { sent: false };
   }
 }

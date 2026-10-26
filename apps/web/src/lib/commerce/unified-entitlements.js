@@ -50,6 +50,7 @@ export async function grantEntitlementsForProducts({
   products = [],
   source = "purchase",
   metadataExtra = null,
+  entitlementWindow = null,
 }) {
   if (!products?.length) return { granted: 0, skipped: false };
 
@@ -58,7 +59,7 @@ export async function grantEntitlementsForProducts({
   const now = new Date().toISOString();
 
   // 1 SELECT to find which products already have an active entitlement.
-  const { data: existing, error: selectError } = await admin
+  const existingQuery = admin
     .from("entitlements")
     .select("resource_id")
     .eq("user_id", userId)
@@ -66,6 +67,8 @@ export async function grantEntitlementsForProducts({
     .eq("source_type", sourceType)
     .eq("status", "active")
     .in("resource_id", productIds);
+  if (entitlementWindow) existingQuery.eq("source_id", purchaseId);
+  const { data: existing, error: selectError } = await existingQuery;
 
   if (selectError) {
     if (isEntitlementsTableMissing(selectError)) return { granted: 0, skipped: true };
@@ -96,6 +99,7 @@ export async function grantEntitlementsForProducts({
       source_id: purchaseId || null,
       status: "active",
       metadata: buildMeta(product),
+      ...(entitlementWindow || {}),
     }));
     const { error: insertError } = await admin.from("entitlements").insert(rows);
     if (!insertError) {
@@ -113,6 +117,7 @@ export async function grantEntitlementsForProducts({
           source_id: purchaseId || null,
           status: "active",
           metadata: buildMeta(product),
+          ...(entitlementWindow || {}),
         });
         if (!fallbackError) {
           granted += 1;
@@ -128,12 +133,13 @@ export async function grantEntitlementsForProducts({
 
   // Per-product UPDATEs for already-existing entitlements (refresh source_id + metadata).
   for (const product of toUpdate) {
-    const { data: updated, error: updateError } = await admin
+    const updateQuery = admin
       .from("entitlements")
       .update({
         status: "active",
         source_id: purchaseId || null,
         metadata: buildMeta(product),
+        ...(entitlementWindow || {}),
         updated_at: now,
       })
       .eq("user_id", userId)
@@ -142,6 +148,8 @@ export async function grantEntitlementsForProducts({
       .eq("source_type", sourceType)
       .eq("status", "active")
       .select("id");
+    if (entitlementWindow) updateQuery.eq("source_id", purchaseId);
+    const { data: updated, error: updateError } = await updateQuery;
 
     if (updateError) {
       if (isEntitlementsTableMissing(updateError)) return { granted, skipped: true };

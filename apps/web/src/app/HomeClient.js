@@ -3,6 +3,8 @@
 import { useDeletedReleaseSlugs } from "@/lib/releases/deletion-store";
 import { excludeDeletedReleases } from "@/lib/releases/deletion-projection";
 
+import OwnershipRecoveryForm from "@/components/account/OwnershipRecoveryForm";
+
 import { playSectionQueue } from "@/lib/playback/section-queue";
 import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition, Suspense } from "react";
 import dynamic from "next/dynamic";
@@ -3134,6 +3136,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 {(pa) => (
                 <>
                   <h2 className="section-heading">Account</h2>
+                  {pa.currentUser && <OwnershipRecoveryForm onComplete={() => getPageAuthRef().refreshAccountState({ force: true, reason: "library:change", source: "ownership-recovery" })} />}
                   {pa.currentUser ? (
                     <div style={{display:"flex",flexDirection:"column",gap:20}}>
                       <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"clamp(20px,3.5cqi,28px)"}}>

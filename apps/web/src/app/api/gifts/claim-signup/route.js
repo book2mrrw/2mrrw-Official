@@ -5,15 +5,12 @@ import {
   getGiftByToken,
   giftPublicState,
   expireGiftIfNeeded,
-  claimGiftForUser,
 } from "@/lib/gifts/helpers";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
 import { validateEmail } from "@/lib/auth/validation";
 import { persistNewUserProfileOrRollback } from "@/lib/auth/provision-new-user";
 import { buildWelcomeEmail, sendTransactionalEmail } from "@/lib/server/email";
-import { catalogCoverUrl } from "@/lib/media-urls";
-import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
 import { geocodeProfileIfNeeded } from "@/lib/geo/geocode-profile";
 import { readAttributionCookie } from "@/lib/auth/attribution-cookie";
 
@@ -53,12 +50,12 @@ export async function POST(req) {
 
     gift = await expireGiftIfNeeded(gift);
     const { state: giftState } = giftPublicState(gift);
-    if (giftState !== "valid") {
+    if (!["valid", "claimed"].includes(giftState)) {
       return NextResponse.json({ error: `Gift is ${giftState}` }, { status: 410 });
     }
 
-    // The gift token landing in the recipient's inbox proves email ownership,
-    // so we enforce the email matches and skip Supabase's separate confirmation email.
+    // Gift-link possession does not prove inbox control. This is only an address
+    // match for signup; ownership still requires the separate email-only challenge.
     const giftEmail = String(gift.recipient_email || "").toLowerCase();
     if (giftEmail && giftEmail !== email) {
       return NextResponse.json(
@@ -136,27 +133,9 @@ export async function POST(req) {
       );
     }
 
-    // Atomically claim the gift now — don't rely on the client's auto-claim useEffect.
-    // This is a single-call, race-free operation: create account → sign in → claim gift.
-    let giftClaimData = null;
-    try {
-      const claimResult = await claimGiftForUser(gift, { id: newUser.id, email });
-      const product = claimResult.product;
-      const canonical = product?.slug ? getCanonicalReleaseBySlug(product.slug) : null;
-      giftClaimData = {
-        gift_id: claimResult.gift.id,
-        item_type: claimResult.gift.item_type,
-        item_id: product?.id || null,
-        item_title: claimResult.gift.item_title || product?.title || null,
-        product_slug: product?.slug || null,
-        cover_url: canonical?.cover || (product?.cover_url ? catalogCoverUrl(product.cover_url) : null) || null,
-        cover_image_url: canonical?.legacy_cover || (product?.cover_url ? catalogCoverUrl(product.cover_url) : null) || null,
-        cover_art_type: canonical?.coverArtType || null,
-      };
-    } catch (claimErr) {
-      // Non-fatal: if claim fails here, the gift page auto-claim will handle it on redirect.
-      console.warn("[claim-signup] atomic gift claim failed (will retry on redirect):", claimErr?.message);
-    }
+    // Account creation is not ownership proof. The gift page requests fresh
+    // email-only verification after the session has been established.
+    const giftClaimData = null;
 
     // Welcome email — non-blocking, non-fatal
     sendTransactionalEmail({
@@ -164,7 +143,7 @@ export async function POST(req) {
       ...buildWelcomeEmail({ name: String(name || "").trim() }),
     }).catch(() => {});
 
-    return NextResponse.json({ ok: true, session: signInData.session, gift: giftClaimData });
+    return NextResponse.json({ ok: true, session: signInData.session, gift: giftClaimData, verificationRequired: true });
   } catch (err) {
     console.error("[claim-signup] error:", err?.message);
     return NextResponse.json({ error: err?.message || "Sign up failed" }, { status: 500 });

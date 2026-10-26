@@ -114,9 +114,7 @@ export async function GET(req) {
     }
 
     const admin = getAdminClient();
-    // Rights addressed to this user's verified email (gifts, guest-era purchases)
-    // are brought onto this account on every build. Runs alongside the reads
-    // below; the library is re-read only when it actually changed something.
+    // Reads never confer inbox authority. Explicit recovery owns cross-principal writes.
     const reconciliationPromise = reconcileEmailBoundRights(admin, user);
     const [initialLibraryResult, membershipResult, productsResult, collectorResult, mediaProgressResult, collectorAccessRecords, preorderResult] = await Promise.all([
       admin
@@ -349,6 +347,7 @@ export async function GET(req) {
       await resolveCapabilityVersion(user.id, capabilityDocument);
 
     const body = {
+      ownershipRecovery: { verificationRequired: !user.isGuest, path: "/account/recover" },
       user,
       library,
       ownedSlugs: finalOwnedSlugs,

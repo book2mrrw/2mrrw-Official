@@ -31,7 +31,7 @@ const compiled = transformSync(source, { filename: 'gift-page.js', jsc: { parser
 
 // Execute the real component and submit handler with simulated hooks/network.
 // This verifies UI payloads without claiming browser or Supabase coverage.
-function formHarness(data) {
+function formHarness(data, sessionUser = null) {
   const values = [data, false];
   let slot = 0;
   const requests = [];
@@ -46,7 +46,8 @@ function formHarness(data) {
       if (id === 'react') return hooks;
       if (id === 'next/link') return { default: 'a' };
       if (id === 'next/navigation') return { useParams: () => ({ token: 'token' }), useRouter: () => ({ push() {} }) };
-      if (id === '@/context/AuthContext') return { useAuth: () => ({ user: null, loading: false, applySessionUser: async () => {} }) };
+      if (id === '@/context/AuthContext') return { useAuth: () => ({ user: sessionUser, loading: false, applySessionUser: async () => {} }) };
+      if (id === '@/components/account/OwnershipRecoveryForm') return { default: () => null };
       if (id === '@/components/gifts/GiftRevealExperience') return { default: () => null };
       if (id === '@/lib/gifts/session-keys') return { hasSeenGiftReveal: () => false };
       if (id === '@/lib/auth/validation') return { validateEmail };
@@ -147,7 +148,7 @@ test('claim signup still rejects email mismatch, inactive gifts, missing country
   let response = await signup({});
   assert.equal(response.status, 403);
   assert.equal((await response.json()).error, 'email_mismatch');
-  for (const status of ['expired', 'revoked', 'claimed']) {
+  for (const status of ['expired', 'revoked']) {
     gift.status = status;
     assert.equal((await signup({ email: 'owner@example.com' })).status, 410);
   }
@@ -156,4 +157,12 @@ test('claim signup still rejects email mismatch, inactive gifts, missing country
     assert.equal((await signup(overrides)).status, 400);
   }
   assert.equal(accountCreations, 0);
+});
+
+test('pending and legacy claimed gift recipients with a guest session can enter the existing account signup flow', async () => {
+ for (const status of ['pending','claimed']) {
+  gift = { id:'legacy-gift',status,recipient_email:'friend@example.com' };
+  const h=formHarness(await (await preview()).json(), {id:'guest-principal',isGuest:true,email:'friend@example.com'});h.fill();await h.submit();
+  assert.equal(h.requests.length,1);assert.ok(h.requests[0].url.includes('/api/gifts/claim-signup'));assert.equal(h.requests[0].body.email,'friend@example.com');
+ }
 });

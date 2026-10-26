@@ -252,8 +252,22 @@ export async function userCanStreamProduct(userId, productSlug, user = null) {
   });
 }
 
-export async function grantLibraryItems({ userId, purchaseId, slugs, source = "purchase", entitlementMetadata = null }) {
-  const admin = getAdminClient();
+export async function grantLibraryItems({ userId, purchaseId, slugs, source = "purchase", entitlementMetadata = null, admin: transactionClient = null, authority = null, entitlementWindow = null }) {
+  const admin = transactionClient || getAdminClient();
+  const { requireOwnershipProof } = await import("@/lib/commerce/ownership-proof");
+  if (purchaseId) {
+    const { data: purchase, error } = await admin.from("purchases").select("user_id, status").eq("id", purchaseId).maybeSingle();
+    if (error) throw error;
+    if (!purchase || purchase.status !== "completed") throw new Error("Ownership purchase unavailable");
+    if (purchase.user_id !== userId) {
+      requireOwnershipProof(authority, { userId, purpose: "recover_library", target: `purchase:${purchaseId}` });
+      for (const slug of slugs) requireOwnershipProof(authority, { userId, purpose: "recover_library", target: `product:${slug}` });
+      if (!admin.transaction) throw new Error("Ownership recovery requires a transaction");
+    }
+  } else if (source === "gift" || entitlementMetadata?.transferred_from_principal) {
+    requireOwnershipProof(authority, { userId, target: `gift:${entitlementMetadata?.gift_id}` });
+    if (!admin.transaction) throw new Error("Gift recovery requires a transaction");
+  }
   const { data: products, error: pErr } = await admin.from("products").select("id, slug").in("slug", slugs);
   if (pErr) throw pErr;
 
@@ -292,12 +306,15 @@ export async function grantLibraryItems({ userId, purchaseId, slugs, source = "p
     products: resolved,
     source,
     metadataExtra: entitlementMetadata,
+    entitlementWindow,
   });
 
   // Invalidate entitlement cache for all granted slugs so the next play event
   // reflects the new ownership immediately rather than waiting for TTL expiry.
   // Fire-and-forget: a failed invalidation is recoverable (TTL expires within 5 min).
-  invalidateUserEntitlementCache(userId, slugs).catch(() => {});
+  const invalidate = () => invalidateUserEntitlementCache(userId, slugs).catch(() => {});
+  if (admin.transaction) admin.afterCommit.push(invalidate);
+  else invalidate();
 
   return data || [];
 }

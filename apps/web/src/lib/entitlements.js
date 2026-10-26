@@ -154,7 +154,9 @@ export async function upsertUserEntitlements(admin, userId, patch = {}) {
   console.log(`${LOG_PREFIX} upsert`, { userId, vault: data.vault_access, subscriber: data.subscriber, collector: data.collector_card });
   // Any write to user_entitlements changes tier state. Invalidate immediately so the
   // next play event re-derives the correct tier rather than serving a stale cache entry.
-  invalidateEntitlementTierCache(userId).catch(() => {});
+  const invalidateTier = () => invalidateEntitlementTierCache(userId).catch(() => {});
+  if (admin.transaction) admin.afterCommit.push(invalidateTier);
+  else invalidateTier();
   return data;
 }
 

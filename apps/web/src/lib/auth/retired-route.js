@@ -35,9 +35,9 @@ import { NextResponse } from "next/server";
  * @param {string} routeName  for the log line and the response body
  * @returns {NextResponse|null} a 410 when retired, or null to continue
  */
-export function retiredRouteGuard(routeName) {
+export function retiredRouteGuard(routeName, { permanent = false } = {}) {
   const enabled = process.env.LEGACY_SEED_ROUTES_ENABLED === "1";
-  if (enabled) {
+  if (enabled && !permanent) {
     console.warn(
       `[retired-route] ${routeName} was invoked while LEGACY_SEED_ROUTES_ENABLED=1. ` +
       "This endpoint has no caller in the repository and is scheduled for deletion. " +
@@ -51,7 +51,7 @@ export function retiredRouteGuard(routeName) {
       error: "This endpoint has been retired.",
       code: "ROUTE_RETIRED",
       route: routeName,
-      detail:
+      detail: permanent ? "This ownership writer is permanently retired and cannot be re-enabled by a legacy flag." :
         "It previously authorised via a shared admin secret and has no known caller. " +
         "If you need it, set LEGACY_SEED_ROUTES_ENABLED=1 and report the caller so it " +
         "can be migrated to a scoped service capability.",

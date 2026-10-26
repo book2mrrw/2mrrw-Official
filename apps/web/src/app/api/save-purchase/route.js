@@ -3,7 +3,7 @@ import { retiredRouteGuard } from "@/lib/auth/retired-route";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(req) {
-  const retired = retiredRouteGuard("/api/save-purchase");
+  const retired = retiredRouteGuard("/api/save-purchase", { permanent: true });
   if (retired) return retired;
 
   try {

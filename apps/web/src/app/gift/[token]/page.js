@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import OwnershipRecoveryForm from "@/components/account/OwnershipRecoveryForm";
 import GiftRevealExperience from "@/components/gifts/GiftRevealExperience";
 import { COUNTRIES } from "@/lib/auth/countries";
 import { validateEmail } from "@/lib/auth/validation";
@@ -52,6 +53,7 @@ export default function GiftClaimPage() {
   const { refreshAccountState, user, loading: authLoading, applySessionUser } = useAuth();
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [verificationRequired, setVerificationRequired] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState("");
   const [emailMismatch, setEmailMismatch] = useState(false);
@@ -118,6 +120,7 @@ export default function GiftClaimPage() {
         credentials: "include",
       });
       const data = await res.json();
+      if (data.error === "email_verification_required") { setVerificationRequired(true); return; }
       if (data.requiresSignup) {
         // Shouldn't happen since we now show inline form, but safety fallback
         router.push(`/join?gift=${token}`);
@@ -187,6 +190,11 @@ export default function GiftClaimPage() {
       }
 
       await applySessionUser(data.session);
+      if (data.verificationRequired) {
+        setVerificationRequired(true);
+        await loadPreview();
+        return;
+      }
 
       // If the server atomically claimed the gift, launch the reveal immediately
       if (data.gift?.gift_id) {
@@ -213,17 +221,21 @@ export default function GiftClaimPage() {
 
   const state_ = preview?.state || "invalid";
   const gift = preview?.gift;
+  const hasAccount = Boolean(user?.id && !user.isGuest);
+  const showRegistration = !hasAccount && (state_ === "valid" || state_ === "claimed");
   const cover = preview?.cover_image_url || preview?.cover_url;
-  const isRecipient = Boolean(user?.id && gift?.recipient_id === user.id);
+  // Display eligibility only; the shared writer still requires fresh email proof.
+  const isRecipient = Boolean(user?.id && (gift?.recipient_id === user.id || String(user?.authEmail || user?.email || "").toLowerCase() === String(gift?.recipient_email || "").toLowerCase()));
   const revealSeen = gift?.id ? hasSeenGiftReveal(gift.id) : false;
 
   const giftEmail = String(gift?.recipient_email || "").toLowerCase();
-  const userEmail = String(user?.email || "").toLowerCase();
+  const userEmail = String(user?.authEmail || user?.email || "").toLowerCase();
   const emailWouldMismatch = Boolean(giftEmail && userEmail && giftEmail !== userEmail);
 
   // Auto-claim for already-logged-in correct recipients
   useEffect(() => {
     if (authLoading || loading || !user || !preview?.gift || revealSeen || revealPayload) return;
+    if (user.isGuest && state_ === "valid") return;
     if (emailWouldMismatch) return;
     if (state_ !== "valid" && !(state_ === "claimed" && isRecipient)) return;
     if (claimAttemptedRef.current) return;
@@ -252,6 +264,7 @@ export default function GiftClaimPage() {
 
   return (
     <main style={{ minHeight: "100vh", background: "#050505", color: "white", fontFamily: "sans-serif" }}>
+      {verificationRequired && hasAccount && <OwnershipRecoveryForm giftToken={token} onComplete={async () => { setVerificationRequired(false); await claim(); }} />}
       {/* Hero — blurred cover art for mystery */}
       <div style={{ minHeight: 260, position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #0a0a12 0%, #050505 60%)" }}>
         {cover ? (
@@ -298,7 +311,7 @@ export default function GiftClaimPage() {
         ) : null}
 
         {/* ── VALID STATE ──────────────────────────────────────────────── */}
-        {!loading && state_ === "valid" ? (
+        {!loading && (state_ === "valid" || showRegistration) ? (
           <>
             <p style={{ fontSize: 11, letterSpacing: 3, color: "#a259ff", textTransform: "uppercase", marginBottom: 8 }}>
               Gift from 2MRRW
@@ -319,7 +332,7 @@ export default function GiftClaimPage() {
             <p style={{ fontSize: 13, color: "#c8ccd2", marginBottom: 20 }}>Claim before {formatDate(gift?.expires_at)}</p>
 
             {/* ── Logged-in correct recipient ── */}
-            {user && !emailWouldMismatch ? (
+            {hasAccount && !emailWouldMismatch ? (
               <button
                 type="button"
                 onClick={() => void claim()}
@@ -328,7 +341,7 @@ export default function GiftClaimPage() {
               >
                 {claiming ? "Opening your gift…" : "Open Your Gift"}
               </button>
-            ) : user && emailWouldMismatch ? (
+            ) : hasAccount && emailWouldMismatch ? (
               /* ── Wrong account (admin viewing, etc.) ── */
               <div style={{ padding: 16, borderRadius: 14, background: "#2a1113", border: "1px solid #6b2a2e" }}>
                 <p style={{ margin: "0 0 12px", fontSize: 14, color: "#ffc9c9", lineHeight: 1.6 }}>
@@ -505,7 +518,7 @@ export default function GiftClaimPage() {
           <h1 style={{ fontSize: 24, fontWeight: 800 }}>This gift is no longer available</h1>
         ) : null}
 
-        {state_ === "claimed" && !revealPayload ? (
+        {state_ === "claimed" && !showRegistration && !revealPayload ? (
           <>
             <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 12 }}>This gift has already been claimed</h1>
             {isRecipient ? (
