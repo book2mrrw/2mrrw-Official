@@ -1,6 +1,7 @@
 // Opt-in release gate. Run with the existing alias loader.
 // Independently checks the application's PostgreSQL project/TLS contract; metadata only.
 import postgres from 'postgres';
+import { SUPABASE_DATABASE_CA } from '@/lib/supabase/database-ca';
 import { SUPABASE_URL } from '@/lib/supabase/supabase-url';
 
 let connection;
@@ -17,7 +18,7 @@ try {
     || !(database.hostname === `db.${project}.supabase.co` || database.hostname.endsWith('.pooler.supabase.com'))) {
     throw Object.assign(new Error(), { code: 'OWNERSHIP_DATABASE_PROJECT_MISMATCH' });
   }
-  connection = postgres(database.href, { ssl: 'verify-full', max: 1, prepare: false, connect_timeout: 10, idle_timeout: 1, onnotice: () => {} });
+  connection = postgres(database.href, { ssl: { ca: SUPABASE_DATABASE_CA, rejectUnauthorized: true }, max: 1, prepare: false, connect_timeout: 10, idle_timeout: 1, onnotice: () => {} });
   const result = await connection.begin('read only', async (tx) => {
     const rows = await tx.unsafe(`select current_user as role,
       to_regclass('public.ownership_email_challenges')::text as challenge_table,

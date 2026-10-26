@@ -1,5 +1,6 @@
 import 'server-only';
 import postgres from 'postgres';
+import { SUPABASE_DATABASE_CA } from '@/lib/supabase/database-ca';
 import { SUPABASE_URL } from '@/lib/supabase/supabase-url';
 let pool;
 export async function ownershipTransaction(run) {
@@ -9,7 +10,7 @@ export async function ownershipTransaction(run) {
     const project = url.username.startsWith('postgres.') ? url.username.slice(9)
       : url.hostname.match(/^db\.([^.]+)\.supabase\.co$/)?.[1];
     if (!['postgres:', 'postgresql:'].includes(url.protocol) || project !== expected || !(url.hostname === `db.${expected}.supabase.co` || url.hostname.endsWith('.pooler.supabase.com'))) throw new Error('ownership_database_unavailable');
-    pool = postgres(url.href, { ssl: 'verify-full', max: 2, prepare: false, idle_timeout: 20, connect_timeout: 10 });
+    pool = postgres(url.href, { ssl: { ca: SUPABASE_DATABASE_CA, rejectUnauthorized: true }, max: 2, prepare: false, idle_timeout: 20, connect_timeout: 10 });
   }
   return pool.begin(async sql => run({ query: async (text, values = []) => ({ rows: await sql.unsafe(text, values) }) }));
 }

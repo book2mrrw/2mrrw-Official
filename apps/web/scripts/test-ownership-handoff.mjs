@@ -24,7 +24,8 @@ async function modules(db) {
     await mod.evaluate();return mod;
   }
   const proof = await load('lib/commerce/ownership-proof.js');
-  const transaction = await load('lib/commerce/ownership-transaction.js', {'server-only':{}, 'postgres':{default:()=>{throw Error('No real connection allowed');}}, '@/lib/supabase/supabase-url':{SUPABASE_URL:'https://fixture.supabase.co'}});
+  const certificate = await load('lib/supabase/database-ca.js');
+  const transaction = await load('lib/commerce/ownership-transaction.js', {'server-only':{}, '@/lib/supabase/database-ca':certificate, 'postgres':{default:()=>{throw Error('No real connection allowed');}}, '@/lib/supabase/supabase-url':{SUPABASE_URL:'https://fixture.supabase.co'}});
   const port = transaction.namespace.transactionAdmin(db);
   // Direct fixture reads are outside a transaction; service writes receive a fresh transaction port.
   port.transaction = false;
@@ -256,3 +257,19 @@ test('Production library schema preserves exact gift provenance without a librar
  assert.equal(rows.length,1);assert.equal(rows[0].gift_id,f.gift);assert.equal(rows[0].entitlement_gift,f.gift);
  assert.equal(rows[0].gifted_by,f.other.id);assert.equal(rows[0].source,'gift');
 }));
+
+test('Production connection keeps CA and hostname verification enabled',async()=>{
+ const db=new PGlite();
+ try {
+  const m=await modules(db);const ca=await m.load('lib/supabase/database-ca.js');
+  const cert=new crypto.X509Certificate(ca.namespace.SUPABASE_DATABASE_CA);
+  assert.equal(cert.ca,true);assert.equal(cert.fingerprint256.replaceAll(':',''),'807025AD50D4ED219D2C9C7D299C004F824EB00CF7F65AFEF607D07B72E6CAFA');
+  m.context.process.env.POSTGRES_URL='postgres://postgres.fixture:synthetic@aws-0-fixture.pooler.supabase.com:6543/postgres';
+  let options;const adapter=await m.load('lib/commerce/ownership-transaction.js',{'server-only':{},'@/lib/supabase/database-ca':ca,
+    '@/lib/supabase/supabase-url':{SUPABASE_URL:'https://fixture.supabase.co'},
+    postgres:{default:(_url,value)=>{options=value;return {begin:async run=>run({unsafe:async()=>[]})};}}});
+  await adapter.namespace.ownershipTransaction(async()=>{});
+  assert.equal(options.ssl.rejectUnauthorized,true);assert.equal(options.ssl.ca,ca.namespace.SUPABASE_DATABASE_CA);
+  assert.equal(options.ssl.checkServerIdentity,undefined,'Node default hostname verification is retained');
+ } finally {await db.close();}
+});
