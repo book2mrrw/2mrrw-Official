@@ -89,7 +89,7 @@ function createChopEngine() {
       clearTimeout(_scheduledClearId);
       _scheduledClearId = null;
     }
-    engine.setChainExtension([]);
+    getWebAudioEngine().setChainExtension([]);
   }
 
   // Register with IMS

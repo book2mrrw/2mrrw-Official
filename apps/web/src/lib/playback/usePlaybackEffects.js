@@ -548,7 +548,7 @@ export function usePlaybackEffects({
       // SM UI channel write path
       patchUI,
     });
-    const { onPlay, onPause, onTime, onDuration, onEnded, onError, onEmptied,
+    const { onPlay, onPause, onTime, onDuration, onEnded, onError, onOnline, onEmptied,
             onWaiting, onStalled, onPlaying, onCanPlayThrough } = handlers;
 
     const detachPlaybackDevTelemetry = attachPlaybackElementDevTelemetry(audio);
@@ -571,16 +571,6 @@ export function usePlaybackEffects({
       audioEngine.on(E.CANPLAYTHROUGH, onCanPlayThrough),
     ];
 
-    const onOnline = () => {
-      if (stateRef.current.isPlaying && stateRef.current.currentTrack) {
-        logPlaybackResilience("network-restored", {
-          source: "AudioContext",
-          code: "ONLINE_RETRY",
-          slug: stateRef.current.currentTrack?.slug ?? null,
-        });
-        void retryStreamPlaybackRef.current?.();
-      }
-    };
     window.addEventListener("online", onOnline);
 
     const routeRecovery = createOutputRouteRecovery({ refs,

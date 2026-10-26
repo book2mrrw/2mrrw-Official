@@ -39,7 +39,7 @@ import { updateAudibilitySample } from "@/lib/playback/audibility";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
 import { dispatchPreviewEnded } from "@/lib/playback/playback-track-utils";
 import { setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
-import { isDocumentPlaybackHidden } from "@/lib/playback/playback-transport-utils";
+import { isDocumentPlaybackHidden, hasIntactPlaybackTransport } from "@/lib/playback/playback-transport-utils";
 import {
   classifyAudioOutputSilence,
   capturePlaybackSnapshotOnPause,
@@ -134,7 +134,7 @@ export const SPURIOUS_ENDED_GUARD_MS = 1200;
  * All handler bodies are verbatim from AudioContext.js — zero logic changes in B-4a.
  *
  * @param {object} deps — all refs and callbacks previously closed over in AudioContext.js useEffect
- * @returns {{ onPlay, onPause, onTime, onDuration, onEnded, onError, onEmptied,
+ * @returns {{ onPlay, onPause, onTime, onDuration, onEnded, onError, onOnline, onEmptied,
  *             onWaiting, onStalled, onPlaying, onCanPlayThrough }}
  */
 export function createPlaybackEventHandlers({
@@ -1166,6 +1166,37 @@ export function createPlaybackEventHandlers({
     return errorRecovery;
   };
 
+  const onOnline = () => {
+    const state = stateRef.current;
+    // A reconnect is a hint, not a failed source. Never supersede a pause,
+    // completion, startup command, denied access, or an existing recovery owner.
+    if (audio !== audioRef.current || !state.currentTrack || audio.ended ||
+        userPausedRef.current || userIntentPausedRef.current ||
+        state.accessDenied || state.streamConflict ||
+        state.playbackState === "loading" || state.playbackNetworkState === "loading_stream" ||
+        isRecoveringRef?.current || offlineResume) return false;
+    if (errorRecovery) return errorRecovery;
+    if (recoveryVerificationRef?.current) return recoveryVerificationRef.current.promise;
+    const hasIntent = state.isPlaying || state.osInterrupted ||
+      playbackIntentBeforeHideRef.current || state.streamRetryable;
+    if (!hasIntent) return false;
+
+    if (!audio.error && hasIntactPlaybackTransport(audio, state.currentTrack)) {
+      if (audio.paused || (audioCtxRef.current && audioCtxRef.current.state !== "running")) {
+        return attemptLightweightPlaybackResume?.("network_restored", {
+          effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
+        });
+      }
+      // Keep hls.js / the stall coordinator in charge of an attached underrun.
+      // A healthy buffered element needs no play, pause, seek or source write.
+      if (audio.readyState < 3) startStallRecovery();
+      return false;
+    }
+    // Reuse fresh authorization, recording/generation checks, finite retries,
+    // queue preservation and progress verification from the existing error owner.
+    return onError();
+  };
+
   const onEmptied = () => {
     stopProgressRaf();
     syncProgressTime(0);
@@ -1181,6 +1212,7 @@ export function createPlaybackEventHandlers({
     onDuration,
     onEnded,
     onError,
+    onOnline,
     onEmptied,
     onWaiting,
     onStalled,

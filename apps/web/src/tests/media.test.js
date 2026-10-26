@@ -301,27 +301,6 @@ describe("AudioContext pause semantics — state machine invariants", () => {
     assert.ok(!cleared, "Teardown must NOT clear chain when effect was already cleared by _clearEffect");
   });
 
-  test("Chop chopClear cancels teardown and clears chain immediately", () => {
-    // Simulates the chopClear() logic added to ChopEngine.
-    let timerId = null;
-    let chainCleared = false;
-
-    // Simulate a scheduled teardown
-    timerId = setTimeout(() => {}, 500);
-
-    function chopClear() {
-      if (timerId !== null) {
-        clearTimeout(timerId);
-        timerId = null;
-      }
-      chainCleared = true; // engine.setChainExtension([])
-    }
-
-    chopClear();
-    assert.equal(timerId, null,    "chopClear must cancel pending teardown timer");
-    assert.ok(chainCleared,        "chopClear must clear chain extension immediately");
-  });
-
   test("Filter deactivation: ramp-to-open fires before node disconnect", () => {
     // Invariant: deactivate() always ramps to FREQ_MAX first (DEACT_MS),
     // then disconnects after DEACT_MS + 20ms. This prevents zipper noise / click

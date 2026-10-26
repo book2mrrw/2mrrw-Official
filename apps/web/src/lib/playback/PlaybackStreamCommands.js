@@ -112,7 +112,24 @@ export function attachStreamCommands(self) {
     // data to cause an audible "plays → silence → plays again" double-init on desktop.
     const willAttemptHLS = Boolean(track?.metadata?.access?.canStream) &&
       isLibraryStreamRedirectSrc(track?.src || "");
-    if (isLibraryStreamRedirectSrc(track?.src) && audioEl) {
+    // The same recording may be attached through HLS (blob/native) or a
+    // resolved CDN URL. URL inequality alone must not interrupt its live buffer.
+    // Completed, failed and empty media still take the normal preparation path.
+    const loadedTrack = stateRef.current.currentTrack;
+    const loadedAccess = loadedTrack?.metadata?.access;
+    const requestedAccess = track?.metadata?.access;
+    const sameAccess = loadedAccess?.canStream === requestedAccess?.canStream &&
+      loadedAccess?.previewOnly === requestedAccess?.previewOnly;
+    const sameSourceIntent = normalizePlaybackSrc(loadedTrack?.src) === normalizePlaybackSrc(track?.src) ||
+      (requestedAccess?.canStream && !requestedAccess.previewOnly && isLibraryStreamRedirectSrc(track?.src) &&
+        (hlsEngineRef.current?.isLoaded ||
+          normalizePlaybackSrc(loadedTrack?.src) === normalizePlaybackSrc(audioEl?.currentSrc || audioEl?.src)));
+    const reuseLoadedRecording = audioEl && !audioEl.ended && !audioEl.error &&
+      audioEl.readyState >= 2 && sameAccess && sameSourceIntent &&
+      stateRef.current.playbackState !== "loading" &&
+      stateRef.current.playbackNetworkState !== "loading_stream" &&
+      isSamePlaybackTrack(loadedTrack, track);
+    if (!reuseLoadedRecording && isLibraryStreamRedirectSrc(track?.src) && audioEl) {
       const earlyNorm = normalizePlaybackSrc(track.src);
       if (earlyNorm && normalizePlaybackSrc(audioEl.src || "") !== earlyNorm) {
         // Guard: only pause if actually playing. audio.pause() on an already-paused
@@ -127,7 +144,7 @@ export function attachStreamCommands(self) {
           audioEl.load();
         }
       }
-    } else if (track?.src && audioEl) {
+    } else if (!reuseLoadedRecording && track?.src && audioEl) {
       // CDN/Preview fast-path: early src assignment so the browser fetch overlaps
       // with Web Audio setup, mirroring the redirect fast-path above.
       const srcKind = classifySourceUrl(track.src);
