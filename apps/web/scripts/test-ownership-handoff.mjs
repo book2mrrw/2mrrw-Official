@@ -60,7 +60,7 @@ async function fixture() {
     create table releases(id uuid primary key,slug text,title text,release_type text,cover_art_r2_key text);
     create table gifts(id uuid primary key,item_id uuid,item_type text,item_title text,recipient_email text,recipient_id uuid,sender_id uuid,status text,claimed boolean,expires_at timestamptz,claimed_at timestamptz,updated_at timestamptz);
     create table purchases(id uuid primary key default gen_random_uuid(),user_id uuid,status text,amount_cents int,gift_id uuid,gifted_by uuid,purchase_type text,items jsonb);
-    create table library_items(id uuid primary key default gen_random_uuid(),user_id uuid,product_id uuid,purchase_id uuid,source text,gift_id uuid,gifted_by uuid,unique(user_id,product_id));
+    create table library_items(id uuid primary key default gen_random_uuid(),user_id uuid,product_id uuid,purchase_id uuid,source text,gifted_by uuid,unique(user_id,product_id));
     create table entitlements(id uuid primary key default gen_random_uuid(),user_id uuid,resource_type text,resource_id uuid,source_type text,source_id uuid,status text,starts_at timestamptz default now(),ends_at timestamptz,metadata jsonb,updated_at timestamptz);
     create table user_entitlements(user_id uuid primary key,vault_access boolean default false,subscriber boolean default false,collector_card boolean default false,vault_source text,metadata jsonb,updated_at timestamptz);
     create table signals(id uuid primary key default gen_random_uuid(),title text,type text,status text,priority int,metadata jsonb);`);
@@ -72,6 +72,8 @@ async function fixture() {
   await db.query("insert into purchases(id,user_id,status) values ($1,$2,'completed')",[purchase,donor]);
   await db.query("insert into library_items(user_id,product_id,purchase_id,source) values ($1,$2,$3,'purchase')",[donor,product,purchase]);
   await db.query("insert into gifts(id,item_id,item_type,item_title,recipient_email,recipient_id,sender_id,status,claimed,expires_at) values ($1,$2,'album','Fixture',$3,$4,$5,'pending',false,$6)",[gift,product,actor.email,donor,other.id,new Date(instant+86400000).toISOString()]);
+  // Current catalog queries also preserve the deployed soft-deletion columns.
+  await db.exec('alter table products add column deleted_at timestamptz;alter table releases add column deleted_at timestamptz');
   const m=await modules(db);let email,clock=instant;
   const service=m.service.createOwnershipRecovery({transaction:run=>db.transaction(run),admin:m.transaction.transactionAdmin(db),sendEmail:async request=>{email=request;return {sent:true};},now:()=>clock});
   const start=async(purpose='recover_library')=>service.start({actor,purpose,gift:purpose==='claim_gift'?{id:gift}:null});
@@ -239,4 +241,18 @@ test('Legacy claimed gift signup establishes the account only and cannot mint ow
  '@/lib/auth/validation':{validateEmail:value=>({ok:true,value})},'@/lib/auth/provision-new-user':{persistNewUserProfileOrRollback:async()=>({ok:true})},
  '@/lib/server/email':{buildWelcomeEmail:()=>({}),sendTransactionalEmail:async()=>({sent:true})},'@/lib/geo/geocode-profile':{geocodeProfileIfNeeded:async()=>{}},'@/lib/auth/attribution-cookie':{readAttributionCookie:async()=>null}});
  await unchanged(f,async()=>{const response=await route.namespace.POST({headers:new Headers(),json:async()=>({email:'new-legacy@example.invalid',password:'synthetic-fixture-password',country:'Canada',giftToken:'synthetic-gift-link'})});assert.equal(response.status,200);const payload=await response.json();assert.equal(payload.verificationRequired,true);assert.equal(payload.gift,null);assert.equal(creations,1);});
+}));
+
+// Production schema was inspected read-only before rollout: gift_id belongs to
+// purchases and entitlement metadata; library_items has purchase_id/gifted_by.
+test('Production library schema preserves exact gift provenance without a library gift_id column',()=>run(async f=>{
+ const c=await f.start('claim_gift');await f.complete(c);
+ const columns=(await f.db.query("select column_name from information_schema.columns where table_name='library_items'")).rows;
+ assert.ok(!columns.some(c=>c.column_name==='gift_id'));
+ const {rows}=await f.db.query(`select li.purchase_id,li.gifted_by,li.source,p.gift_id,e.metadata->>'gift_id' as entitlement_gift
+   from library_items li join purchases p on p.id=li.purchase_id
+   join entitlements e on e.source_id=p.id and e.user_id=li.user_id and e.resource_id=li.product_id
+   where li.user_id=$1 and li.product_id=$2`,[f.actor.id,f.product]);
+ assert.equal(rows.length,1);assert.equal(rows[0].gift_id,f.gift);assert.equal(rows[0].entitlement_gift,f.gift);
+ assert.equal(rows[0].gifted_by,f.other.id);assert.equal(rows[0].source,'gift');
 }));

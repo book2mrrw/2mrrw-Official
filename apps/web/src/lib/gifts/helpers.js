@@ -258,9 +258,10 @@ export async function claimGiftForUser(gift, user, options = {}) {
     admin, authority: options.authority,
   });
 
+  // Gift identity is authoritative on purchases.gift_id and entitlement metadata.
+  // library_items links to that provenance through purchase_id; it has no gift_id.
   const libraryPatch = {
     gifted_by: gift.sender_id,
-    gift_id: gift.id,
     source: "gift",
   };
   await admin
