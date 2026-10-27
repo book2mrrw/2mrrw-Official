@@ -113,25 +113,28 @@ test('online error recovery respects fresh server denial and does not retry deni
   assert.equal(h.deps.queueIndexRef.current, 2);
 });
 
-test('online does not duplicate the existing offline error callback', async t => {
+test('offline errors return through the bounded online recovery owner without a forced play listener', async t => {
   const h = setup(t);
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
-  Object.defineProperty(globalThis, 'window', {configurable:true,value:new EventTarget()});
+  const host = new EventTarget();let subscriptions=0;
+  const add = host.addEventListener.bind(host);
+  host.addEventListener = (...args) => { if(args[0]==='online')subscriptions++;add(...args); };
+  Object.defineProperty(globalThis, 'window', {configurable:true,value:host});
   t.after(() => {if(previous)Object.defineProperty(globalThis,'window',previous);else delete globalThis.window;});
   navigator.onLine = false;
   h.audio.error = {code:2};
-  let retries = 0;
-  h.deps.playTrackRef.current = (track, options) => {
-    retries++;
-    assert.equal(track, h.track);
-    assert.equal(options.preserveQueue, true);
-    return true;
-  };
+  let forced=0,resolves=0;
+  h.deps.playTrackRef.current = () => {forced++;};
+  t.mock.method(globalThis,'fetch',async()=>{resolves++;return {ok:true,status:200,headers:new Headers({'content-type':'application/json'}),json:async()=>({url:h.track.src})};});
   await h.handlers.onError();
+  assert.equal(subscriptions,0);assert.equal(resolves,0);
+  assert.equal(h.state.error,'RECONNECTING');
   navigator.onLine = true;
-  assert.equal(h.handlers.onOnline(), false);
-  window.dispatchEvent(new Event('online'));
-  assert.equal(retries, 1);
+  const pending=h.handlers.onOnline();h.handlers.onOnline();
+  await flush();h.advance();
+  assert.equal(await pending,true);
+  assert.equal(forced,0);assert.equal(resolves,1);
+  assert.equal(h.deps.queueIndexRef.current,2);
 });
 
 test('online restores a suspended context without replacing an attached HLS source', async t => {
@@ -184,3 +187,12 @@ for (const change of ['pause', 'track', 'request']) {
     assert.equal(h.audio.src, 'blob:active-hls');
   });
 }
+
+test('offline/online events do not replenish an exhausted media-error retry budget',async t=>{
+  const h=setup(t);h.audio.error={code:2};h.deps.streamErrorRetriedRef.current=3;
+  navigator.onLine=false;await h.handlers.onError();navigator.onLine=true;
+  let resolves=0;t.mock.method(globalThis,'fetch',async()=>{resolves++;throw Error('budget exhausted');});
+  assert.equal(await h.handlers.onOnline(),false);
+  assert.equal(resolves,0);assert.equal(h.deps.streamErrorRetriedRef.current,3);
+  assert.equal(h.deps.queueIndexRef.current,2);
+});

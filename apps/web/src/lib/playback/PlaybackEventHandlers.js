@@ -1037,7 +1037,6 @@ export function createPlaybackEventHandlers({
   };
 
   let errorRecovery = null;
-  let offlineResume = null;
   const recoverMediaError = async () => {
     const operation = captureRecoveryOperation({ audioRef, stateRef, playRequestIdRef, commandRequestIdRef, userPausedRef, userIntentPausedRef });
     const { isCurrent } = operation;
@@ -1075,15 +1074,8 @@ export function createPlaybackEventHandlers({
       return false;
     };
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      if (offlineResume) window.removeEventListener("online", offlineResume);
-      offlineResume = () => {
-        window.removeEventListener("online", offlineResume);
-        offlineResume = null;
-        if (isCurrent()) void playTrackRef.current?.(track, {
-          resumeAt: audio.currentTime || 0, forceStream: true, preserveQueue: true,
-        });
-      };
-      window.addEventListener("online", offlineResume, { once: true });
+      // onOnline is the only connectivity listener. When connectivity returns,
+      // it re-enters this bounded error owner with fresh access/identity checks.
       patchState({ error: "RECONNECTING", isBuffering: true, playbackNetworkState: "retrying_stream" });
       return false;
     }
@@ -1168,20 +1160,30 @@ export function createPlaybackEventHandlers({
 
   const onOnline = () => {
     const state = stateRef.current;
+    if (audio === audioRef.current && state.error === "RECONNECTING" &&
+        (userPausedRef.current || userIntentPausedRef.current || audio.ended)) {
+      patchState({ error: null, isBuffering: false });
+      return false;
+    }
     // A reconnect is a hint, not a failed source. Never supersede a pause,
     // completion, startup command, denied access, or an existing recovery owner.
     if (audio !== audioRef.current || !state.currentTrack || audio.ended ||
         userPausedRef.current || userIntentPausedRef.current ||
         state.accessDenied || state.streamConflict ||
         state.playbackState === "loading" || state.playbackNetworkState === "loading_stream" ||
-        isRecoveringRef?.current || offlineResume) return false;
+        isRecoveringRef?.current) return false;
     if (errorRecovery) return errorRecovery;
     if (recoveryVerificationRef?.current) return recoveryVerificationRef.current.promise;
     const hasIntent = state.isPlaying || state.osInterrupted ||
-      playbackIntentBeforeHideRef.current || state.streamRetryable;
+      playbackIntentBeforeHideRef.current || state.streamRetryable || state.error === "RECONNECTING";
     if (!hasIntent) return false;
 
     if (!audio.error && hasIntactPlaybackTransport(audio, state.currentTrack)) {
+      // Offline status is observational. Only this recovery owner clears it;
+      // healthy reconnects never reset request generations or retry budgets.
+      if (state.error === "RECONNECTING") {
+        patchState({ error: null, isBuffering: audio.readyState < 3 });
+      }
       if (audio.paused || (audioCtxRef.current && audioCtxRef.current.state !== "running")) {
         return attemptLightweightPlaybackResume?.("network_restored", {
           effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,

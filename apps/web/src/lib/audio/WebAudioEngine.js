@@ -4,7 +4,7 @@
  * Survives React provider remounts and route changes; graph is built once and persists.
  *
  * Signal chain (Spotify-architecture):
- *   source → mainGain → userGain → analyser → stereoPanner → bassFilter → limiter → destination
+ *   source → mainGain → userGain → transitionGain → analyser → stereoPanner → bassFilter → limiter → destination
  *
  * mainGain  — per-track loudness normalization (gain.value = loudness-normalized linear gain)
  * userGain  — user volume preference (0–1, persisted to localStorage)
@@ -28,10 +28,14 @@ export class WebAudioEngine extends AudioEngineBase {
     /** @type {AudioContext|null} */
     this.ctx = null;
     this._pendingReposition = null;
+    this._basePresentations = new WeakMap();
+    this._screwPlaybackRate = null;
+    this._presentationElement = null;
     /** @type {MediaElementAudioSourceNode|null} */
     this.source = null;
     /** @type {GainNode|null} Per-track normalization + crossfade fader. */
     this.mainGain = null;
+    this._transitionGain = null;
     /** @type {GainNode|null} Single user-volume authority. Element volume stays at 1.0. */
     this.userGain = null;
     /** @type {AnalyserNode|null} */
@@ -49,6 +53,8 @@ export class WebAudioEngine extends AudioEngineBase {
     this._onContextRunning = null;
     /** @type {AudioNode[]} Nodes inserted between bassFilter and limiter by effect engines. */
     this._chainExtensionNodes = [];
+    this._effectRouting = null;
+    this._effectChange = null;
 
     // ── Two-deck representation handoff ──────────────────────────────────────
     /** @type {GainNode|null} Standby deck fader — parallel to mainGain, permanently wired to userGain, normally gain=0. */
@@ -188,6 +194,11 @@ export class WebAudioEngine extends AudioEngineBase {
     const mainGain = ctx.createGain();
     mainGain.gain.value = 1;
 
+    // A dedicated fader keeps seek smoothing independent of normalization,
+    // user volume, and preview fades. Created only with the existing graph.
+    const transitionGain = ctx.createGain();
+    transitionGain.gain.value = 1;
+
     const userGain = ctx.createGain();
     userGain.gain.value = this._userVolume;
 
@@ -213,6 +224,7 @@ export class WebAudioEngine extends AudioEngineBase {
 
     // Tear down stale nodes before connecting.
     try { this.mainGain?.disconnect(); } catch {}
+    try { this._transitionGain?.disconnect(); } catch {}
     try { this.userGain?.disconnect(); } catch {}
     try { this.analyser?.disconnect(); } catch {}
     try { this.stereoPanner?.disconnect(); } catch {}
@@ -220,7 +232,7 @@ export class WebAudioEngine extends AudioEngineBase {
     try { this.limiter?.disconnect(); } catch {}
     try { source.disconnect(this.mainGain); } catch {}
 
-    // Primary chain: source → mainGain → userGain → analyser → stereoPanner → bassFilter → limiter → destination
+    // Primary chain: source → mainGain → userGain → transitionGain → analyser → stereoPanner → bassFilter → limiter → destination
     source.connect(mainGain);
     mainGain.connect(userGain);
 
@@ -250,13 +262,15 @@ export class WebAudioEngine extends AudioEngineBase {
       this._standbyElement = null;
     }
 
-    userGain.connect(analyser);
+    userGain.connect(transitionGain);
+    transitionGain.connect(analyser);
     analyser.connect(stereoPanner);
     stereoPanner.connect(bassFilter);
     this._applyChain(bassFilter, limiter);
     limiter.connect(ctx.destination);
 
     this.mainGain = mainGain;
+    this._transitionGain = transitionGain;
     this.userGain = userGain;
     this.analyser = analyser;
     this.stereoPanner = stereoPanner;
@@ -341,7 +355,7 @@ export class WebAudioEngine extends AudioEngineBase {
     }
 
     if (options.playbackRate != null) {
-      el.playbackRate = options.playbackRate;
+      this.applyPlaybackPresentation(el, { playbackRate: options.playbackRate });
     }
 
     el.src = src;
@@ -375,6 +389,7 @@ export class WebAudioEngine extends AudioEngineBase {
 
   /** Pause playback without unloading the track src. */
   pause() {
+    this.cancelPendingReposition();
     this._boundElement?.pause();
   }
 
@@ -382,14 +397,26 @@ export class WebAudioEngine extends AudioEngineBase {
    * Seek to an absolute position in seconds.
    * @param {number} position
    */
-  seek(position) {
-    const el = this._boundElement;
-    if (!el) return;
-    el.currentTime = position;
+  seek(position, { audio = this._boundElement, isCurrent = () => true, onSeek } = {}) {
+    if (!audio || !Number.isFinite(position)) return;
+    const pending = this.rampAcrossReposition(() => {
+      audio.currentTime = Math.max(0, Math.min(position, Number.isFinite(audio.duration) ? audio.duration : position));
+      onSeek?.(audio.currentTime);
+    }, 0.02, { audio, isCurrent, allowMovingPosition: true, waitForSeek: true });
+    if (pending) {
+      pending.seekTarget = Math.max(0, Math.min(position, Number.isFinite(audio.duration) ? audio.duration : position));
+    }
+  }
+
+  getSeekPosition(audio = this._boundElement) {
+    const pending = this._pendingReposition;
+    return pending?.audio === audio && pending.src === audio?.src && Number.isFinite(pending.seekTarget)
+      ? pending.seekTarget : audio?.currentTime || 0;
   }
 
   /** Stop playback and release the track src, freeing network resources. */
   stop() {
+    this.cancelPendingReposition();
     const el = this._boundElement;
     if (!el) return;
     el.pause();
@@ -415,7 +442,37 @@ export class WebAudioEngine extends AudioEngineBase {
   setPlaybackRate(rate) {
     const el = this._boundElement;
     if (!el) return;
-    el.playbackRate = rate;
+    this.applyPlaybackPresentation(el, { ...this.getPlaybackPresentation(el), playbackRate: rate });
+  }
+
+  // The persistent engine resolves base presentation and live Screw intent.
+  // Reapplying a source/CS presentation cannot silently clear the live effect.
+  getPlaybackPresentation(audio = this._boundElement) {
+    return this._basePresentations.get(audio) || {
+      playbackRate: audio?.playbackRate ?? 1,
+      preservesPitch: audio?.preservesPitch ?? true,
+    };
+  }
+
+  applyPlaybackPresentation(audio, { playbackRate = 1, preservesPitch = true } = {}) {
+    if (!audio || !Number.isFinite(playbackRate) || playbackRate <= 0) return;
+    this._basePresentations.set(audio, { playbackRate, preservesPitch });
+    this._presentationElement = audio;
+    const rate = this._screwPlaybackRate ?? playbackRate;
+    const pitch = this._screwPlaybackRate == null ? preservesPitch : false;
+    // Avoid redundant native writes on healthy continuation/gesture callbacks.
+    for (const key of ["preservesPitch", "mozPreservesPitch", "webkitPreservesPitch", "webkitPreservePitch"]) {
+      if (key in audio && audio[key] !== pitch) audio[key] = pitch;
+    }
+    if (audio.playbackRate !== rate) audio.playbackRate = rate;
+  }
+
+  setScrewPlaybackRate(rate) {
+    if (rate != null && (!Number.isFinite(rate) || rate <= 0)) return;
+    const audio = this._boundElement || this._presentationElement;
+    const base = this.getPlaybackPresentation(audio);
+    this._screwPlaybackRate = rate;
+    this.applyPlaybackPresentation(audio, base);
   }
 
   // ── DSP effects ────────────────────────────────────────────────────────────
@@ -477,34 +534,102 @@ export class WebAudioEngine extends AudioEngineBase {
    * Called from buildGraph() and setChainExtension().
    */
   _applyChain(bassFilter, limiter) {
-    const nodes = this._chainExtensionNodes;
-    if (!nodes || nodes.length === 0) {
-      bassFilter.connect(limiter);
-    } else {
-      bassFilter.connect(nodes[0]);
-      for (let i = 0; i < nodes.length - 1; i++) {
-        nodes[i].connect(nodes[i + 1]);
-      }
-      nodes[nodes.length - 1].connect(limiter);
+    clearTimeout(this._effectChange?.timer);
+    this._effectChange = null;
+    const previous = this._effectRouting;
+    if (previous) {
+      try { previous.dry.disconnect(); } catch {}
+      try { previous.wet.disconnect(); } catch {}
+      for (const node of previous.nodes) { try { node.disconnect(); } catch {} }
     }
+    // Fixed dry/wet faders belong to this graph. Gestures never rebuild the
+    // player or reconnect its primary path; only the silent wet input changes.
+    try { bassFilter.disconnect(limiter); } catch {}
+    const dry = this.ctx.createGain();
+    const wet = this.ctx.createGain();
+    dry.gain.value = this._chainExtensionNodes.length ? 0 : 1;
+    wet.gain.value = this._chainExtensionNodes.length ? 1 : 0;
+    bassFilter.connect(dry);
+    dry.connect(limiter);
+    wet.connect(limiter);
+    const route = { ctx: this.ctx, bassFilter, limiter, dry, wet, nodes: [] };
+    this._effectRouting = route;
+    this._replaceWetNodes(route, this._chainExtensionNodes);
   }
 
-  /**
-   * Insert AudioNodes between bassFilter and limiter.
-   * Pass an empty array to remove extensions and restore direct connection.
-   * Effect engines call this to activate / deactivate themselves.
-   * @param {AudioNode[]} nodes
-   */
-  setChainExtension(nodes) {
-    if (!this.bassFilter || !this.limiter) return;
-    // Tear down current chain from bassFilter outward.
-    try { this.bassFilter.disconnect(); } catch {}
-    const prev = this._chainExtensionNodes;
-    if (prev && prev.length) {
-      for (const n of prev) { try { n.disconnect(); } catch {} }
+  _replaceWetNodes(route, nodes) {
+    if (route.nodes.length) {
+      try { route.bassFilter.disconnect(route.nodes[0]); } catch {}
+      for (const node of route.nodes) { try { node.disconnect(); } catch {} }
     }
-    this._chainExtensionNodes = Array.isArray(nodes) ? nodes : [];
-    this._applyChain(this.bassFilter, this.limiter);
+    route.nodes = nodes;
+    if (!nodes.length) return;
+    route.bassFilter.connect(nodes[0]);
+    for (let i = 0; i < nodes.length - 1; i++) nodes[i].connect(nodes[i + 1]);
+    nodes[nodes.length - 1].connect(route.wet);
+  }
+
+  /** Change only the effect input, at zero wet gain, with complementary fades. */
+  setChainExtension(nodes) {
+    if (!this.bassFilter || !this.limiter || !this.ctx) return;
+    const next = Array.isArray(nodes) ? nodes : [];
+    if (!this._effectRouting || this._effectRouting.ctx !== this.ctx ||
+        this._effectRouting.bassFilter !== this.bassFilter || this._effectRouting.limiter !== this.limiter) {
+      this._applyChain(this.bassFilter, this.limiter);
+    }
+    if (next.length === this._chainExtensionNodes.length &&
+        next.every((node, i) => node === this._chainExtensionNodes[i])) return;
+    this._chainExtensionNodes = next;
+    clearTimeout(this._effectChange?.timer);
+    this._effectChange = null;
+    const route = this._effectRouting;
+    const ctx = route.ctx;
+    const fadeSec = 0.01;
+    const fade = (wetTarget, immediate = false) => {
+      const now = ctx.currentTime;
+      for (const [param, target] of [[route.wet.gain, wetTarget], [route.dry.gain, 1 - wetTarget]]) {
+        if (typeof param.cancelAndHoldAtTime === "function") param.cancelAndHoldAtTime(now);
+        else {
+          const value = param.value;
+          param.cancelScheduledValues(now);
+          param.setValueAtTime(value, now);
+        }
+        if (immediate) param.setValueAtTime(target, now);
+        else param.linearRampToValueAtTime(target, now + fadeSec);
+      }
+    };
+    if (ctx.state !== "running") {
+      this._replaceWetNodes(route, next);
+      fade(next.length ? 1 : 0, true);
+      return;
+    }
+    // Reversing a pending handoff to the still-wired owner needs no rewiring.
+    if (next.length === route.nodes.length && next.every((node, i) => node === route.nodes[i])) {
+      fade(next.length ? 1 : 0);
+      return;
+    }
+    if (!route.nodes.length) {
+      this._replaceWetNodes(route, next);
+      fade(next.length ? 1 : 0);
+      return;
+    }
+    // Fade back to dry before replacing or removing an audible effect.
+    fade(0);
+    const fadeEnd = ctx.currentTime + fadeSec;
+    const pending = { timer: null };
+    this._effectChange = pending;
+    const replace = () => {
+      if (this._effectChange !== pending || this._effectRouting !== route) return;
+      if (ctx.state === "running" && ctx.currentTime + 1e-9 < fadeEnd) {
+        pending.timer = setTimeout(replace, Math.max(1, Math.ceil((fadeEnd - ctx.currentTime) * 1000)));
+        return;
+      }
+      this._effectChange = null;
+      if (ctx.state !== "running") fade(0, true);
+      this._replaceWetNodes(route, next);
+      fade(next.length ? 1 : 0, ctx.state !== "running");
+    };
+    pending.timer = setTimeout(replace, Math.round(fadeSec * 1000));
   }
 
   /**
@@ -515,10 +640,7 @@ export class WebAudioEngine extends AudioEngineBase {
   setPreservesPitch(value) {
     const el = this._boundElement;
     if (!el) return;
-    const v = Boolean(value);
-    if ("preservesPitch"        in el) el.preservesPitch        = v;
-    if ("mozPreservesPitch"     in el) el.mozPreservesPitch     = v;
-    if ("webkitPreservesPitch"  in el) el.webkitPreservesPitch  = v;
+    this.applyPlaybackPresentation(el, { ...this.getPlaybackPresentation(el), preservesPitch: Boolean(value) });
   }
 
   // ── Audio element event forwarding ─────────────────────────────────────────
@@ -663,80 +785,107 @@ export class WebAudioEngine extends AudioEngineBase {
     this._standbyGain.gain.linearRampToValueAtTime(0, end);
   }
 
-  /**
-   * Duck mainGain to silence, run a synchronous reposition callback at the
-   * bottom of the fade, then restore. A raw `audio.currentTime` jump (or any
-   * other mid-stream reposition) on a live Web Audio graph is a sample
-   * discontinuity — audibly a click or pop. Wrapping it in a ~20ms fade
-   * (same ramp length as setUserVolume's zipper-noise guard) makes the
-   * reposition inaudible instead of eliminating it structurally.
-   * Falls back to an immediate reposition when there is no live graph to click.
-   *
-   * @param {() => void} reposition  Runs once gain has reached 0.
-   * @param {number} [fadeSec=0.02] Fade duration each way.
-   */
+  /** Cancel the owned delayed reposition and restore its transition fader. */
   cancelPendingReposition() {
-    const pending = this._pendingReposition;
-    if (!pending) return;
-    this._pendingReposition = null;
-    clearTimeout(pending.timer);
-    pending.restore();
+    this._pendingReposition?.finish();
   }
 
-  rampAcrossReposition(reposition, fadeSec = 0.02) {
+  /**
+   * Fade the dedicated output fader, reposition at audio-clock silence, then
+   * restore after seek readiness. Recovery keeps its strict stalled-position
+   * guard; user seeks opt into advancing playback and current-intent guards.
+   * With no live graph (or while paused), reposition immediately.
+   */
+  rampAcrossReposition(reposition, fadeSec = 0.02, {
+    audio = this._boundElement, isCurrent = () => true,
+    allowMovingPosition = false, waitForSeek = false,
+  } = {}) {
     const previousTarget = this._pendingReposition?.restoreTo;
     this.cancelPendingReposition();
+    if (!isCurrent()) return;
     const ctx = this.ctx;
-    const gain = this.mainGain;
-    if (!ctx || !gain || ctx.state !== "running") {
+    const gain = this._transitionGain || this.mainGain;
+    if (!ctx || !gain || ctx.state !== "running" || audio?.paused || audio !== this._boundElement) {
       reposition();
       return;
     }
-    const audio = this._boundElement;
     const src = audio?.src;
     const position = audio?.currentTime;
     const now = ctx.currentTime;
-    const restoreTo = previousTarget ?? gain.gain.value;
+    const restoreTo = this._transitionGain ? 1 : previousTarget ?? gain.gain.value;
+    const ownsGraph = () => this.ctx === ctx && (this._transitionGain || this.mainGain) === gain;
+    const ownsPosition = () => this._boundElement === audio && (!audio ||
+      (audio.src === src && (allowMovingPosition || audio.currentTime === position) && !audio.paused && !audio.ended));
+    const hold = () => {
+      const t = ctx.currentTime;
+      if (typeof gain.gain.cancelAndHoldAtTime === "function") gain.gain.cancelAndHoldAtTime(t);
+      else {
+        const current = gain.gain.value;
+        gain.gain.cancelScheduledValues(t);
+        gain.gain.setValueAtTime(current, t);
+      }
+      return t;
+    };
+    const events = [];
     const pending = {
-      restoreTo,
-      timer: null,
-      restore: () => {
-        // An old operation must never schedule gain changes on a replacement graph.
-        if (this.ctx !== ctx || this.mainGain !== gain || ctx.state === "closed") return;
-        const t = ctx.currentTime;
-        if (typeof gain.gain.cancelAndHoldAtTime === "function") {
-          gain.gain.cancelAndHoldAtTime(t);
-        } else {
-          const current = gain.gain.value;
-          gain.gain.cancelScheduledValues(t);
-          gain.gain.setValueAtTime(current, t);
+      restoreTo, audio, src, timer: null, finished: false, seeking: false,
+      finish: () => {
+        if (pending.finished) return;
+        pending.finished = true;
+        clearTimeout(pending.timer);
+        events.forEach(([event, fn]) => audio?.removeEventListener?.(event, fn));
+        if (this._pendingReposition === pending) this._pendingReposition = null;
+        // Restore only the owned transition fader; never alter normalization.
+        if (ownsGraph() && ctx.state !== "closed") {
+          const t = hold();
+          gain.gain.linearRampToValueAtTime(restoreTo, t + fadeSec);
         }
-        gain.gain.linearRampToValueAtTime(restoreTo, t + fadeSec);
       },
     };
-    this._pendingReposition = pending;
-    if (typeof gain.gain.cancelAndHoldAtTime === "function") {
-      gain.gain.cancelAndHoldAtTime(now);
-    } else {
-      const current = gain.gain.value;
-      gain.gain.cancelScheduledValues(now);
-      gain.gain.setValueAtTime(current, now);
+    const listen = (event, fn) => {
+      audio?.addEventListener?.(event, fn);
+      events.push([event, fn]);
+    };
+    for (const event of ["pause", "ended", "emptied", "error"]) listen(event, pending.finish);
+    if (waitForSeek) {
+      const ready = () => {
+        if (!isCurrent() || !ownsGraph() || !ownsPosition()) return pending.finish();
+        if (pending.seeking && !audio.seeking && audio.readyState >= 2) pending.finish();
+      };
+      listen("seeked", ready);
+      listen("canplay", ready);
+      // A seek outside this owner supersedes the delayed operation as well.
+      listen("seeking", () => { if (!pending.seeking) pending.finish(); });
     }
-    gain.gain.linearRampToValueAtTime(0, now + fadeSec);
-    pending.timer = setTimeout(() => {
+    this._pendingReposition = pending;
+    hold();
+    const fadeEnd = now + fadeSec;
+    const fadeDeadline = Date.now() + 2000;
+    gain.gain.linearRampToValueAtTime(0, fadeEnd);
+    const perform = () => {
       if (this._pendingReposition !== pending) return;
-      this._pendingReposition = null;
-      const ownsGraph = this.ctx === ctx && this.mainGain === gain;
-      const ownsPosition = this._boundElement === audio && (!audio ||
-        (audio.src === src && audio.currentTime === position && !audio.paused && !audio.ended));
-      try {
-        if (ownsGraph && ownsPosition && ctx.state === "running") reposition();
-      } catch {
-        // Recovery remains best-effort; always restore the owned gain.
-      } finally {
-        pending.restore();
+      if (!isCurrent() || !ownsGraph() || !ownsPosition() || ctx.state !== "running" || Date.now() >= fadeDeadline) return pending.finish();
+      // Wall-clock timers can run before the audio clock reaches silence.
+      if (ctx.currentTime + 1e-9 < fadeEnd) {
+        pending.timer = setTimeout(perform, Math.max(1, Math.ceil((fadeEnd - ctx.currentTime) * 1000)));
+        return;
       }
-    }, Math.round(fadeSec * 1000));
+      try {
+        pending.seeking = true;
+        reposition();
+        if (pending.finished) return;
+        if (waitForSeek && (audio.seeking || audio.readyState < 2)) {
+          // Readiness is event-driven; timeout guarantees the fader cannot stay muted.
+          pending.timer = setTimeout(pending.finish, 2000);
+          return;
+        }
+      } catch {
+        // Recovery remains best-effort; always restore the owned fader.
+      }
+      pending.finish();
+    };
+    pending.timer = setTimeout(perform, Math.round(fadeSec * 1000));
+    return pending;
   }
 
   /** @returns {HTMLAudioElement|null} Active (playing) audio element — public read accessor. */

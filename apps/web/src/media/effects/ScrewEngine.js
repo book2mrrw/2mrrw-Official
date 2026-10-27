@@ -17,7 +17,6 @@
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
 import { interactiveMediaState } from "@/media/InteractiveMediaState";
 
-const RATE_NORMAL = 1.0;
 const RATE_MIN    = 0.65;   // deepest screw (intensity=1)
 const RATE_MAX    = 0.85;   // lightest screw (intensity=0)
 
@@ -32,21 +31,19 @@ function createScrewEngine() {
   function activate(intensity) {
     _active = true;
     const engine = getWebAudioEngine();
-    engine.setPreservesPitch(false);
-    engine.setPlaybackRate(intensityToRate(intensity));
+    engine.setScrewPlaybackRate(intensityToRate(intensity));
   }
 
   function deactivate() {
     if (!_active) return;
     _active = false;
     const engine = getWebAudioEngine();
-    engine.setPlaybackRate(RATE_NORMAL);
-    engine.setPreservesPitch(true);
+    engine.setScrewPlaybackRate(null);
   }
 
   function setIntensity(intensity) {
     if (!_active) return;
-    getWebAudioEngine().setPlaybackRate(intensityToRate(intensity));
+    getWebAudioEngine().setScrewPlaybackRate(intensityToRate(intensity));
   }
 
   // Register with IMS so it can dispatch through us.

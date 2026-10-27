@@ -10,18 +10,24 @@ test("seekInternal rejects every seek for preview-only tracks — the single enf
   const src = read("src/lib/playback/PlaybackTransportCommands.js");
   const fnAt = src.indexOf("self.seekInternal = function seekInternal");
   const guardAt = src.indexOf("if (track?.metadata?.access?.previewOnly) return;", fnAt);
-  const audioWriteAt = src.indexOf("audio.currentTime = Math.max", fnAt);
+  const audioWriteAt = src.indexOf("getWebAudioEngine().seek(time,", fnAt);
   assert.ok(fnAt > -1 && guardAt > fnAt && guardAt < audioWriteAt,
     "the previewOnly guard must return before audio.currentTime is ever touched");
 });
 
-test("non-preview seeking is completely unchanged — no clamping logic was left behind for it", () => {
+test("full-song seeks use the shared transition and clamp only to the recording duration", () => {
   const src = read("src/lib/playback/PlaybackTransportCommands.js");
   const fnAt = src.indexOf("self.seekInternal = function seekInternal");
   const fnBody = src.slice(fnAt, fnAt + 1500);
   assert.doesNotMatch(fnBody, /let capped = time/,
     "the old clamp-to-cap variable should be gone — full tracks seek to exactly the requested time, same as before");
-  assert.match(fnBody, /audio\.currentTime = Math\.max\(0, Math\.min\(time,/);
+  assert.match(fnBody, /getWebAudioEngine\(\)\.seek\(time,/);
+  const engine = read("src/lib/audio/WebAudioEngine.js");
+  const seekAt = engine.indexOf("  seek(position,");
+  const seekBody = engine.slice(seekAt, engine.indexOf("  /** Stop playback", seekAt));
+  assert.match(seekBody, /rampAcrossReposition/);
+  assert.match(seekBody, /audio\.currentTime = Math\.max\(0, Math\.min\(position, Number\.isFinite\(audio\.duration\) \? audio\.duration : position\)\)/);
+  assert.doesNotMatch(seekBody, /PREVIEW_HARD_CAP_SEC|previewOnly/);
 });
 
 test("seekBack, keyboard shortcuts, and Media Session seekbackward/seekforward/seekto all route through the one protected function", () => {

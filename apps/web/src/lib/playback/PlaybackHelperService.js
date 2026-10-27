@@ -1343,9 +1343,7 @@ export function createPlaybackHelpers(initialDeps) {
 
     applyCsToElement(audio, presentation, resumeAt = null) {
       if (!audio || !presentation) return;
-      audio.playbackRate = presentation.playbackRate ?? 1;
-      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-      if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
+      getWebAudioEngine().applyPlaybackPresentation(audio, { playbackRate: presentation.playbackRate ?? 1 });
       self._deps.csUsingAlternateSrcRef.current = Boolean(presentation.useCsSrc);
       if (resumeAt != null && resumeAt > 0) {
         const applySeek = () => {

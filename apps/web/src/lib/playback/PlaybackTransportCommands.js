@@ -24,6 +24,7 @@ import { logPlayback } from "@/lib/observability/client-log";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
 import { clearPersistedMediaSessionTrack } from "@/lib/media-session-artwork";
+import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
 import { captureRecoveryOperation } from "./recovery-operation";
 import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 
@@ -56,6 +57,7 @@ export function attachTransportCommands(self) {
     }
 
     tracePlayback("pauseInternal", "pauseInternal", { fromViewport, userInitiated, interrupt });
+    getWebAudioEngine().cancelPendingReposition();
     audioRef.current?.pause();
 
     // When stall recovery has already paused the audio element, audio.pause() is a
@@ -281,29 +283,34 @@ export function attachTransportCommands(self) {
       syncProgressTime(pendingSeekRef.current);
       return;
     }
-    audio.currentTime = Math.max(0, Math.min(time, isFinite(audio.duration) ? audio.duration : time));
-    syncProgressTime(audio.currentTime);
-    syncPositionState(true);
-    if (stateRef.current.currentTrack) {
-      sendControlSystemPlaybackEvent(stateRef.current.currentTrack, "seek", {
-        mediaType: "audio",
-        positionSeconds: audio.currentTime,
-        durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
-      });
-    }
+    const operation = captureRecoveryOperation(self._deps, { respectPause: false });
+    getWebAudioEngine().seek(time, {
+      audio, isCurrent: operation.isCurrent,
+      onSeek(position) {
+        syncProgressTime(position);
+        syncPositionState(true);
+        if (stateRef.current.currentTrack) {
+          sendControlSystemPlaybackEvent(stateRef.current.currentTrack, "seek", {
+            mediaType: "audio", positionSeconds: position,
+            durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
+          });
+        }
+      },
+    });
   };
 
   self.seekBack = function seekBack(seconds = 15) {
     const audio = self._deps.audioRef.current;
     if (!audio) return;
-    self.seekInternal(Math.max(0, (audio.currentTime || 0) - seconds));
+    self.seekInternal(Math.max(0, getWebAudioEngine().getSeekPosition(audio) - seconds));
   };
 
   self.seekForward = function seekForward(seconds = 15) {
     const audio = self._deps.audioRef.current;
     if (!audio) return;
-    const max = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (audio.currentTime || 0) + seconds;
-    self.seekInternal(Math.min(max, (audio.currentTime || 0) + seconds));
+    const position = getWebAudioEngine().getSeekPosition(audio);
+    const max = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : position + seconds;
+    self.seekInternal(Math.min(max, position + seconds));
   };
 
   self.setPlaybackRateInternal = function setPlaybackRateInternal(rate) {
@@ -312,9 +319,7 @@ export function attachTransportCommands(self) {
     const audio = audioRef.current;
     if (!audio || !Number.isFinite(rate) || rate <= 0) return;
     tracePlayback("setPlaybackRateInternal", "setPlaybackRateInternal", { rate });
-    audio.playbackRate = rate;
-    if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-    if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
+    getWebAudioEngine().applyPlaybackPresentation(audio, { playbackRate: rate });
   };
 
   self.resumeTrackAtPosition = async function resumeTrackAtPosition(trackId, position) {

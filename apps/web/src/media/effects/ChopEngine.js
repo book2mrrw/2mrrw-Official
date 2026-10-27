@@ -52,16 +52,18 @@ function createChopEngine() {
     // Install as chain extension
     engine.setChainExtension([chopGain]);
 
-    // Schedule on/off gate pattern
-    const t0 = ctx.currentTime + 0.005; // tiny ramp-in delay
+    // Keep plateaus, with short attack/release edges on the audio clock.
+    // A scheduling delay alone does not smooth a gain discontinuity.
+    const t0 = ctx.currentTime + 0.005;
+    const edge = Math.min(0.005, halfPeriod / 4);
     for (let i = 0; i < BURST_CYCLES; i++) {
-      const onTime  = t0 + i * period;
-      const offTime = onTime + halfPeriod;
-      chopGain.gain.setValueAtTime(1,     onTime);
-      chopGain.gain.setValueAtTime(depth, offTime);
+      const offTime = t0 + i * period + halfPeriod;
+      const nextOn = t0 + (i + 1) * period;
+      chopGain.gain.setValueAtTime(1, offTime - edge);
+      chopGain.gain.linearRampToValueAtTime(depth, offTime);
+      chopGain.gain.setValueAtTime(depth, nextOn - edge);
+      chopGain.gain.linearRampToValueAtTime(1, nextOn);
     }
-    // Return to full gain at end
-    chopGain.gain.setValueAtTime(1, t0 + totalDur);
 
     // Clear after burst completes — but only if CHOP still owns the chain.
     // FilterEngine may have taken ownership during the burst; in that case
@@ -75,8 +77,8 @@ function createChopEngine() {
   }
 
   /**
-   * Immediately cancel any pending teardown timer and remove the Chop GainNode from
-   * the WebAudio chain. Called by IMS._clearEffect() on track change or effect collision
+   * Cancel the burst timer and hand the chain back through the engine's dry fade.
+   * Called by IMS._clearEffect() on track change or effect collision
    * so the chopGain never lingers as a silent pass-through after the burst owner changes.
    *
    * AudioParam events already scheduled on the audio thread are NOT cancelled — they

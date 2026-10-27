@@ -1,5 +1,7 @@
 "use client";
 
+import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
+
 import { completeQueuePlayback as completeCoreQueue } from "@/lib/playback/queue-completion";
 import { useCallback, startTransition, useMemo } from "react";
 import { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
@@ -410,7 +412,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     csHoldSavedRef.current = {
       src: audio.currentSrc || audio.src,
       currentTime: audio.currentTime,
-      playbackRate: audio.playbackRate,
+      presentation: getWebAudioEngine().getPlaybackPresentation(audio),
       wasPlaying: !audio.paused,
     };
     skipPauseInterruptionRef.current = true;
@@ -430,9 +432,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
           audio.addEventListener("loadedmetadata", applySeek, { once: true });
         }
       }
-      audio.playbackRate = 1;
-      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-      if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
+      getWebAudioEngine().applyPlaybackPresentation(audio, { playbackRate: 1 });
       if (csHoldSavedRef.current?.wasPlaying) {
         await playAudioIfNotPaused(audio, true, {
           command: "CS_HOLD_PREVIEW",
@@ -458,9 +458,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
   const setCsHoldPlaybackRate = useCallback((progress) => {
     const audio = audioRef.current;
     if (!audio || csModeRef.current || csHoldActiveRef.current) return;
-    audio.playbackRate = 1 - (1 - CS_PLAYBACK_RATE) * progress;
-    if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-    if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
+    getWebAudioEngine().applyPlaybackPresentation(audio, { playbackRate: 1 - (1 - CS_PLAYBACK_RATE) * progress });
   }, []);
 
   const endCsHoldPreview = useCallback(() => {
@@ -495,9 +493,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
         } else if (saved.currentTime > 0) {
           audio.currentTime = saved.currentTime;
         }
-        audio.playbackRate = saved.playbackRate ?? 1;
-        if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-        if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
+        getWebAudioEngine().applyPlaybackPresentation(audio, saved.presentation);
         if (saved.wasPlaying && audio.paused) {
           await playAudioIfNotPaused(audio, true, {
             command: "CS_HOLD_END",
@@ -518,9 +514,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
         });
       });
     } else if (audio) {
-      audio.playbackRate = 1;
-      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-      if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
+      getWebAudioEngine().applyPlaybackPresentation(audio, { playbackRate: 1 });
     }
 
     csHoldActiveRef.current = false;

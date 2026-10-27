@@ -4,9 +4,9 @@ import { WebAudioEngine, getWebAudioEngine } from '../../audio/WebAudioEngine.js
 import { recoveryCoordinator } from '../recovery-coordinator.js';
 
 function setup(t, engine = new WebAudioEngine()) {
-  t.mock.timers.enable({apis:['setTimeout']});
+  t.mock.timers.enable({apis:['setTimeout','Date']});
   const changes = [];
-  engine.ctx = {state:'running',currentTime:10};
+  engine.ctx = {state:'running',get currentTime(){return 10+Date.now()/1000;}};
   engine.mainGain = {gain:{value:1,cancelScheduledValues(){},setValueAtTime(){},linearRampToValueAtTime(v){changes.push(v);}}};
   engine._boundElement = {src:'first',currentTime:5,paused:false,ended:false};
   t.after(() => engine.cancelPendingReposition());

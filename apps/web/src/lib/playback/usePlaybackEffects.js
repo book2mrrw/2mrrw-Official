@@ -1343,13 +1343,16 @@ export function usePlaybackEffects({
     updateMediaSession,
   ]);
 
-  // ─── Effect 24: Proactive Offline / Online Handling ─────────────────────────
+  // ─── Effect 24: Offline Status (recovery belongs to onOnline) ─────────────────────────
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const handleOffline = () => {
       const audio = audioRef.current;
-      const isCurrentlyPlaying = stateRef.current.isPlaying && audio && !audio.paused;
+      const state = stateRef.current;
+      const isCurrentlyPlaying = state.isPlaying && audio && !audio.paused &&
+        !state.accessDenied && !state.streamConflict &&
+        !userPausedRef.current && !userIntentPausedRef.current;
       stopStallRecovery();
       patchState({
         isBuffering: isCurrentlyPlaying,
@@ -1358,32 +1361,9 @@ export function usePlaybackEffects({
       });
     };
 
-    const handleOnline = () => {
-      const audio = audioRef.current;
-      const track = stateRef.current.currentTrack;
-      if (
-        !userPausedRef.current &&
-        !userIntentPausedRef.current &&
-        track &&
-        audio &&
-        (stateRef.current.isPlaying || stateRef.current.error === "RECONNECTING")
-      ) {
-        streamErrorRetriedRef.current = 0;
-        patchState({ error: null, isBuffering: true });
-        void playTrackRef.current?.(track, {
-          resumeAt: audio.currentTime || 0,
-          forceStream: true,
-        });
-      } else if (stateRef.current.error === "RECONNECTING") {
-        patchState({ error: null, isBuffering: false });
-      }
-    };
-
     window.addEventListener("offline", handleOffline);
-    window.addEventListener("online", handleOnline);
     return () => {
       window.removeEventListener("offline", handleOffline);
-      window.removeEventListener("online", handleOnline);
     };
   }, [patchState, stopStallRecovery]);
 

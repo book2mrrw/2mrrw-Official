@@ -67,11 +67,10 @@ function createFilterEngine() {
       _deactTimer = null;
     }
 
-    if (!_active) {
-      // First activation — install in chain
-      engine.setChainExtension([f]);
-      _active = true;
-    }
+    // Idempotent at the graph owner, including a rapid Chop → Filter return
+    // while the previous Filter deactivation was still pending.
+    engine.setChainExtension([f]);
+    _active = true;
 
     const targetFreq = logFreq(nx);
     const targetQ    = Q_MIN + Math.max(0, Math.min(1, ny)) * (Q_MAX - Q_MIN);
