@@ -13,6 +13,10 @@ for(const table of tables){
 }
 for(const c of schema.constraints.filter(c=>c.contype!=='f'))await db.exec(`ALTER TABLE public."${c.table_name}" ADD CONSTRAINT "${c.conname}" ${c.definition}`);
 for(const c of schema.constraints.filter(c=>c.contype==='f'))await db.exec(`ALTER TABLE public."${c.table_name}" ADD CONSTRAINT "${c.conname}" ${c.definition}`);
+// Match the live timestamp triggers: now() is transaction time, not a new
+// wall-clock version for every statement within the same transaction.
+await db.exec(`CREATE FUNCTION public.fixture_touch_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at=now(); RETURN NEW; END $$;`);
+for(const table of ['releases','products','tracks','catalog_tracks']) await db.exec(`CREATE TRIGGER fixture_updated_at BEFORE UPDATE ON public.${table} FOR EACH ROW EXECUTE FUNCTION public.fixture_touch_updated_at();`);
 // The captured credit schema predates lyric reads of the existing replacement pipeline.
 // Only the columns read by the resolver are needed here; promotion itself is not simulated.
 await db.exec('CREATE TABLE IF NOT EXISTS public.audio_master_revisions(entity_kind text,entity_id uuid,staged_master_key text,status text,hls_prefix text); CREATE TABLE IF NOT EXISTS public.hls_manifests(hls_prefix text,duration_seconds numeric);');
@@ -21,5 +25,6 @@ await db.exec(await fs.readFile('supabase/migrations/20261021020000_atomic_credi
 
 await db.exec(await fs.readFile('supabase/migrations/20261022010000_atomic_lyric_timing_edits.sql','utf8'));
 await db.exec(await fs.readFile('supabase/migrations/20261024010000_private_lyric_working_drafts.sql','utf8'));
+await db.exec(await fs.readFile('supabase/migrations/20261027021455_atomic_active_catalog_order.sql','utf8'));
 return db;
 }

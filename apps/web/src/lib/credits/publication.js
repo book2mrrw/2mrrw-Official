@@ -1,5 +1,23 @@
 import { editableCreditGroups, mergeCreditProjection, optionalIdentifier, validateCreditGroups } from './contract';
 
+/** Recording identity never follows a mutable display position. */
+export function publicationTrackOverrides(requested, recordings, { allowPlaceholder = false } = {}) {
+  const ids = new Set(recordings.map(row => row.id));
+  const overrides = new Map();
+  for (const row of requested) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('Each recording must be an object.');
+    // The single/feature wizard has an unused multi-track placeholder.
+    if (row.id == null && allowPlaceholder) continue;
+    if (!ids.has(row.id)) throw new Error('A recording does not belong to this release. Reload before publishing.');
+    if (overrides.has(row.id)) throw new Error('A recording was supplied more than once.');
+    if (Object.hasOwn(row, 'position') && (!Number.isInteger(row.position) || row.position < 1)) throw new Error('Track positions must be positive whole numbers.');
+    overrides.set(row.id, row);
+  }
+  const positions = recordings.filter(row => row.upload_status === 'ready').map(row => overrides.get(row.id)?.position ?? row.position);
+  if (new Set(positions).size !== positions.length) throw new Error('Each recording needs a distinct track position.');
+  return overrides;
+}
+
 /** Older full-form clients send empty defaults. Only v1 patches may delete attribution. */
 export function publicationCredits(existing, patch, { allowClear = false } = {}) {
   let next = existing;

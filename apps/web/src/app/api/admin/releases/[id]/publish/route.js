@@ -1,5 +1,5 @@
 import {verifyLyricInput,rebindCopiedLyrics} from "@/lib/lyrics/audio-source";
-import { publicationCredits, metadataPatch } from "@/lib/credits/publication";
+import { publicationCredits, metadataPatch, publicationTrackOverrides } from "@/lib/credits/publication";
 import { validateCreditGroups, optionalIdentifier, publicCredits } from "@/lib/credits/contract";
 import { creditStorageCapabilities } from "@/lib/credits/admin-store";
 import { randomUUID } from "node:crypto";
@@ -75,6 +75,7 @@ export async function POST(req, { params }) {
   const admin = getAdminClient();
   if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid publication payload" }, { status: 400 });
   const creditInput = body;
+  if (Array.isArray(body.tracks) && body.tracks.some(row => !row || typeof row !== "object" || Array.isArray(row))) return NextResponse.json({ error: "Each recording must be an object" }, { status: 422 });
   const creditErrors = [body, ...(Array.isArray(body.tracks) ? body.tracks : [])].flatMap(value => value?.credit_groups ? validateCreditGroups(value.credit_groups) : []);
   try {
     if (Object.hasOwn(body, "upc")) optionalIdentifier(body.upc, "UPC/EAN");
@@ -165,11 +166,19 @@ export async function POST(req, { params }) {
   const isMultiTrack = ["album", "ep", "mixtape"].includes(releaseType);
 
   // ── 2. Load tracks ─────────────────────────────────────────────────────────
-  const { data: dbTracks } = await admin
+  const { data: dbTracks, error: tracksError } = await admin
     .from("tracks")
     .select("id, title, upload_status, audio_r2_key, master_r2_key, position, lyrics, preview_r2_key, preview_start_seconds")
     .eq("release_id", releaseId)
     .is("removed_from_release_at", null);
+
+  if (tracksError) return NextResponse.json({ error: "Could not load recordings before publication" }, { status: 503 });
+  let trackOverrides;
+  try {
+    trackOverrides = publicationTrackOverrides(bodyTracks, dbTracks || [], { allowPlaceholder: !isMultiTrack });
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 422 });
+  }
 
   // Merge body track data (titles, lyrics, credits overrides) into DB rows.
   // preview_key/preview_start_seconds prefer the durable per-track DB column
@@ -178,16 +187,7 @@ export async function POST(req, { params }) {
   // its in-memory preview_key (the browser File it was derived from doesn't
   // survive a page reload), but the DB write from the original upload persists.
   const tracks = (dbTracks || []).map((dbTrack) => {
-    // The single/feature wizard step keeps an unused `tracks: [{ id: null,
-    // position: 1, ... }]` placeholder in its own state (a phantom leftover
-    // from sharing the multi-track UI's shape) that's still sent in every
-    // publish body regardless of release type. Requiring a real id for the
-    // position fallback keeps that placeholder from ever matching — a
-    // genuine multi-track track always has its id set (from the audio
-    // upload-complete response) by the time it's publish-ready.
-    const bodyTrack = bodyTracks.find((bt) =>
-      bt.id === dbTrack.id || (bt.id != null && Number(bt.position) === Number(dbTrack.position))
-    );
+    const bodyTrack = trackOverrides.get(dbTrack.id);
     const stableSlug = (existingCatalogTracks || []).find(track => track.track_id === dbTrack.id)?.slug || bodyTrack?.slug || slugify(bodyTrack?.title || dbTrack.title || `track-${dbTrack.position || 1}`);
     const previewKey = dbTrack.preview_r2_key || bodyTrack?.preview_key || null;
     const previewStartSeconds = dbTrack.preview_r2_key
@@ -625,7 +625,7 @@ export async function POST(req, { params }) {
   if (isMultiTrack && readyTracks.length > 0) {
     trackRows = readyTracks.map((t, i) => {
       const priorTrack = (existingCatalogTracks || []).find(row => row.track_id === t.id);
-      const requestedTrack = bodyTracks.find(row => row.id === t.id) || {};
+      const requestedTrack = trackOverrides.get(t.id) || {};
       const tCredits = publicationCredits(priorTrack?.credits, {
         ...requestedTrack,
         ...((requestedTrack.inherit_credits === true || (!priorTrack && requestedTrack.inherit_credits !== false)) ? {
@@ -694,7 +694,7 @@ export async function POST(req, { params }) {
   if (p_line)            releaseUpdate.p_line = p_line;
 
   const recordingPatches = readyTracks.map(track => {
-    const requested = bodyTracks.find(item => item.id === track.id) || {};
+    const requested = trackOverrides.get(track.id) || {};
     return {
       id: track.id, ...(canonicalTrackUpdates.get(track.id) || {}),
       title: !isMultiTrack ? title.trim() : track.title,

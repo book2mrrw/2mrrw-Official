@@ -5,6 +5,7 @@ import {
   getRadioCarouselItemsFromDB,
 } from "@/lib/media/catalog-db";
 import { toMobileCatalogReleases } from "@/lib/media/mobile-catalog-projection";
+import { getCatalogRefreshStateFromDB } from "@/lib/media/catalog-refresh-state";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,6 +20,15 @@ const NO_STORE_HEADERS = {
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const view = searchParams.get("view");
+
+  if (view === "revision") {
+    const headers = { "Cache-Control": "private, no-store, max-age=0" };
+    try {
+      return NextResponse.json(await getCatalogRefreshStateFromDB(), { headers });
+    } catch {
+      return NextResponse.json({ error: "catalog_revision_unavailable" }, { status: 503, headers });
+    }
+  }
 
   if (view === "snapshot") {
     try {

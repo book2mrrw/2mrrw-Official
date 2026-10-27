@@ -22,6 +22,7 @@ export async function GET(req) {
     .from("releases")
     .select("id, slug, release_type")
     .eq("status", "scheduled")
+    .is("deleted_at", null)
     .lte("available_at", now)
     .not("available_at", "is", null);
 
