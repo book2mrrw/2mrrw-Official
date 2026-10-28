@@ -24,6 +24,8 @@ export function catalogMediaSignature(item) {
   return [
     item.slug,
     item.cover,
+    item.baseCover,
+    item.coverArtType,
     item.video,
     item.visual,
     item.preview,
@@ -93,7 +95,11 @@ function resolveCatalogMediaField(value, resolver) {
 export function withR2CatalogMedia(item) {
   if (!item) return item;
   const slug = item.slug;
-  const sig = catalogMediaSignature(item);
+  // The cached value is the complete catalog item, not only artwork. Album
+  // occurrences share a slug and cover but have distinct recording metadata.
+  // Key validity by the complete JSON catalog input so neither those fields nor
+  // still-only artwork updates can return an earlier occurrence's object.
+  const sig = JSON.stringify(item);
   if (slug) {
     const cached = catalogMediaStableCache.get(slug);
     if (cached?.sig === sig && Date.now() - cached.ts < CATALOG_CACHE_TTL_MS) {
@@ -148,7 +154,7 @@ export function withR2CatalogMedia(item) {
     return resolveCatalogMediaField(raw, catalogCoverUrl);
   };
 
-  const coverIdentity = resolveCoverDescriptor({
+  const coverIdentity = next.releaseCoverIdentity || resolveCoverDescriptor({
     // baseCover first: it is the field that is meant to be a still. `cover`
     // and legacy_cover are fallbacks for rows that never carried one.
     still: [next.baseCover, next.legacy_cover, next.cover].map(resolveStillCandidate),

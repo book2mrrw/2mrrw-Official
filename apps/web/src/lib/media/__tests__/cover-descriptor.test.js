@@ -163,18 +163,23 @@ test("every release resolves a still that is safe for an <img>", async () => {
   }
 });
 
-test("withR2CatalogMedia derives the legacy fields, never recomputes them", () => {
-  const source = read("src/lib/media/r2-catalog-media.js");
-
-  assert.match(source, /from "@\/lib\/media\/cover-descriptor"/);
-  assert.match(source, /const coverIdentity = resolveCoverDescriptor\(\{/);
-  assert.match(source, /const legacy = coverDescriptorToLegacyFields\(coverIdentity\);/);
-
-  // The old independent recomputations must stay gone. coverArtType derived
-  // from `video` alone is what made an inherited track "image"; baseCover
-  // re-resolved separately is what let a video URL land in it.
-  assert.doesNotMatch(source, /next\.coverArtType = next\.video \? "video"/);
-  assert.doesNotMatch(source, /next\.baseCover = resolveCatalogMediaField\(next\.cover/);
+test("withR2CatalogMedia derives legacy fields from the authoritative descriptor", async () => {
+  const { withR2CatalogMedia } = await import("@/lib/media/r2-catalog-media");
+  const releaseCoverIdentity = resolveCoverDescriptor({
+    still: "https://cdn.example/release.jpg", motion: "https://cdn.example/release.mp4",
+  });
+  for (const releaseIdentity of [undefined, releaseCoverIdentity]) {
+    const item = withR2CatalogMedia({
+      slug: "descriptor-contract", baseCover: "https://cdn.example/single.jpg",
+      video: "https://cdn.example/single.mp4", releaseCoverIdentity: releaseIdentity,
+    });
+    const legacy = coverDescriptorToLegacyFields(item.coverIdentity);
+    for (const key of ["cover", "baseCover", "coverArtType", "video"]) {
+      assert.equal(item[key], legacy[key]);
+    }
+    assert.ok(isStillUrl(item.baseCover));
+    if (releaseIdentity) assert.equal(item.coverIdentity, releaseIdentity);
+  }
 });
 
 test("the descriptor is exposed on the item so surfaces can stop guessing", () => {

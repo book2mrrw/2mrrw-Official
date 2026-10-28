@@ -1,3 +1,4 @@
+import { coverDescriptorToLegacyFields } from "@/lib/media/cover-descriptor";
 import { withR2CatalogMedia } from "@/lib/media/r2-catalog-media";
 import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess } from "@/lib/music-access";
 import {
@@ -151,6 +152,8 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
     baseCover: albumNorm.baseCover,
     coverArtType: albumNorm.coverArtType,
     video: albumNorm.video,
+    // Preserve the release decision through catalog aliases and later conversions.
+    releaseCoverIdentity: albumNorm.coverIdentity,
   };
 
   if (typeof track === "string") {
@@ -251,7 +254,7 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
   const visualRaw = normalized?.visual || null;
   const motionRaw =
     normalized?.motion_cover_url || normalized?.motionCoverUrl || normalized?.video || null;
-  const coverArtType =
+  let coverArtType =
     normalized?.coverArtType || normalized?.cover_art_type || (motionRaw || visualRaw ? "video" : "image");
   const csCoverType = normalized?.csCoverType || normalized?.cs_cover_type || "image";
   const coverRaw =
@@ -263,7 +266,7 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
     null;
   const videoRaw = motionRaw || visualRaw;
   const motionPath = videoRaw ? String(videoRaw).replace(/^\//, "") : "";
-  const cover =
+  let cover =
     visualRaw
       ? catalogVisualMediaUrl(String(visualRaw).replace(/^\//, ""))
       : coverArtType === "video" && videoRaw
@@ -279,9 +282,14 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
           : null;
   // baseCover is always a static image URL — safe for <img> tags.
   // When coverArtType === "video", cover is the MP4 motion URL; baseCover is the still image.
-  const baseCover = coverRaw
+  let baseCover = coverRaw
     ? catalogCoverUrl(String(coverRaw).replace(/^\//, ""))
     : cover || null;
+  // A release queue occurrence owns its artwork independently of recording/single aliases.
+  // Apply the descriptor after legacy conversion so those aliases cannot reselect it.
+  if (normalized.releaseCoverIdentity) {
+    ({ cover, baseCover, coverArtType } = coverDescriptorToLegacyFields(normalized.releaseCoverIdentity));
+  }
   const previewPath =
     normalized?.preview_path || normalized?.previewPath || normalized?.preview || null;
   const playbackSrc = resolvePlaybackSrc(normalized, access, { userId, accountState });
