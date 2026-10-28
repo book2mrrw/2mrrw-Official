@@ -17,8 +17,8 @@ export default function AdminMediaPage() {
           <div style={styles.logo}>2MRRW</div>
           <div style={styles.title}>Audio Refresh</div>
           <div style={styles.sub}>
-            Use this after uploading a new audio file to R2. Clears old HLS segments,
-            invalidates all caches, and re-queues transcoding.
+            Use this after uploading a new audio file to R2. Prepares a verified
+            replacement while the published recording stays available.
           </div>
         </div>
         <RefreshForm />
@@ -115,9 +115,8 @@ function RefreshForm() {
             {allGreen ? "Refresh complete" : "Partial refresh — check steps below"}
           </div>
           <div style={styles.stepGrid}>
-            <StepRow label="Job cancelled" value={result.steps?.jobCancelled} />
-            <StepRow label="Manifest deleted" value={result.steps?.manifestDeleted} />
-            <StepRow label="HLS segments deleted" value={result.steps?.segmentsDeleted} numeric suffix={`(${result.steps?.segmentsFailed ?? 0} failed)`} />
+            <StepRow label="Published audio preserved" value={result.steps?.publishedAudioPreserved} />
+            <StepRow label="Original audio verified" value={result.steps?.sourceVerified} />
             <StepRow label="Caches invalidated" value={result.steps?.cacheInvalidated} />
             <StepRow label="Transcode re-queued" value={result.steps?.jobQueued} />
           </div>

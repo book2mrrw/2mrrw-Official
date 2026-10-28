@@ -56,22 +56,22 @@ test("claimNextJob requires and forwards a jobType to the RPC as p_job_type", ()
 
 test("touchHeartbeat only refreshes a job that is still actually processing", () => {
   const src = read("workers/hls-transcoder/src/db.js");
-  const fnAt = src.indexOf("export async function touchHeartbeat(jobId) {");
+  const fnAt = src.indexOf("export async function touchHeartbeat(");
   assert.ok(fnAt > -1);
-  const body = src.slice(fnAt, fnAt + 300);
+  const body = src.slice(fnAt, src.indexOf('export async function markJobProcessing', fnAt));
   assert.match(body, /heartbeat_at: new Date\(\)\.toISOString\(\)/);
   assert.match(body, /\.eq\("status", "processing"\)/);
 });
 
 test("markJobFailed accepts and persists a failure_category, defaulting to UNKNOWN — never an opaque generic error", () => {
   const src = read("workers/hls-transcoder/src/db.js");
-  assert.match(src, /export async function markJobFailed\(jobId, errorMessage, failureCategory = "UNKNOWN"\)/);
+  assert.match(src, /export async function markJobFailed\(jobId, errorMessage, failureCategory = "UNKNOWN"(?:, job = null)?\)/);
   assert.match(src, /failure_category:\s*failureCategory,/);
 });
 
 test("markJobFailed also clears heartbeat_at when a job is rescued/reset — no stale heartbeat from a previous attempt survives a retry", () => {
   const src = read("workers/hls-transcoder/src/db.js");
   const fnAt = src.indexOf("export async function markJobFailed(");
-  const body = src.slice(fnAt, fnAt + 900);
+  const body = src.slice(fnAt);
   assert.match(body, /heartbeat_at:\s*null,/);
 });

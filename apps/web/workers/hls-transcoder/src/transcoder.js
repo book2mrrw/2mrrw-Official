@@ -13,6 +13,7 @@ import { runAudioFfmpeg, measureTruePeak, initialHeadroomGain, nextHeadroomGain,
 import { measureAudioRendition } from "./audio-rendition-metadata.js";
 import { logger } from "./logger.js";
 import { downloadStream, upload } from "./r2.js";
+import { validateAudioSourceKey } from './audio-source-key.js';
 
 const SEG_DURATION = 6; // seconds
 
@@ -117,6 +118,8 @@ async function transcodeOneBitrate({ sourcePath, gainDb, bitrate, slug, trackSlu
 export async function transcode({ job }) {
   const { id: jobId, slug, track_slug: trackSlug, source_key: sourceKey,
           hls_prefix: prefix, bitrates = ["320k", "160k", "96k", "64k"] } = job;
+  validateAudioSourceKey(sourceKey);
+  if (Number(job.target_profile_version || 3) > 3) throw new Error('Unsupported audio encoding profile');
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `hls-${jobId}-`));
 
@@ -126,7 +129,10 @@ export async function transcode({ job }) {
 
     // Download once: retries and tiers must encode identical bytes, never a changing source.
     const sourcePath = path.join(tmpDir, "source");
-    await pipeline(await downloadStream(sourceKey), fs.createWriteStream(sourcePath), { signal: AbortSignal.timeout(30 * 60 * 1000) });
+    const sourceHash = crypto.createHash('sha256');
+    const sourceStream = await downloadStream(sourceKey);
+    sourceStream.on('data', chunk => sourceHash.update(chunk));
+    await pipeline(sourceStream, fs.createWriteStream(sourcePath), { signal: AbortSignal.timeout(30 * 60 * 1000) });
     const sourcePeak = await measureTruePeak(sourcePath);
     let gainDb = initialHeadroomGain(sourcePeak);
     let verified = null;
@@ -173,7 +179,11 @@ export async function transcode({ job }) {
       segment_duration_secs: SEG_DURATION,
       duration_seconds:      durationSeconds,
       segment_counts:        segmentCounts,
+      segment_durations:     Object.fromEntries(Object.entries(renditionMetadata).map(([br, m]) => [br, m.segment_durations])),
       rendition_metadata:    renditionMetadata,
+      source_metadata:       { source_key: sourceKey, sha256: sourceHash.digest('hex') },
+      media_kind:            'audio',
+      transcode_profile_version: 3,
     };
   } finally {
     // Always clean up temp files — segments can be 50–200 MB per bitrate

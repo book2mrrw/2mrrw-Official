@@ -1,21 +1,14 @@
 ﻿/**
  * POST /api/admin/media/refresh-track
  *
- * Atomic audio refresh pipeline for a single track.
- * Wires together the four operations that must happen together when audio is
- * replaced in R2 but the user still hears the old version:
- *
- *   1. Cancel any in-flight or queued transcode jobs (prevents race)
- *   2. Delete the hls_manifests row (manifest API returns 404 immediately;
- *      all clients fall back to progressive download)
- *   3. Delete every HLS segment from R2 under the track's hls_prefix
- *   4. Invalidate all playback key caches (in-memory + durable DB)
- *   5. Re-enqueue a fresh transcode job at highest priority (1)
+ * Queue verified original audio as a replacement generation. Published HLS
+ * metadata and segments remain available to existing and new listeners until
+ * the worker commits the verified replacement. Conflicting active jobs return
+ * 409 rather than being cancelled underneath their current worker.
  *
  * Body: { slug: string, trackSlug?: string, releaseType?: string }
  *
- * Admin-only. All five steps are reported individually so callers can
- * diagnose partial failures without re-running the entire pipeline.
+ * Admin-only. Validation and queue outcomes are reported individually.
  */
 
 import { NextResponse } from "next/server";
@@ -59,7 +52,7 @@ export async function POST(req) {
 
   const admin = getAdminClient();
 
-  const { steps, jobId, hlsPrefix, sourceKeyFound } = await invalidateAudioCacheAndRequeueTranscode({
+  const result = await invalidateAudioCacheAndRequeueTranscode({
     admin,
     slug,
     trackSlug,
@@ -71,9 +64,6 @@ export async function POST(req) {
     slug,
     trackSlug,
     releaseType,
-    hlsPrefix,
-    steps,
-    jobId,
-    sourceKeyFound,
-  });
+    ...result,
+  }, result.error ? result.status : 200);
 }

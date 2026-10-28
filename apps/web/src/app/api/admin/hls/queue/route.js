@@ -15,8 +15,8 @@
  * or video-renditions.js) — a mismatch is rejected, never silently filtered.
  *
  * The worker (Fly.io hls-transcoder) polls hls_transcode_jobs for pending rows.
- * It resolves the source_key itself using the same resolve-playback-key logic
- * the stream route uses — or it can be provided explicitly to skip that lookup.
+ * Audio jobs resolve a verified original independently of listening caches.
+ * Explicit source keys undergo the same original-audio validation.
  *
  * DELETE /api/admin/hls/queue?jobId=<id>  — cancel a pending/failed job
  */
@@ -26,6 +26,7 @@ import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
+import { resolveAudioSource } from "@/lib/hls/audio-source";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
 import { AUDIO_RENDITIONS } from "@/lib/hls/audio-renditions";
 import { VIDEO_RENDITIONS } from "@/lib/hls/video-renditions";
@@ -58,18 +59,18 @@ async function requireAdmin() {
 
 /**
  * Resolve the R2 source key for a track.
- * If the caller provides it explicitly, skip the DB lookup.
+ * Audio always uses original-source authority; video keeps its existing path.
  */
-async function resolveSourceKey(admin, slug, trackSlug, sourceKey) {
-  if (sourceKey) return sourceKey;
+async function resolveSourceKey(admin, slug, trackSlug, sourceKey, releaseType, jobType) {
   try {
+    if (jobType === 'audio') return await resolveAudioSource(admin, { slug, trackSlug, releaseType, sourceKey });
+    if (sourceKey) return sourceKey;
     const resolved = await resolvePlaybackKey(admin, slug, {
       trackSlug: trackSlug || undefined,
-      preferMaster: true, // always use the highest-quality master for transcoding input
     });
     return resolved?.key || null;
   } catch (err) {
-    console.error("[admin/hls/queue] resolvePlaybackKey failed", { slug, trackSlug, message: err?.message });
+    console.error("[admin/hls/queue] source resolution failed", { slug, trackSlug, message: err?.message });
     return null;
   }
 }
@@ -132,7 +133,7 @@ export async function POST(req) {
       bitrates = validRenditions;
     }
 
-    const sourceKey = await resolveSourceKey(admin, slug, trackSlug, t.sourceKey || null);
+    const sourceKey = await resolveSourceKey(admin, slug, trackSlug, t.sourceKey || null, releaseType, jobType);
     if (!sourceKey) {
       errors.push({ slug, trackSlug, error: "Could not resolve source audio key from R2" });
       continue;

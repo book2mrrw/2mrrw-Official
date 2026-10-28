@@ -50,6 +50,24 @@ test('readiness is recomputed after eviction; missing one segment never advertis
   assert.equal(await store.complete(variant()), false);
 });
 
+test('a persistent read already in flight cannot resurrect a decoder-rejected fragment', async () => {
+  const url = segment('late-rejected');
+  let release; let deleted = false;
+  const store = new EncryptedSegmentStore({ storage: { open: async () => ({
+    match: () => new Promise(resolve => { release = resolve; }),
+    delete: async key => { assert.equal(key, url); deleted = true; },
+  }) } });
+  const read = store.get(url);
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  const removed = store.reject(url);
+  release(new Response(data()));
+  assert.equal(await read, null);
+  await removed;
+  assert.equal(deleted, true);
+  assert.equal(await store.put(url, data()), false, 'late producers cannot reinsert the rejected address');
+  assert.equal(await store.has(url), false);
+});
+
 test('bounded storage protects active bytes, rejects excess and never destroys playback on quota failure', async () => {
   const disk = storage();
   const store = new EncryptedSegmentStore({ storage: disk, maxBytes: 8 });
@@ -105,12 +123,13 @@ function harness() {
   return { manager, store, disk, calls, audio, tick };
 }
 
-test('scheduler finishes the selected song, then next opening, then warms high without swapping active media', async () => {
+test('scheduler retains the selected song and next opening without requesting a higher tier', async () => {
   const h = harness(); h.manager.queueNext('/next');
   for (let i = 0; i < 20; i++) await h.tick();
   const segments = h.calls.filter(url => url.startsWith('https://cdn.test'));
-  assert.deepEqual(segments, ['low-1', 'low-2', 'next-1', 'next-2', 'next-3', 'high-1', 'high-2'].map(name => segment(name)));
-  assert.equal(await h.store.complete(variant('high')), true);
+  assert.deepEqual(segments, ['low-1', 'low-2', 'next-1', 'next-2', 'next-3'].map(name => segment(name)));
+  assert.equal(h.calls.includes(variant('high')), false);
+  assert.equal(await h.store.complete(variant('high')), false);
   assert.equal(h.audio.currentTime, 0);
   assert.equal(h.audio.src, undefined);
 });
@@ -138,7 +157,7 @@ test('repeated warm failures are bounded and never fall through to higher-qualit
   for (let i = 0; i < 8; i++) await h.tick();
   assert.equal(h.manager.session.selected.errors, 3);
   assert.equal(h.manager.session.selected.failed, true);
-  assert.equal(h.manager.session.high.urls, undefined);
+  assert.equal(h.calls.includes(variant('high')), false);
 });
 
 test('stalled response bodies abort at the download deadline and release the scheduler', async t => {

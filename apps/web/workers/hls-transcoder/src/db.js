@@ -42,12 +42,24 @@ export async function claimNextJob(workerId, jobType) {
  * single fixed timeout that would either falsely reclaim a healthy long
  * encode or leave a truly dead one unrecovered for too long.
  */
-export async function touchHeartbeat(jobId) {
-  const { error } = await db
+function audioClaim(job) {
+  if (job?.job_type !== 'audio') return null;
+  if (!job.id || !job.worker_id || !job.claim_token || !Number.isSafeInteger(Number(job.generation)) || Number(job.generation) < 1) {
+    throw new Error('Audio publication requires the current claimed generation');
+  }
+  return { p_job_id: job.id, p_worker_id: job.worker_id,
+    p_claim_token: job.claim_token, p_generation: job.generation };
+}
+
+export async function touchHeartbeat(jobId, job = null) {
+  const claim = audioClaim(job);
+  let query = db
     .from("hls_transcode_jobs")
     .update({ heartbeat_at: new Date().toISOString() })
     .eq("id", jobId)
     .eq("status", "processing");
+  if (claim) query = query.eq('worker_id', job.worker_id).eq('claim_token', job.claim_token).eq('generation', job.generation);
+  const { error } = await query;
   if (error) throw new Error(`touchHeartbeat: ${error.message}`);
 }
 
@@ -61,6 +73,14 @@ export async function markJobProcessing(jobId, workerId) {
 
 export async function markJobComplete(job, manifest) {
   const jobId = job.id;
+  const claim = audioClaim(job);
+  if (claim) {
+    // Publish metadata and complete the lease in one transaction. A worker
+    // finishing after a reclaim must never replace a newer recording.
+    const { data, error } = await db.rpc('hls_commit_transcode_job', { ...claim, p_manifest: manifest });
+    if (error) throw new Error(`commit audio generation: ${error.message}`);
+    if (!data?.committed) return false;
+  } else {
   // PostgREST's onConflict can't reference expression-based indexes (COALESCE).
   // INSERT first; on unique constraint violation (23505), UPDATE the existing row.
   const { error: insErr } = await db.from("hls_manifests").insert(manifest);
@@ -86,6 +106,7 @@ export async function markJobComplete(job, manifest) {
     .update({ status: "complete", completed_at: new Date().toISOString() })
     .eq("id", jobId);
   if (jErr) throw new Error(`markJobComplete: ${jErr.message}`);
+  }
 
   // Notify the web app to invalidate the L1+L2 manifest cache immediately so
   // the next /api/library/hls request serves the real manifest instead of waiting
@@ -112,6 +133,7 @@ export async function markJobComplete(job, manifest) {
       console.warn("[worker] cache invalidation notify failed", err?.message);
     }
   }
+  return true;
 }
 
 export async function updatePosterKey(slug, trackSlug, posterKey, status = "ready") {
@@ -124,14 +146,30 @@ export async function updatePosterKey(slug, trackSlug, posterKey, status = "read
   if (error) throw new Error(`updatePosterKey: ${error.message}`);
 }
 
-export async function markJobFailed(jobId, errorMessage, failureCategory = "UNKNOWN") {
-  const { data: job } = await db
+export async function markJobFailed(jobId, errorMessage, failureCategory = "UNKNOWN", job = null) {
+  const claim = audioClaim(job);
+  if (claim) {
+    const { data, error } = await db.rpc('hls_fail_transcode_job', { ...claim,
+      p_error_message: `[${failureCategory}] ${errorMessage}`, p_max_attempts: 3 });
+    if (error) throw new Error(`fail audio generation: ${error.message}`);
+    if (data?.updated) {
+      // Preserve diagnostics on the returned failed/pending generation. If a
+      // successor has already claimed it, these guards leave its lease alone.
+      const { error: metadataError } = await db.from('hls_transcode_jobs')
+        .update({ failure_category: failureCategory, heartbeat_at: null })
+        .eq('id', jobId).eq('generation', data.generation).eq('status', data.status)
+        .is('worker_id', null).is('claim_token', null);
+      if (metadataError) throw new Error(`audio failure metadata: ${metadataError.message}`);
+    }
+    return data;
+  }
+  const { data: currentJob } = await db
     .from("hls_transcode_jobs")
     .select("attempt_count")
     .eq("id", jobId)
     .single();
 
-  const attemptCount = (job?.attempt_count ?? 0) + 1;
+  const attemptCount = (currentJob?.attempt_count ?? 0) + 1;
   const maxAttempts  = 3;
   const nextStatus   = attemptCount >= maxAttempts ? "failed" : "pending";
 

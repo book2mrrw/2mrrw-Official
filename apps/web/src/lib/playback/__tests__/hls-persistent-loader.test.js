@@ -1,9 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { encryptedSegmentStore as store } from '../../audio/encrypted-segment-store.js';
-import { clearSegmentCache } from '../../audio/hls-segment-cache.js';
+import { clearSegmentCache, setSegment } from '../../audio/hls-segment-cache.js';
 import { createPrefetchLoaderClass, memoryDeliveredStats } from '../../audio/hls-prefetch-loader.js';
 import { hlsDownloadManager } from '../../audio/hls-download-manager.js';
+
+test('a memory hit preempts unrelated speculative traffic and owns delivery through the decoder callback', async t => {
+  clearSegmentCache();
+  t.after(() => { clearSegmentCache(); hlsDownloadManager.stop(); });
+  const controller = new AbortController();
+  hlsDownloadManager.pending = { controller, borrowers: new Set(), segment: null };
+  const url = 'https://cdn.test/current.ts?v=1'; setSegment(url, new ArrayBuffer(16));
+  class NetworkLoader { constructor() { this.stats = {}; } load() { assert.fail('Memory hit must not request the network'); } }
+  const Loader = createPrefetchLoaderClass(NetworkLoader);
+  const delivery = await new Promise(resolve => new Loader({}).load({ url }, {}, { onSuccess: () => {
+    resolve({ aborted: controller.signal.aborted, foreground: hlsDownloadManager.foreground.size });
+  } }));
+  assert.equal(delivery.aborted, true);
+  assert.equal(delivery.foreground, 1);
+  assert.equal(hlsDownloadManager.foreground.size, 0);
+});
 
 test('a network decoder load retains encrypted bytes before transfer; a later loader reads persistent storage', async t => {
   clearSegmentCache();

@@ -38,7 +38,10 @@ const IDLE_POLL_MS = parseInt(process.env.IDLE_POLL_MS || "5000", 10);
 
 async function processAudioTranscodeJob(job) {
   const manifest = await transcode({ job });
-  await markJobComplete(job, manifest);
+  if (!await markJobComplete(job, manifest)) {
+    logger.info('job superseded; published audio preserved', { jobId: job.id, generation: job.generation });
+    return;
+  }
   logger.info("job complete", { jobId: job.id, slug: job.slug, trackSlug: job.track_slug });
 
   const isVideoJob = job.bitrates?.some((b) => VIDEO_BITRATES.has(b));

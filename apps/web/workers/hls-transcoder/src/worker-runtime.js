@@ -58,7 +58,7 @@ export function runWorker({ jobType, workerId, processFn, idlePollMs }) {
       await markJobFailed(
         job.id,
         `Lane mismatch: a "${jobType}" worker claimed a "${job.job_type}" job`,
-        "VALIDATION_FAILURE"
+        "VALIDATION_FAILURE", job
       ).catch(() => {});
       return;
     }
@@ -68,7 +68,7 @@ export function runWorker({ jobType, workerId, processFn, idlePollMs }) {
     });
 
     const heartbeatTimer = setInterval(() => {
-      touchHeartbeat(job.id).catch((err) => {
+      touchHeartbeat(job.id, job).catch((err) => {
         logger.warn("heartbeat write failed", { jobId: job.id, lane: jobType, message: err?.message });
       });
     }, HEARTBEAT_INTERVAL_MS);
@@ -79,7 +79,7 @@ export function runWorker({ jobType, workerId, processFn, idlePollMs }) {
       const message = err?.message ?? String(err);
       const failureCategory = err?.failureCategory || "UNKNOWN";
       logger.error("job failed", { jobId: job.id, jobType, lane: jobType, message, failureCategory });
-      await markJobFailed(job.id, message, failureCategory).catch((dbErr) => {
+      await markJobFailed(job.id, message, failureCategory, job).catch((dbErr) => {
         logger.error("markJobFailed error", { jobId: job.id, lane: jobType, message: dbErr?.message });
       });
     } finally {

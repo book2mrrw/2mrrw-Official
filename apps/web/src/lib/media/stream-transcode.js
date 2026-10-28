@@ -5,6 +5,8 @@
 
 import { spawn } from "child_process";
 import { STREAM_BITRATE_KBPS } from "@/lib/media/stream-asset-schema";
+import { runAudioFfmpeg, measureTruePeak, initialHeadroomGain, nextHeadroomGain,
+  MAX_HEADROOM_PASSES } from '../../../workers/hls-transcoder/src/audio-headroom.js';
 
 /** Default upload transcode bitrate (kbps) — AAC-LC with +faststart. */
 export const STREAM_UPLOAD_BITRATE_KBPS = STREAM_BITRATE_KBPS.hq;
@@ -50,24 +52,22 @@ function runCommand(command, args) {
  */
 export async function transcodeMasterToStreamFile(inputPath, outputPath, options = {}) {
   const bitrateKbps = options.bitrateKbps ?? STREAM_UPLOAD_BITRATE_KBPS;
-  const ffmpeg = resolveFfmpegBinary();
-
-  // loudnorm: EBU R128 single-pass normalization to -14 LUFS (Spotify/Apple target).
-  // TP=-1 keeps peaks 1dB below full scale; LRA=11 matches broadcast spec.
-  await runCommand(ffmpeg, [
-    "-y",
-    "-i",
-    inputPath,
-    "-af",
-    "loudnorm=I=-14:TP=-1:LRA=11",
-    "-c:a",
-    "aac",
-    "-b:a",
-    `${bitrateKbps}k`,
-    "-movflags",
-    "+faststart",
-    outputPath,
-  ]);
+  const sourcePeak = await measureTruePeak(inputPath);
+  let gainDb = initialHeadroomGain(sourcePeak);
+  for (let pass = 0; pass < MAX_HEADROOM_PASSES; pass++) {
+    // Preserve the master's dynamics. A loudnorm pre-encode TP setting does
+    // not constrain AAC reconstruction peaks or its internal upsampled rate.
+    await runAudioFfmpeg(['-hide_banner', '-nostats', '-xerror', '-y',
+      '-i', inputPath, '-map', '0:a:0', '-vn',
+      '-af', `volume=${gainDb}dB:precision=double`,
+      '-c:a', 'aac', '-b:a', `${bitrateKbps}k`, '-ac', '2', '-ar', '44100',
+      '-movflags', '+faststart', outputPath]);
+    const decodedPeak = await measureTruePeak(outputPath);
+    const nextGain = nextHeadroomGain(gainDb, [decodedPeak]);
+    if (nextGain === null) return { gainDb, decodedPeak };
+    gainDb = nextGain;
+  }
+  throw new Error('Progressive AAC exceeds decoded true-peak ceiling after bounded headroom passes');
 }
 
 /**

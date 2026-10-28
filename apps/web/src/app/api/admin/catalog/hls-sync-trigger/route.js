@@ -16,7 +16,8 @@ import { NextResponse } from "next/server";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { isAdminUser } from "@/lib/auth/constants";
-import { resolvePlaybackKey, clearPersistedPlaybackKey } from "@/lib/playback/resolve-playback-key";
+import { clearPersistedPlaybackKey } from "@/lib/playback/resolve-playback-key";
+import { resolveAudioSource } from "@/lib/hls/audio-source";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { r2Client, R2_BUCKET } from "@/lib/storage/r2";
@@ -151,10 +152,9 @@ export async function POST() {
         }
 
         // Resolve source audio key from R2 / DB
-        const sourceKey = await resolvePlaybackKey(admin, releaseSlug, {
-          trackSlug: trackSlug || undefined,
-          preferMaster: true,
-        }).then((r) => r?.key || null).catch(() => null);
+        const sourceKey = await resolveAudioSource(admin, {
+          slug: releaseSlug, trackSlug, releaseType,
+        }).catch(() => null);
 
         if (!sourceKey) {
           errors.push({ slug: releaseSlug, trackSlug, error: "Could not resolve source audio key" });

@@ -14,9 +14,21 @@ const MAX_BYTES = 15 * 1024 * 1024;
 /** @type {Map<string, { buf: ArrayBuffer, size: number, lastUsed: number }>} */
 const _cache = new Map();
 let _totalBytes = 0;
+// Decoder-rejected addresses remain quarantined for this page lifetime. A
+// late prefetch or persistent read cannot put the same rejected bytes back.
+const _rejected = new Set();
+export function isRejectedSegment(url) { return _rejected.has(url); }
+
+export function rejectSegment(url) {
+  const entry = _cache.get(url);
+  if (entry) { _totalBytes -= entry.size; _cache.delete(url); }
+  if (_rejected.size >= 1024) _rejected.delete(_rejected.values().next().value);
+  _rejected.add(url);
+}
 
 /** Readiness checks must not copy every retained audio segment. */
 export function hasSegment(url) {
+  if (isRejectedSegment(url)) return false;
   return (_cache.get(url)?.buf.byteLength || 0) > 0;
 }
 
@@ -29,6 +41,7 @@ export function hasSegment(url) {
  * @returns {ArrayBuffer|null}
  */
 export function getSegment(url) {
+  if (isRejectedSegment(url)) return null;
   const entry = _cache.get(url);
   if (!entry) return null;
   if (entry.buf.byteLength === 0) {
@@ -47,6 +60,7 @@ export function getSegment(url) {
  * @param {ArrayBuffer} buf
  */
 export function setSegment(url, buf) {
+  if (isRejectedSegment(url)) return;
   if (_cache.has(url)) return;
   const size = buf.byteLength;
   // Invalid data must fall through to the normal network loader. Reject an

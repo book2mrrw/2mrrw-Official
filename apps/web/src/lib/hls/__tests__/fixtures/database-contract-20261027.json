@@ -1,0 +1,440 @@
+{
+  "columns": [
+    {
+      "udt_name": "uuid",
+      "table_name": "hls_manifests",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_manifests",
+      "column_name": "slug",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_manifests",
+      "column_name": "track_slug",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_manifests",
+      "column_name": "release_type",
+      "is_nullable": "NO",
+      "column_default": "'singles'::text"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_manifests",
+      "column_name": "hls_prefix",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "_text",
+      "table_name": "hls_manifests",
+      "column_name": "bitrates",
+      "is_nullable": "NO",
+      "column_default": "ARRAY['320k'::text, '160k'::text, '96k'::text]"
+    },
+    {
+      "udt_name": "int4",
+      "table_name": "hls_manifests",
+      "column_name": "segment_duration_secs",
+      "is_nullable": "NO",
+      "column_default": "6"
+    },
+    {
+      "udt_name": "numeric",
+      "table_name": "hls_manifests",
+      "column_name": "duration_seconds",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "jsonb",
+      "table_name": "hls_manifests",
+      "column_name": "segment_counts",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_manifests",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_manifests",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_manifests",
+      "column_name": "poster_key",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_manifests",
+      "column_name": "poster_status",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_manifests",
+      "column_name": "vtt_key",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_manifests",
+      "column_name": "media_kind",
+      "is_nullable": "NO",
+      "column_default": "'audio'::text"
+    },
+    {
+      "udt_name": "jsonb",
+      "table_name": "hls_manifests",
+      "column_name": "segment_durations",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "udt_name": "jsonb",
+      "table_name": "hls_manifests",
+      "column_name": "rendition_metadata",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "udt_name": "jsonb",
+      "table_name": "hls_manifests",
+      "column_name": "source_metadata",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "udt_name": "int4",
+      "table_name": "hls_manifests",
+      "column_name": "transcode_profile_version",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "udt_name": "int8",
+      "table_name": "hls_manifests",
+      "column_name": "active_generation",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_manifests",
+      "column_name": "activated_at",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "uuid",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "slug",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "track_slug",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "hls_prefix",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "int8",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "generation",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "retired_at",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "delete_after",
+      "is_nullable": "NO",
+      "column_default": "(now() + '48:00:00'::interval)"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "column_default": "'pending'::text"
+    },
+    {
+      "udt_name": "int4",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "attempt_count",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "last_error",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "deleted_at",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_retired_prefixes",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "uuid",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "slug",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "track_slug",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "release_type",
+      "is_nullable": "NO",
+      "column_default": "'singles'::text"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "source_key",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "hls_prefix",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "column_default": "'pending'::text"
+    },
+    {
+      "udt_name": "int4",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "priority",
+      "is_nullable": "NO",
+      "column_default": "5"
+    },
+    {
+      "udt_name": "_text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "bitrates",
+      "is_nullable": "NO",
+      "column_default": "ARRAY['320k'::text, '160k'::text, '96k'::text, '64k'::text]"
+    },
+    {
+      "udt_name": "int4",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "segment_duration_secs",
+      "is_nullable": "NO",
+      "column_default": "6"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "error_message",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "attempt_count",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "worker_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "queued_by",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "started_at",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "completed_at",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "base_hls_prefix",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "int8",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "generation",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "udt_name": "uuid",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "claim_token",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "target_profile_version",
+      "is_nullable": "NO",
+      "column_default": "3"
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "job_type",
+      "is_nullable": "NO",
+      "column_default": "'audio'::text"
+    },
+    {
+      "udt_name": "uuid",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "asset_version_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "heartbeat_at",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "table_name": "hls_transcode_jobs",
+      "column_name": "failure_category",
+      "is_nullable": "YES",
+      "column_default": null
+    }
+  ],
+  "functions": [
+    {
+      "name": "hls_base_prefix",
+      "definition": "CREATE OR REPLACE FUNCTION public.hls_base_prefix(p_prefix text)\n RETURNS text\n LANGUAGE plpgsql\n IMMUTABLE\n SET search_path TO 'public', 'pg_temp'\nAS $function$\r\ndeclare\r\n  v_prefix text;\r\nbegin\r\n  v_prefix := regexp_replace(trim(coalesce(p_prefix, '')), '^/+', '');\r\n  v_prefix := regexp_replace(v_prefix, 'versions/g[0-9]+/?$', '');\r\n  v_prefix := regexp_replace(v_prefix, '/+$', '') || '/';\r\n\r\n  if v_prefix !~ '^hls/[a-zA-Z0-9._/-]+/$' or v_prefix like '%..%' then\r\n    raise exception 'invalid HLS prefix';\r\n  end if;\r\n\r\n  return v_prefix;\r\nend;\r\n$function$\n"
+    },
+    {
+      "name": "hls_claim_next_job",
+      "definition": "CREATE OR REPLACE FUNCTION public.hls_claim_next_job(p_worker_id text, p_job_type text)\n RETURNS hls_transcode_jobs\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\ndeclare\n  v_job hls_transcode_jobs;\nbegin\n  if p_job_type not in ('audio', 'video', 'vault_video') then\n    raise exception 'invalid job_type: %', p_job_type;\n  end if;\n\n  select * into v_job from hls_transcode_jobs\n   where status = 'pending' and job_type = p_job_type\n   order by priority asc, created_at asc\n   limit 1 for update skip locked;\n\n  if not found then return null; end if;\n\n  update hls_transcode_jobs\n     set status = 'processing', worker_id = p_worker_id,\n         started_at = now(), heartbeat_at = now()\n   where id = v_job.id;\n\n  v_job.status := 'processing';\n  v_job.worker_id := p_worker_id;\n  v_job.started_at := now();\n  v_job.heartbeat_at := now();\n  return v_job;\nend;\n$function$\n"
+    },
+    {
+      "name": "hls_commit_transcode_job",
+      "definition": "CREATE OR REPLACE FUNCTION public.hls_commit_transcode_job(p_job_id uuid, p_worker_id text, p_claim_token uuid, p_generation bigint, p_manifest jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\r\ndeclare\r\n  v_job public.hls_transcode_jobs;\r\n  v_old public.hls_manifests;\r\n  v_bitrates text[];\r\n  v_manifest_id uuid;\r\nbegin\r\n  select * into v_job\r\n    from public.hls_transcode_jobs\r\n   where id = p_job_id\r\n   for update;\r\n\r\n  if not found\r\n     or v_job.status <> 'processing'\r\n     or v_job.worker_id is distinct from p_worker_id\r\n     or v_job.claim_token is distinct from p_claim_token\r\n     or v_job.generation is distinct from p_generation then\r\n    return jsonb_build_object('committed', false, 'reason', 'superseded');\r\n  end if;\r\n\r\n  if p_manifest is null\r\n     or p_manifest->>'slug' is distinct from v_job.slug\r\n     or coalesce(p_manifest->>'track_slug', '') is distinct from coalesce(v_job.track_slug, '')\r\n     or p_manifest->>'hls_prefix' is distinct from v_job.hls_prefix\r\n     or jsonb_typeof(p_manifest->'bitrates') <> 'array'\r\n     or jsonb_typeof(coalesce(p_manifest->'segment_counts', '{}'::jsonb)) <> 'object'\r\n     or jsonb_typeof(coalesce(p_manifest->'segment_durations', '{}'::jsonb)) <> 'object'\r\n     or jsonb_typeof(coalesce(p_manifest->'rendition_metadata', '{}'::jsonb)) <> 'object'\r\n     or jsonb_typeof(coalesce(p_manifest->'source_metadata', '{}'::jsonb)) <> 'object'\r\n     or coalesce((p_manifest->>'transcode_profile_version')::integer, 0) < v_job.target_profile_version\r\n     or coalesce((p_manifest->>'segment_duration_secs')::integer, 0) < 1\r\n     or coalesce((p_manifest->>'duration_seconds')::numeric, 0) <= 0 then\r\n    raise exception 'manifest does not match claimed HLS job';\r\n  end if;\r\n\r\n  select array_agg(value order by ordinality) into v_bitrates\r\n    from jsonb_array_elements_text(p_manifest->'bitrates') with ordinality;\r\n\r\n  if coalesce(array_length(v_bitrates, 1), 0) = 0 then\r\n    raise exception 'manifest requires at least one rendition';\r\n  end if;\r\n\r\n  select * into v_old\r\n    from public.hls_manifests\r\n   where slug = v_job.slug\r\n     and coalesce(track_slug, '') = coalesce(v_job.track_slug, '')\r\n   for update;\r\n\r\n  if found then\r\n    v_manifest_id := v_old.id;\r\n\r\n    if v_old.hls_prefix is distinct from v_job.hls_prefix then\r\n      insert into public.hls_retired_prefixes (\r\n        slug, track_slug, hls_prefix, generation, delete_after\r\n      ) values (\r\n        v_old.slug, v_old.track_slug, v_old.hls_prefix,\r\n        v_old.active_generation, now() + interval '48 hours'\r\n      )\r\n      on conflict (hls_prefix) do update\r\n        set delete_after = greatest(public.hls_retired_prefixes.delete_after, excluded.delete_after),\r\n            status = 'pending',\r\n            last_error = null,\r\n            deleted_at = null,\r\n            updated_at = now();\r\n    end if;\r\n\r\n    update public.hls_manifests\r\n       set release_type = v_job.release_type,\r\n           hls_prefix = v_job.hls_prefix,\r\n           bitrates = v_bitrates,\r\n           segment_duration_secs = (p_manifest->>'segment_duration_secs')::integer,\r\n           duration_seconds = (p_manifest->>'duration_seconds')::numeric,\r\n           segment_counts = coalesce(p_manifest->'segment_counts', '{}'::jsonb),\r\n           segment_durations = coalesce(p_manifest->'segment_durations', '{}'::jsonb),\r\n           media_kind = coalesce(nullif(p_manifest->>'media_kind', ''), 'audio'),\r\n           rendition_metadata = coalesce(p_manifest->'rendition_metadata', '{}'::jsonb),\r\n           source_metadata = coalesce(p_manifest->'source_metadata', '{}'::jsonb),\r\n           transcode_profile_version = (p_manifest->>'transcode_profile_version')::integer,\r\n           active_generation = v_job.generation,\r\n           activated_at = now(),\r\n           updated_at = now()\r\n     where id = v_old.id;\r\n  else\r\n    insert into public.hls_manifests (\r\n      slug, track_slug, release_type, hls_prefix, bitrates,\r\n      segment_duration_secs, duration_seconds, segment_counts,\r\n      segment_durations, media_kind, rendition_metadata, source_metadata,\r\n      transcode_profile_version, active_generation, activated_at\r\n    ) values (\r\n      v_job.slug, v_job.track_slug, v_job.release_type, v_job.hls_prefix,\r\n      v_bitrates, (p_manifest->>'segment_duration_secs')::integer,\r\n      (p_manifest->>'duration_seconds')::numeric,\r\n      coalesce(p_manifest->'segment_counts', '{}'::jsonb),\r\n      coalesce(p_manifest->'segment_durations', '{}'::jsonb),\r\n      coalesce(nullif(p_manifest->>'media_kind', ''), 'audio'),\r\n      coalesce(p_manifest->'rendition_metadata', '{}'::jsonb),\r\n      coalesce(p_manifest->'source_metadata', '{}'::jsonb),\r\n      (p_manifest->>'transcode_profile_version')::integer,\r\n      v_job.generation, now()\r\n    ) returning id into v_manifest_id;\r\n  end if;\r\n\r\n  delete from public.hls_retired_prefixes\r\n   where hls_prefix = v_job.hls_prefix;\r\n\r\n  update public.hls_transcode_jobs\r\n     set status = 'complete',\r\n         completed_at = now(),\r\n         error_message = null\r\n   where id = v_job.id;\r\n\r\n  return jsonb_build_object(\r\n    'committed', true,\r\n    'manifest_id', v_manifest_id,\r\n    'generation', v_job.generation,\r\n    'hls_prefix', v_job.hls_prefix\r\n  );\r\nend;\r\n$function$\n"
+    },
+    {
+      "name": "hls_fail_transcode_job",
+      "definition": "CREATE OR REPLACE FUNCTION public.hls_fail_transcode_job(p_job_id uuid, p_worker_id text, p_claim_token uuid, p_generation bigint, p_error_message text, p_max_attempts integer DEFAULT 3)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\r\ndeclare\r\n  v_job public.hls_transcode_jobs;\r\n  v_next_status text;\r\nbegin\r\n  select * into v_job\r\n    from public.hls_transcode_jobs\r\n   where id = p_job_id\r\n   for update;\r\n\r\n  if not found\r\n     or v_job.status <> 'processing'\r\n     or v_job.worker_id is distinct from p_worker_id\r\n     or v_job.claim_token is distinct from p_claim_token\r\n     or v_job.generation is distinct from p_generation then\r\n    return jsonb_build_object('updated', false, 'reason', 'superseded');\r\n  end if;\r\n\r\n  v_next_status := case\r\n    when v_job.attempt_count >= greatest(p_max_attempts, 1) then 'failed'\r\n    else 'pending'\r\n  end;\r\n\r\n  update public.hls_transcode_jobs\r\n     set status = v_next_status,\r\n         error_message = left(coalesce(p_error_message, 'transcode failed'), 4000),\r\n         worker_id = null,\r\n         claim_token = null,\r\n         started_at = null,\r\n         completed_at = case when v_next_status = 'failed' then now() else null end\r\n   where id = v_job.id\r\n   returning * into v_job;\r\n\r\n  return jsonb_build_object(\r\n    'updated', true,\r\n    'status', v_job.status,\r\n    'generation', v_job.generation,\r\n    'attempt_count', v_job.attempt_count\r\n  );\r\nend;\r\n$function$\n"
+    },
+    {
+      "name": "hls_prepare_job_generation",
+      "definition": "CREATE OR REPLACE FUNCTION public.hls_prepare_job_generation()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\r\ndeclare\r\n  v_base text;\r\n  v_new_generation boolean;\r\nbegin\r\n  v_base := public.hls_base_prefix(\r\n    coalesce(nullif(new.base_hls_prefix, ''), new.hls_prefix)\r\n  );\r\n\r\n  if tg_op = 'INSERT' then\r\n    new.base_hls_prefix := v_base;\r\n    new.generation := greatest(coalesce(new.generation, 0), 1);\r\n    new.hls_prefix := v_base || 'versions/g' || new.generation::text || '/';\r\n    new.claim_token := null;\r\n    new.updated_at := now();\r\n    return new;\r\n  end if;\r\n\r\n  v_new_generation := new.status = 'pending' and (\r\n    old.status is distinct from 'pending'\r\n    or new.source_key is distinct from old.source_key\r\n    or v_base is distinct from old.base_hls_prefix\r\n    or new.generation > old.generation\r\n    or new.target_profile_version is distinct from old.target_profile_version\r\n    or new.bitrates is distinct from old.bitrates\r\n    or new.segment_duration_secs is distinct from old.segment_duration_secs\r\n  );\r\n\r\n  if v_new_generation then\r\n    if not exists (\r\n      select 1 from public.hls_manifests manifest\r\n       where manifest.slug = old.slug\r\n         and coalesce(manifest.track_slug, '') = coalesce(old.track_slug, '')\r\n         and manifest.hls_prefix = old.hls_prefix\r\n    ) then\r\n      insert into public.hls_retired_prefixes (\r\n        slug, track_slug, hls_prefix, generation, delete_after\r\n      ) values (\r\n        old.slug, old.track_slug, old.hls_prefix, old.generation,\r\n        now() + interval '48 hours'\r\n      )\r\n      on conflict (hls_prefix) do update\r\n        set delete_after = greatest(public.hls_retired_prefixes.delete_after, excluded.delete_after),\r\n            status = 'pending',\r\n            last_error = null,\r\n            deleted_at = null,\r\n            updated_at = now();\r\n    end if;\r\n\r\n    new.base_hls_prefix := v_base;\r\n    new.generation := greatest(old.generation, 0) + 1;\r\n    new.hls_prefix := v_base || 'versions/g' || new.generation::text || '/';\r\n    new.claim_token := null;\r\n    new.worker_id := null;\r\n  else\r\n    new.base_hls_prefix := old.base_hls_prefix;\r\n    new.generation := old.generation;\r\n    new.hls_prefix := old.hls_prefix;\r\n    if new.status <> 'processing' then\r\n      new.claim_token := null;\r\n    end if;\r\n  end if;\r\n\r\n  new.updated_at := now();\r\n  return new;\r\nend;\r\n$function$\n"
+    }
+  ],
+  "captured_at": "2026-10-28T02:33:35.361193+00:00"
+}

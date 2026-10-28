@@ -1,0 +1,6 @@
+# Preserve the deployed audio runtime and FFmpeg build during this source-only
+# rollout. No audio-worker dependency changed. Video lanes deploy separately.
+FROM registry.fly.io/2mrrw-hls-transcoder:audio-headroom-92c9cf6@sha256:787fd4976e43780256796939d14eb2edf3f6b7ee7911e445ff39b76d45954f8a
+WORKDIR /app
+COPY --chown=worker:worker src/ ./src/
+CMD ["node", "src/workers/audio-worker.js"]

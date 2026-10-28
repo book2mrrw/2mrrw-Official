@@ -37,13 +37,13 @@ test("transcoder.js — today's audio encoder — is still imported only by the 
   assert.match(audioSrc, /from ["']\.\.\/transcoder\.js["']/);
 });
 
-test("the audio processor still calls transcoder.js's transcode() and markJobComplete, unchanged", () => {
+test("the audio processor delegates encoding and fenced publication to their shared owners", () => {
   const src = read("workers/hls-transcoder/src/workers/audio-worker.js");
   const fnAt = src.indexOf("async function processAudioTranscodeJob(job) {");
   assert.ok(fnAt > -1);
   const body = src.slice(fnAt, fnAt + 300);
   assert.match(body, /const manifest = await transcode\(\{ job \}\);/);
-  assert.match(body, /await markJobComplete\(job, manifest\);/);
+  assert.match(body, /await markJobComplete\(job, manifest\)/);
 });
 
 test("worker-runtime.js is the shared claim/heartbeat/failure loop and carries zero media-specific policy", () => {
