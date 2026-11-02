@@ -235,3 +235,16 @@ test('standby HLS initialization cannot steal the download lease; a committed de
   active.detach();
   assert.equal(downloads.session.audio, second, 'destroying the old deck cannot stop its successor');
 });
+
+test('native HLS wins when the browser supports both native and MSE; prefetch follows the same policy', async t => {
+  environment(t,'4g');
+  FakeHls.supported=true;
+  const { getAudioEngineRuntime }=await import('../audio-engine-runtime.js');
+  const { isHlsJsActive }=await import('../../audio/HLSEngine.js');
+  const audio={canPlayType:()=> 'probably'};
+  getAudioEngineRuntime().refs.audioRef.current=audio;
+  const engine=new HLSEngine();t.after(()=>engine.destroy());
+  assert.equal(await engine.loadTrack('/native-dual.m3u8',audio),true);
+  assert.equal(engine.transport,'native-hls');assert.equal(engine._hls,null);
+  assert.equal(audio.src,'/native-dual.m3u8');assert.equal(isHlsJsActive(),false);
+});

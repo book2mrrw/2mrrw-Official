@@ -1,0 +1,23 @@
+{
+  "productionBaseline": "2ba6a47468e7272c47b353a436ba296e0bcee1da",
+  "productionBaselineDeployment": "dpl_FocT3ivNKwb129KrZxheLckZDh9L",
+  "sourceSha256": {
+    "apps/web/src/lib/audio/HLSEngine.js": "31a65ca54187e55ec9d11052f1edbcd6665dc7f27100580a858072f66d18bdcd",
+    "apps/web/src/lib/audio/WebAudioEngine.js": "67b851f19f51ca43540056410592a5ee5b4a998d4c4bc246edcaa66e7de9f760",
+    "apps/web/src/lib/audio/audio-element-utils.js": "3d73dcb1802960528725ffa649e216f3632c6fe5cb369a7c8db32dc04b972a6e",
+    "apps/web/src/lib/audio/media-activation.js": "e09a936734260549c3d040be466cbec52b3ecf01b20e321d14f5434712f95186",
+    "apps/web/src/lib/audio/media-play-request.js": "cbffdc640fd720ec21dcbeaf61c0a457f05f37b4d2e9aa49198418565f4c8515",
+    "apps/web/src/lib/audio/playback-buffer.js": "05ff7d6780ece9ce288c87d12a3a51f4fa18aeb0c7721fcab6931c4d2631773c",
+    "apps/web/src/lib/audio/playback-capabilities.js": "7ed6ab304eb0cc296b689a7a67b671a6ad137fb651b8d9cbbaab924ddab551d4",
+    "apps/web/src/lib/playback-core/production/wireProductionCore.js": "f33fc56816721dcb2a6ebbf27f93293ac39410f6b2d22e722f68f642f22d34e8",
+    "apps/web/src/lib/playback/PlaybackStreamCommands.js": "99e972bfe796a79aa72673b453ef8b8df689363c4703ed3797452e08dc332baa",
+    "apps/web/src/lib/playback/PlaybackTransportCommands.js": "16255f9c8ef896265d3321345ebffe2ac8af1fca4887e22b30ce8dce88d2b680",
+    "apps/web/src/lib/playback/__tests__/hls-adaptation.test.js": "c437db8766a16d049aef3e6079e8c71cb61a46fd729a73acc54f057100636538",
+    "apps/web/src/lib/playback/__tests__/media-activation-dispatch.test.js": "cb5d0124becc94f404d8a86325d44001107b92db12db88e037750ce8f03a12c1",
+    "apps/web/src/lib/playback/__tests__/media-activation.test.js": "93ffb8d670b00e157d7282c034604f0ea7eba27ff2bd3a21a105586b296ab37f",
+    "apps/web/src/lib/playback/__tests__/native-startup.test.js": "a3516858c46320128181af6bda5876832881a85d7f341c348f67bf12c6cab980",
+    "apps/web/src/lib/playback/__tests__/native-stream-service.test.js": "000657a0103e41057684cde5f53aebdf53744eae91568e9ff4fea55aec7d68b3",
+    "apps/web/src/lib/playback/command-dispatcher.js": "462a104d602f2d6cfc6293a37300b55bd3063caab0434f66c9a2019daf5d2777",
+    "apps/web/src/lib/playback/playback-diagnostics.js": "a263fb0e2dbce83c2796a3b807c01835c125f0e6f5331cc6f695f9b0f8f1de50"
+  }
+}

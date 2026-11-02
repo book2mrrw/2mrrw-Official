@@ -20,7 +20,8 @@ export function canPreloadAudio(audio, { buffering = false, recentStallAt = 0 } 
 }
 
 /** Extra startup runway on weak links; hidden pages hand buffering to play(). */
-export function waitForPlaybackBuffer(audio, { signal, document: doc = globalThis.document } = {}) {
+export function waitForPlaybackBuffer(audio, { signal, document: doc = globalThis.document, transport = "buffered" } = {}) {
+  if (transport === "native-hls" || transport === "native-media") return Promise.resolve();
   const weak = ["slow-2g", "2g", "3g"].includes(globalThis.navigator?.connection?.effectiveType);
   const target = weak ? 6 : 3;
   const ready = () => {

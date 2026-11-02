@@ -19,6 +19,9 @@
  * The MSE decryption runs in a background Worker inside hls.js itself.
  */
 
+import { selectHlsTransport, supportsNativeHls } from "./playback-capabilities";
+import { getAudioEngineRuntime } from "@/lib/playback/audio-engine-runtime";
+
 let _Hls = null;
 let _prefetchLoaderClass = null;
 
@@ -109,6 +112,10 @@ export class HLSEngine {
     return Boolean((this._hls || this._native) && this._manifestUrl);
   }
 
+  get transport() {
+    return this._native ? "native-hls" : this._hls ? "mse-hls" : null;
+  }
+
   get currentBitrateKbps() {
     if (!this._hls) return null;
     const lvl = this._hls.levels?.[this._hls.currentLevel];
@@ -139,12 +146,15 @@ export class HLSEngine {
 
     const version = _version >= 0 ? _version : this._manifestVersion;
     void encryptedSegmentStore.prepare();
-    const Hls = await importHls();
+    // Decide native capability before importing or constructing hls.js. Modern
+    // Safari can support both; MSE support must not override native playback.
+    const Hls = supportsNativeHls(audioEl) ? null : await importHls();
     if (this._destroyed || version !== this._manifestVersion) return false;
 
     // Safari handles HLS natively via src= — no hls.js needed
-    if (!Hls || !Hls.isSupported()) {
-      if (!audioEl.canPlayType?.("application/vnd.apple.mpegurl")) return false;
+    const transport = selectHlsTransport(audioEl, Hls);
+    if (!transport) return false;
+    if (transport === "native-hls") {
       // Assign the manifest URL directly — Safari's native HLS player takes over
       this._destroyHls();
       this._native = true;
@@ -608,10 +618,11 @@ export function setActiveHLSEngine(engine) {
  * ~500 KB of CDN bandwidth per queued track with zero latency benefit.
  *
  * Returns false until importHls() has resolved (safe to call before prewarm).
- * Returns false on Safari (Hls.isSupported() = false due to native HLS).
+ * Returns false whenever the persistent element supports native HLS.
  */
 export function isHlsJsActive() {
-  return Boolean(_Hls && _Hls.isSupported());
+  const audio = getAudioEngineRuntime().refs.audioRef.current;
+  return !supportsNativeHls(audio) && Boolean(_Hls && _Hls.isSupported());
 }
 
 /**
@@ -620,6 +631,7 @@ export function isHlsJsActive() {
  * Safe to call many times — importHls() caches the module after first load.
  */
 export function prewarmHLS() {
+  if (supportsNativeHls(getAudioEngineRuntime().refs.audioRef.current)) return;
   void encryptedSegmentStore.prepare();
   importHls().catch(() => {});
 }
