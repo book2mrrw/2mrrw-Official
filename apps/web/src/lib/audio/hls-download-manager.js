@@ -37,7 +37,8 @@ export function parseEncryptedRendition(text, base) {
 }
 
 /** One opportunistic request at a time. Decoder requests always preempt it.
- * Selected rendition > next opening > highest rendition for a future play.
+ * Only the selected rendition and a bounded next opening may be retained.
+ * Never fetch a second encoding of the playing song in the background.
  */
 export class HlsDownloadManager {
   constructor({ store = encryptedSegmentStore, fetcher = (...args) => fetch(...args) } = {}) {
@@ -51,11 +52,10 @@ export class HlsDownloadManager {
     this.running = false;
   }
 
-  begin(audio, selected, highest) {
+  begin(audio, selected) {
     this.stop();
     const selectedJob = { url: selected, priority: 0 };
-    this.session = { audio, selected: selectedJob,
-      high: highest && highest !== selected ? { url: highest, priority: 2 } : null };
+    this.session = { audio, selected: selectedJob };
     const wake = () => {
       if (!this.healthy()) this.abortSpeculation();
       this.schedule();
@@ -108,7 +108,6 @@ export class HlsDownloadManager {
   queueNext(masterUrl) {
     if (this.next?.masterUrl === masterUrl) return;
     this.next = { masterUrl, priority: 1, limit: 3 };
-    if (this.pending?.job.priority === 2) this.abortSpeculation();
     this.schedule();
   }
 
@@ -149,7 +148,7 @@ export class HlsDownloadManager {
     if (this.running || !this.healthy() || this.foreground.size) return;
     const session = this.session;
     if (session.selected.failed) return;
-    const job = [session.selected, this.next, session.high].find(item => item && !item.done && !item.failed);
+    const job = [session.selected, this.next].find(item => item && !item.done && !item.failed);
     if (!job) return;
     const controller = new AbortController();
     this.running = true;

@@ -15,6 +15,20 @@ function setup(t) {
   return { ...h, fallback };
 }
 
+test('an established quality lock cannot silently swap to a different progressive encode', async t => {
+  const h = setup(t);
+  const pending = h.fallback({ position: 83, qualityLocked: true });
+  await flush();
+  if (h.audio.plays) h.advance();
+  const result = await pending;
+  assert.equal(h.audio.src, 'blob:old-hls');
+  assert.equal(result, false);
+  assert.equal(h.audio.plays, 0);
+  assert.equal(h.state.playbackNetworkState, 'error_stream');
+  assert.equal(h.state.streamRetryable, true);
+  assert.equal(h.deps.queueIndexRef.current, 2);
+});
+
 test('post-startup HLS fallback preserves recording and saved position, coalesces errors and confirms advancement', async t => {
   const h = setup(t);
   const pending = h.fallback({ position: 83 });

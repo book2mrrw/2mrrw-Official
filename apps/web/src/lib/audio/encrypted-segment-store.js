@@ -1,4 +1,4 @@
-import { getSegment, hasSegment, setSegment } from './hls-segment-cache';
+import { getSegment, hasSegment, setSegment, isRejectedSegment, rejectSegment } from './hls-segment-cache';
 
 const CACHE_NAME = '2mrrw-encrypted-audio-v1';
 const MAX_BYTES = 64 * 1024 * 1024;
@@ -66,21 +66,23 @@ export class EncryptedSegmentStore {
   }
 
   async has(url) {
+    if (isRejectedSegment(url)) return false;
     if (hasSegment(url)) return true;
     return storageRead(async () => {
       const response = await (await this.cache())?.match(url);
-      return Number(response?.headers.get('x-2mrrw-bytes')) > 0;
+      return !isRejectedSegment(url) && Number(response?.headers.get('x-2mrrw-bytes')) > 0;
     }, false);
   }
 
   async get(url, { timeoutMs = 200 } = {}) {
+    if (isRejectedSegment(url)) return null;
     const memory = getSegment(url);
     if (memory) return memory;
     return storageRead(async () => {
       const response = await (await this.cache())?.match(url);
       if (!response) return null;
       const bytes = await response.arrayBuffer();
-      if (!bytes.byteLength) return null;
+      if (!bytes.byteLength || isRejectedSegment(url)) return null;
       setSegment(url, bytes);
       if (this.entries?.has(url)) this.entries.get(url).at = Date.now();
       return bytes;
@@ -88,13 +90,14 @@ export class EncryptedSegmentStore {
   }
 
   async put(url, bytes, { descriptor = false } = {}) {
-    if (!bytes?.byteLength || bytes.byteLength > this.maxBytes) return false;
+    if (isRejectedSegment(url) || !bytes?.byteLength || bytes.byteLength > this.maxBytes) return false;
     if (!descriptor) setSegment(url, bytes);
     // Legacy URLs have no replacement identity and must not survive a reload.
     if (!renditionCacheKey(url)) return false;
     if (!descriptor && [...new URL(url).searchParams.keys()].some(key => key !== 'v')) return false;
     const owned = bytes.slice(0);
     const write = async () => {
+      if (isRejectedSegment(url)) return false;
       const cache = await this.cache();
       if (!cache) return false;
       try {
@@ -136,6 +139,19 @@ export class EncryptedSegmentStore {
       ? globalThis.navigator.locks.request(CACHE_NAME, write) : write();
     const result = this.writes.then(lockedWrite, lockedWrite);
     this.writes = result.catch(() => false);
+    return result;
+  }
+
+  reject(url) {
+    rejectSegment(url);
+    this.inventory?.delete(url);
+    const remove = async () => {
+      try { await (await this.cache())?.delete(url); this.entries?.delete(url); } catch {}
+    };
+    const locked = () => globalThis.navigator?.locks?.request
+      ? globalThis.navigator.locks.request(CACHE_NAME, remove) : remove();
+    const result = this.writes.then(locked, locked);
+    this.writes = result.catch(() => {});
     return result;
   }
 
