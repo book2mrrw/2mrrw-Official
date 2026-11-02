@@ -125,14 +125,19 @@ test('network hints seed startup without selecting manual bitrate, on weak and s
   assert.equal(await getQualityLevel(), 1);
 });
 
-test('quality preference maps actual bitrate ordering and returning to Auto clears the pin', () => {
+test('quality preference maps bitrate ordering and clearing the preference preserves the active selection', () => {
   const engine = new HLSEngine();
-  engine._hls = { levels: [{ bitrate: 64000 }, { bitrate: 320000 }, { bitrate: 160000 }], currentLevel: -1 };
+  engine._hls = { levels: [{ bitrate: 64000 }, { bitrate: 320000 }, { bitrate: 160000 }], currentLevel: 1 };
+  engine._manifestUrl = '/active'; engine._trackQualityCap = 1;
   engine.setQualityLevel(0);
+  assert.equal(qualityTierLevel(engine._hls.levels, 0), 1);
   assert.equal(engine._hls.currentLevel, 1);
   engine.setQualityLevel(-1);
-  assert.equal(engine._hls.currentLevel, -1);
+  assert.equal(engine._currentLevel, -1);
+  assert.equal(engine._hls.currentLevel, 1);
+  assert.equal(engine._trackQualityCap, 1);
   assert.equal(qualityTierLevel(engine._hls.levels, 3), 0);
+  engine.destroy();
 });
 
 function media(ranges = [[0, 2]]) {

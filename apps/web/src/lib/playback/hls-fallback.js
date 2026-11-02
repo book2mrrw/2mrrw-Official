@@ -19,6 +19,16 @@ export function createHlsFallback({ refs, requestId, signal, src, patchState, re
     pending = (async () => {
       await Promise.resolve(prior).catch(() => false);
       if (!current()) return false;
+      if (snapshot.qualityLocked) {
+        // Retries and key renewal already ran in the selected HLS rendition.
+        // A progressive file is a different encode, with different gain and
+        // codec delay. Never silently substitute it after playback is locked.
+        refs.hlsEngineRef.current = null;
+        patchState({ isPlaying: false, isBuffering: false, playbackState: 'paused',
+          playbackNetworkState: 'error_stream', streamRetryable: true,
+          error: 'Playback interrupted — tap play to retry.' });
+        return false;
+      }
       if (refs.recoveryVerificationRef) refs.recoveryVerificationRef.current = lease;
       recoveryCoordinator.notifyStreamUpgrade();
       refs.hlsEngineRef.current = null;

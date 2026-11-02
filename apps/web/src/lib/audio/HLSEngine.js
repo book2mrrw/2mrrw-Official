@@ -35,7 +35,7 @@ import { getStartupQualityLevel } from "./network-quality";
 import { createCacheAwareAbrController } from "./cache-aware-abr";
 import { createPrefetchLoaderClass } from "./hls-prefetch-loader";
 import { encryptedSegmentStore } from "./encrypted-segment-store";
-import { hlsDownloadManager } from "./hls-download-manager";
+import { hlsDownloadManager, parseVariants } from "./hls-download-manager";
 
 async function importHls() {
   if (typeof window === "undefined") return null;
@@ -89,10 +89,10 @@ export class HLSEngine {
     this.onError = null;
     /** @type {(() => void)|null} Called on fatal segment error after manifest loaded (post-settle) */
     this.onSegmentFatalError = null;
-    /** @type {number} Current bitrate index (0 = auto) */
+    /** @type {number} Preference for the next load (-1 = automatic initial selection, 0 = highest). */
     this._currentLevel = -1;
-    // Auto ABR is allowed to settle during the startup buffer window. Once
-    // playback begins, this is the selected rendition for the whole play.
+    // Select once before the first fragment request. A buffer filled with
+    // multiple encodings cannot be made continuous by freezing ABR later.
     // It is reset only by detach() (a new track/play attempt).
     this._trackQualityCap = null;
     this._bufferedLevel = null;
@@ -155,13 +155,38 @@ export class HLSEngine {
     const transport = selectHlsTransport(audioEl, Hls);
     if (!transport) return false;
     if (transport === "native-hls") {
-      // Assign the manifest URL directly — Safari's native HLS player takes over
+      // Native HLS also gets exactly one rendition. Giving AVPlayer the master
+      // would leave quality switching outside this engine's ownership.
       this._destroyHls();
-      this._native = true;
-      audioEl.src = manifestUrl;
-      this._audioEl = audioEl;
-      this._manifestUrl = manifestUrl;
-      return true;
+      const controller = new AbortController();
+      const cancel = () => controller.abort();
+      this._cancelPendingLoad = cancel;
+      const timer = setTimeout(cancel, manifestTimeoutMs);
+      try {
+        const response = await fetch(manifestUrl, { credentials: 'same-origin', signal: controller.signal });
+        if (!response.ok) return false;
+        const body = await response.text();
+        if (controller.signal.aborted || this._destroyed || version !== this._manifestVersion) return false;
+        const base = response.url || new URL(manifestUrl, globalThis.location?.href || 'https://www.2mrrw.com/').href;
+        const variants = parseVariants(body, base);
+        const tier = this._trackQualityCap ?? (this._currentLevel >= 0 ? this._currentLevel : getStartupQualityLevel());
+        // Unknown network hints are -1 (including Safari without navigator.connection).
+        // Use the same ordering-independent highest-rendition fallback as MSE.
+        const hinted = qualityTierLevel(variants, tier);
+        const selectedLevel = hinted >= 0 ? hinted : qualityTierLevel(variants, 0);
+        const selected = variants[selectedLevel];
+        if (!selected) return false;
+        this._trackQualityCap = selectedLevel;
+        this._native = true;
+        audioEl.src = selected.url;
+        this._audioEl = audioEl;
+        this._manifestUrl = manifestUrl;
+        return true;
+      } catch { return false; }
+      finally {
+        clearTimeout(timer);
+        if (this._cancelPendingLoad === cancel) this._cancelPendingLoad = null;
+      }
     }
 
     // Stale-renewal guard (post-await): importHls() is async; detach() may have
@@ -183,6 +208,7 @@ export class HLSEngine {
       enableWorker:               true,
       autoStartLoad:              false,
       lowLatencyMode:             false,
+      preserveManualLevelOnError: true,
 
       // Buffer targets — music is VOD, prioritise uninterrupted playback over low latency
       maxBufferLength:            60,         // seconds of forward buffer
@@ -277,8 +303,15 @@ export class HLSEngine {
             response: data.response ? { code: data.response.code, text: data.response.text } : null,
           });
         }
+        if (data.details && (data.details === Hls.ErrorDetails.FRAG_DECRYPT_ERROR ||
+             data.details === Hls.ErrorDetails.FRAG_PARSING_ERROR) && data.frag?.url) {
+          // Rebuilding hls.js must not replay decoder-rejected bytes forever
+          // from memory/disk. The next attempt reads the delivery source.
+          void encryptedSegmentStore.reject(data.frag.url);
+        }
         if (!data.fatal) return;
-        const failureSnapshot = { position: audioEl.currentTime || 0, wasPlaying: !audioEl.paused };
+        const failureSnapshot = { position: audioEl.currentTime || 0, wasPlaying: !audioEl.paused,
+          qualityLocked: this._holdRequested };
 
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR &&
             data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
@@ -414,19 +447,17 @@ export class HLSEngine {
         if (this._destroyed || version !== this._manifestVersion || this._hls !== hls) return;
         const tier = this._currentLevel >= 0 ? this._currentLevel : warmHighest ? 0 : getStartupQualityLevel();
         const level = qualityTierLevel(levels, tier);
-        if (this._currentLevel >= 0) {
-          hls.currentLevel = level;
-        } else if (level >= 0) {
-          // currentLevel selects manual mode. startLevel seeds startup selection;
-          // auto ABR remains available until the playback buffer gate completes.
-          hls.startLevel = level;
-        }
-        if (warmHighest) this._trackQualityCap = highest;
-        if (this._currentLevel < 0 && this._trackQualityCap != null) {
-          // A token refresh rebuilds hls.js during the same play. Restore the
-          // exact chosen rendition before loading resumes; do not reopen ABR.
-          hls.loadLevel = this._trackQualityCap;
-        }
+        if (this._trackQualityCap == null) this._trackQualityCap = level >= 0 ? level : highest;
+        // startLevel is only a hint. loadLevel sets manual selection before
+        // startLoad, so the entire buffer comes from the same encoder stream.
+        // Renewal restores the original choice without flushing audible media.
+        hls.startLevel = this._trackQualityCap;
+        // hls.js can otherwise reopen ABR and select an alternate tier after
+        // retries, even with manual loadLevel. Constrain both ends of its
+        // recovery ladder to the selected rendition; keep its bounded retries.
+        hls.config.minAutoBitrate = levels[this._trackQualityCap]?.bitrate || 0;
+        hls.autoLevelCapping = this._trackQualityCap;
+        hls.loadLevel = this._trackQualityCap;
         hls.startLoad(startPosition);
         if (this._trackQualityCap != null) this._startFullSongDownload(this._trackQualityCap);
         settle(true);
@@ -488,50 +519,40 @@ export class HLSEngine {
   }
 
   /**
-   * Set the ABR quality level.
-   * -1 = full auto, 0 = highest, levels.length-1 = lowest.
+   * Set the next load's quality preference.
+   * -1 = automatic initial selection, 0 = highest, levels.length-1 = lowest.
    */
   setQualityLevel(levelIndex) {
     this._currentLevel = levelIndex;
-    this._trackQualityCap = null;
-    if (this._hls) {
-      this._hls.currentLevel = qualityTierLevel(this._hls.levels || [], levelIndex);
-    }
+    // Preferences are read before a fresh load. Changing a preference must
+    // never flush or reopen automatic selection on the already playing song.
+    if (!this.isLoaded) this._trackQualityCap = null;
   }
 
   /**
-   * Freeze rendition selection at the quality available when playback starts.
+   * Acknowledge the rendition already selected before buffering starts.
    * The chosen level survives key-token reloads and is reset by detach() before
    * a new track is loaded. This deliberately prevents mid-track quality changes.
    */
   holdCurrentQualityForPlayback() {
     this._holdRequested = true;
     if (!this._hls) return null;
-    if (this._currentLevel >= 0) {
-      this._startFullSongDownload(qualityTierLevel(this._hls.levels || [], this._currentLevel));
-      return null;
-    }
-    const selected = Number.isInteger(this._hls.currentLevel) && this._hls.currentLevel >= 0
-      ? this._hls.currentLevel
-      : this._bufferedLevel;
+    const selected = this._trackQualityCap;
     if (!Number.isInteger(selected) || selected < 0) return null;
-    this._trackQualityCap = selected;
-    // loadLevel changes only future requests. currentLevel would force hls.js
-    // to flush buffered audio immediately, risking a playback pause here.
-    this._hls.loadLevel = selected;
     this._startFullSongDownload(selected);
-    return selected;
+    return this._currentLevel >= 0 ? null : selected;
   }
 
   _startFullSongDownload(selected) {
     // Standby/preview decoders must never take the active song's download lease.
     if (_activeEngine !== this) return;
     const levels = this._hls?.levels || [];
-    const highest = qualityTierLevel(levels, 0);
     const selectedUrl = levels[selected]?.url?.[0];
     if (!selectedUrl || !this._audioEl) return;
+    if (hlsDownloadManager.session?.audio === this._audioEl &&
+        hlsDownloadManager.session.selected.url === selectedUrl) return;
     this._stopDownload?.();
-    this._stopDownload = hlsDownloadManager.begin(this._audioEl, selectedUrl, levels[highest]?.url?.[0]);
+    this._stopDownload = hlsDownloadManager.begin(this._audioEl, selectedUrl);
   }
 
   /**

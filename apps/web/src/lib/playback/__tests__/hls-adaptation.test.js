@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
+import ActualHls from 'hls.js';
 
 class FakeHls {
   static Events = { ERROR: 'error', MANIFEST_PARSED: 'manifest', LEVEL_SWITCHED: 'level', FRAG_BUFFERED: 'buffered' };
   static ErrorTypes = { NETWORK_ERROR: 'network', MEDIA_ERROR: 'media' };
-  static ErrorDetails = { KEY_LOAD_ERROR: 'key', FRAG_DECRYPT_ERROR: 'decrypt' };
+  static ErrorDetails = { KEY_LOAD_ERROR: 'key', FRAG_DECRYPT_ERROR: 'decrypt', FRAG_PARSING_ERROR: 'parse' };
   static DefaultConfig = { loader: class {}, abrController: class {} };
   static supported = true;
   static isSupported() { return this.supported; }
@@ -23,7 +24,7 @@ class FakeHls {
   set loadLevel(value) { this._loadLevel = value; this.manualLevel = value; }
   get autoLevelEnabled() { return this.manualLevel === -1; }
   on(event, fn) { this.handlers.set(event, fn); }
-  startLoad() {}
+  startLoad() { this.manualLevelAtFirstRequest = this.manualLevel; }
   loadSource() {}
   attachMedia() { queueMicrotask(() => this.handlers.get('manifest')?.('manifest', { levels: this.levels })); }
   detachMedia() {}
@@ -41,30 +42,60 @@ function environment(t, effectiveType) {
 }
 
 for (const [network, index] of [['2g', 0], ['3g', 2], ['4g', 3]]) {
-  test(`${network} startup seeds a rendition without locking before playback`, async (t) => {
+  test(`${network} selects one rendition before any segment request`, async (t) => {
     environment(t, network);
     const engine = new HLSEngine();
     assert.equal(await engine.loadTrack('/master.m3u8', {}), true);
     assert.equal(engine._hls.startLevel, index);
-    assert.equal(engine._hls.autoLevelEnabled, true);
-    assert.equal(engine._hls.autoLevelCapping, undefined);
+    assert.equal(engine._hls.manualLevelAtFirstRequest, index);
+    assert.equal(engine._hls.autoLevelEnabled, false);
+    assert.equal(engine._hls.autoLevelCapping, index);
     engine.detach();
     assert.equal(engine.isLoaded, false);
   });
 }
 
-test('an explicit quality pin remains manual and clearing it restores auto', async (t) => {
+test('quality preferences apply to the next load and cannot reopen ABR on the playing song', async (t) => {
   environment(t, '4g');
   const engine = new HLSEngine();
   engine.setQualityLevel(1);
   await engine.loadTrack('/master.m3u8', {});
-  assert.equal(engine._hls.currentLevel, 2);
+  assert.equal(engine._hls.loadLevel, 2);
   assert.equal(engine._hls.autoLevelEnabled, false);
   assert.equal(engine.holdCurrentQualityForPlayback(), null, 'an explicit pin remains authoritative');
   engine.setQualityLevel(-1);
-  assert.equal(engine._hls.autoLevelEnabled, true);
+  assert.equal(engine._hls.autoLevelEnabled, false);
+  assert.equal(engine._hls.loadLevel, 2);
+  engine.detach();
+  await engine.loadTrack('/next', {});
+  assert.equal(engine._hls.loadLevel, 3);
   engine.detach();
 });
+
+for (const network of ['3g', '4g']) {
+  test(`installed hls.js recovery cannot clear or escape the ${network} selected tier`, async t => {
+    environment(t, network);
+    const engine = new HLSEngine(); t.after(() => engine.destroy());
+    await engine.loadTrack('/master', {});
+    const selected = engine._trackQualityCap;
+    const config = engine._hls.config;
+    const actual = new ActualHls({ enableWorker: false, autoStartLoad: false,
+      preserveManualLevelOnError: config.preserveManualLevelOnError, minAutoBitrate: config.minAutoBitrate });
+    t.after(() => actual.destroy());
+    const levels = [64000, 96000, 160000, 320000].map(bitrate => ({ bitrate, maxBitrate: bitrate,
+      loadError: 0, fragmentError: 0, codecSet: 'mp4a', attrs: {} }));
+    Object.assign(actual.levelController, { _levels: levels, manualLevelIndex: selected,
+      currentLevelIndex: selected, currentLevel: levels[selected] });
+    actual.autoLevelCapping = engine._hls.autoLevelCapping;
+    const errors = actual.networkControllers.find(controller => controller instanceof ActualHls.DefaultConfig.errorController);
+    const action = errors.getLevelSwitchAction({ details: ActualHls.ErrorDetails.FRAG_LOAD_ERROR,
+      frag: { type: 'main', level: selected } }, selected);
+    assert.equal(actual.autoLevelEnabled, false, 'retry exhaustion must not silently clear manual selection');
+    assert.equal(action.nextAutoLevel, undefined, 'recovery cannot select another encoder stream');
+    assert.equal(actual.minAutoLevel, selected);
+    assert.equal(actual.maxAutoLevel, selected);
+  });
+}
 
 test('automatic quality is held at the selected startup rendition after the buffer gate', async (t) => {
   environment(t, '4g');
@@ -83,7 +114,7 @@ test('automatic quality is held at the selected startup rendition after the buff
   assert.equal(engine._trackQualityCap, null, 'a new track starts with a fresh selection');
 });
 
-test('the first buffered rendition is the fallback when hls.js has no current level', async (t) => {
+test('a late buffered event cannot replace the rendition selected before startup', async (t) => {
   environment(t, '4g');
   const engine = new HLSEngine();
   await engine.loadTrack('/master.m3u8', {});
@@ -91,8 +122,8 @@ test('the first buffered rendition is the fallback when hls.js has no current le
   engine._hls.handlers.get('buffered')('buffered', {
     frag: { type: 'main', sn: 1, level: 2, stats: { loaded: 1024, aborted: false } },
   });
-  assert.equal(engine.holdCurrentQualityForPlayback(), 2);
-  assert.equal(engine._hls.loadLevel, 2);
+  assert.equal(engine.holdCurrentQualityForPlayback(), 3);
+  assert.equal(engine._hls.loadLevel, 3);
   engine.detach();
 });
 
@@ -100,10 +131,10 @@ test('a token refresh reloads the same rendition during the active play', async 
   environment(t, '4g');
   const engine = new HLSEngine();
   await engine.loadTrack('/master.m3u8', {});
-  engine._hls._currentLevel = 2;
+  engine._hls._currentLevel = 2; // A stale observation cannot change the selected tier.
   engine.holdCurrentQualityForPlayback();
   await engine.loadTrack('/master.m3u8', {});
-  assert.equal(engine._hls.loadLevel, 2);
+  assert.equal(engine._hls.loadLevel, 3);
   assert.equal(engine._hls.autoLevelEnabled, false);
   engine.detach();
 });
@@ -124,13 +155,63 @@ test('native HLS counts as loaded and unsupported browsers fall back', async (t)
   environment(t, '4g');
   FakeHls.supported = false;
   t.after(() => { FakeHls.supported = true; });
+  t.mock.method(globalThis, 'fetch', async () => new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n/low\n#EXT-X-STREAM-INF:BANDWIDTH=320000\n/high'));
   const engine = new HLSEngine();
   const audio = { canPlayType: () => 'probably' };
   assert.equal(await engine.loadTrack('/native.m3u8', audio), true);
+  assert.equal(audio.src, 'https://www.2mrrw.com/high', 'native decoder gets one rendition, never an adaptive master');
   assert.equal(engine.isLoaded, true);
   engine.detach();
   assert.equal(engine.isLoaded, false);
   assert.equal(await engine.loadTrack('/unsupported.m3u8', { canPlayType: () => '' }), false);
+});
+
+test('native manifest authorization failure never falls through to an uncontrolled adaptive master', async t => {
+  environment(t, '4g'); FakeHls.supported = false;
+  t.after(() => { FakeHls.supported = true; });
+  t.mock.method(globalThis, 'fetch', async () => new Response('', { status: 403 }));
+  const engine = new HLSEngine(); const audio = { canPlayType: () => 'probably' };
+  assert.equal(await engine.loadTrack('/denied', audio), false);
+  assert.equal(audio.src, undefined);
+  assert.equal(engine.isLoaded, false);
+  engine.destroy();
+});
+
+test('a decoder-rejected cached fragment cannot survive recovery or a late prefetch', async t => {
+  environment(t, '4g');
+  const { encryptedSegmentStore: store } = await import('../../audio/encrypted-segment-store.js');
+  const { setSegment, getSegment } = await import('../../audio/hls-segment-cache.js');
+  const url = 'https://cdn.test/rejected-by-decoder.ts?v=one';
+  await store.put(url, new ArrayBuffer(16));
+  assert.ok(await store.get(url));
+  const engine = new HLSEngine(); t.after(() => engine.destroy());
+  await engine.loadTrack('/master', {});
+  engine._hls.handlers.get('error')('error', { fatal: false, type: 'media', details: 'parse', frag: { url } });
+  await store.writes;
+  setSegment(url, new ArrayBuffer(16));
+  assert.equal(getSegment(url), null);
+  assert.equal(await store.get(url), null);
+  assert.equal(await store.has(url), false);
+  assert.equal(engine._hls.loadLevel, 3, 'cache repair cannot change the selected bitrate');
+});
+
+test('detaching during native manifest retrieval aborts and cannot attach a stale source', async t => {
+  environment(t, '4g'); FakeHls.supported = false;
+  t.after(() => { FakeHls.supported = true; });
+  let release, signal;
+  t.mock.method(globalThis, 'fetch', async (_, options) => {
+    signal = options.signal;
+    return new Promise(resolve => { release = resolve; });
+  });
+  const engine = new HLSEngine(); const audio = { canPlayType: () => 'probably' };
+  const pending = engine.loadTrack('/old', audio);
+  await new Promise(resolve => setImmediate(resolve));
+  engine.detach(); assert.equal(signal.aborted, true);
+  release(new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=320000\n/high'));
+  assert.equal(await pending, false);
+  assert.equal(audio.src, undefined);
+  assert.equal(engine.isLoaded, false);
+  engine.destroy();
 });
 
 for (const details of ['key', 'decrypt']) {
@@ -241,10 +322,19 @@ test('native HLS wins when the browser supports both native and MSE; prefetch fo
   FakeHls.supported=true;
   const { getAudioEngineRuntime }=await import('../audio-engine-runtime.js');
   const { isHlsJsActive }=await import('../../audio/HLSEngine.js');
+  t.mock.method(globalThis,'fetch',async()=>new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n/native-selected'));
   const audio={canPlayType:()=> 'probably'};
   getAudioEngineRuntime().refs.audioRef.current=audio;
   const engine=new HLSEngine();t.after(()=>engine.destroy());
   assert.equal(await engine.loadTrack('/native-dual.m3u8',audio),true);
   assert.equal(engine.transport,'native-hls');assert.equal(engine._hls,null);
-  assert.equal(audio.src,'/native-dual.m3u8');assert.equal(isHlsJsActive(),false);
+  assert.equal(audio.src,'https://www.2mrrw.com/native-selected');assert.equal(isHlsJsActive(),false);
+});
+
+test('native HLS without Network Information API uses the shared highest-rendition fallback',async t=>{
+  environment(t,undefined);delete globalThis.navigator.connection;
+  t.mock.method(globalThis,'fetch',async()=>new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n/low\n#EXT-X-STREAM-INF:BANDWIDTH=320000\n/high'));
+  const engine=new HLSEngine();t.after(()=>engine.destroy());const audio={canPlayType:()=> 'probably'};
+  assert.equal(await engine.loadTrack('/unknown-network',audio),true);
+  assert.equal(audio.src,'https://www.2mrrw.com/high');assert.equal(engine._trackQualityCap,0);
 });

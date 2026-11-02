@@ -5,6 +5,7 @@ const { attachStreamCommands }=await import('../PlaybackStreamCommands.js');
 const { getHLSEngine }=await import('../../audio/HLSEngine.js');
 const ref=current=>({current});
 function fixture(t, fail){
+ t.mock.method(globalThis,'fetch',async()=>new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n/api/library/hls/variant?slug=album&bitrate=64&token=fixture'));
  const engine=getHLSEngine();engine.detach();t.after(()=>engine.detach());
  const audio=Object.assign(new EventTarget(),{src:'',currentSrc:'',paused:true,ended:false,error:null,readyState:0,networkState:0,currentTime:0,duration:180,
   buffered:{length:0},plays:0,loads:0,canPlayType:()=> 'probably',load(){this.loads++;},pause(){this.paused=true;},
@@ -22,7 +23,7 @@ function fixture(t, fail){
 
 test('real stream command starts metadata-only native HLS with one play and no progressive replacement',async t=>{
  const f=fixture(t);assert.equal(await f.service.playTrackInternal(f.track,f.options),true);
- assert.equal(f.audio.plays,1);assert.match(f.audio.src,/\/api\/library\/hls\?/);assert.equal(f.audio.loads,0);
+ assert.equal(f.audio.plays,1);assert.match(f.audio.src,/\/api\/library\/hls\/variant\?/);assert.equal(f.audio.loads,0);
 });
 test('real stream command falls back once after native decode rejection using the same authority',async t=>{
  const f=fixture(t,new DOMException('decoder unavailable','NotSupportedError'));
@@ -32,7 +33,7 @@ test('real stream command falls back once after native decode rejection using th
 test('real stream command does not substitute sources or retry permission rejection',async t=>{
  const f=fixture(t,new DOMException('gesture required','NotAllowedError'));
  assert.equal(await f.service.playTrackInternal(f.track,f.options),false);assert.equal(f.audio.plays,1);
- assert.match(f.audio.src,/\/api\/library\/hls\?/);assert.equal(f.state.playbackNetworkState,'error_stream');assert.match(f.state.error,/permission/);
+ assert.match(f.audio.src,/\/api\/library\/hls\/variant\?/);assert.equal(f.state.playbackNetworkState,'error_stream');assert.match(f.state.error,/permission/);
 });
 
 test('a pause cancels actual native startup and cannot trigger fallback or late resume',async t=>{
@@ -41,7 +42,7 @@ test('a pause cancels actual native startup and cannot trigger fallback or late 
  const result=f.service.playTrackInternal(f.track,f.options);
  for(let i=0;i<40 && !f.audio.plays;i++)await Promise.resolve();assert.equal(f.audio.plays,1);
  f.service._deps.pausedDuringCurrentLoadRef.current=true;f.service._deps.activeStreamAbortRef.current.abort();
- assert.equal(await result,false);assert.equal(f.audio.plays,1);assert.match(f.audio.src,/\/api\/library\/hls\?/);
+ assert.equal(await result,false);assert.equal(f.audio.plays,1);assert.match(f.audio.src,/\/api\/library\/hls\/variant\?/);
  resolve();await Promise.resolve();assert.equal(f.audio.paused,true);
 });
 
