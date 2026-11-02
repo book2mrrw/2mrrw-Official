@@ -24,7 +24,6 @@ import {
   PLAYBACK_STREAM_COMMAND_TIMEOUT_MS,
   ACTIVE_COMMAND_STALE_MS,
 } from "./playback-commands";
-import { captureMediaActivation, finishMediaActivation, cancelMediaActivation } from "@/lib/audio/media-activation";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { correlateBlackscreenPlayback } from "@/lib/diagnostics/playback-trace";
@@ -36,6 +35,22 @@ import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authori
 // newer PLAY_QUEUE has arrived, the stale one skips immediately without
 // touching audio state. Result: only the last rapid tap executes.
 let _playQueueSeq = 0;
+
+// Minimal silent WAV (RIFF header, 0 PCM samples) used as a dedicated unlock
+// element for iOS gesture-time audio permission. iOS Safari requires audio.play()
+// to be called synchronously within the user gesture event handler — calling it
+// later (after HLS stream setup, URL resolution, etc.) loses the activation token
+// on iOS 18. A separate element is used so no events fire on the main audio element
+// and no real stream buffering begins before the command handler runs.
+const SILENT_WAV_URI = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+let _silentUnlockEl = null;
+function getSilentUnlockEl() {
+  if (!_silentUnlockEl && typeof Audio !== "undefined") {
+    _silentUnlockEl = new Audio(SILENT_WAV_URI);
+    _silentUnlockEl.volume = 0;
+  }
+  return _silentUnlockEl;
+}
 
 /**
  * Dispatch a playback command through the serial command queue.
@@ -60,7 +75,6 @@ export function dispatchPlaybackCommand(type, payload = {}, {
     activeStreamAbortRef,
     initWebAudioRef,
     stateGetterRef,
-    audioRef,
   } = getAudioEngineRuntime().refs;
 
   const resolvedType = PLAYBACK_COMMAND_ALIASES[type] || type;
@@ -81,18 +95,16 @@ export function dispatchPlaybackCommand(type, payload = {}, {
     // iOS rejects AudioContext.resume() issued after an await.
     initWebAudioRef.current?.();
     getWebAudioEngine().resumeSync();
-    // Activation belongs to the persistent playback element. Preparation only
-    // touches a cold empty element and never starts protected/previous content.
-    captureMediaActivation(audioRef.current);
+    // Unlock the HTML audio element for iOS gesture activation. AudioContext and
+    // HTMLMediaElement are tracked as separate permissions in iOS Safari — ctx.resume()
+    // alone does not grant audio.play() permission on iOS 18. Calling play() on a
+    // dedicated silent element here (synchronously, before any await) grants page-wide
+    // media autoplay permission that persists for all subsequent programmatic play()
+    // calls on any audio element, regardless of async depth.
+    getSilentUnlockEl()?.play().catch(() => {});
   }
 
-  if (EMERGENCY_BYPASS_COMMANDS.has(resolvedType)) cancelMediaActivation(audioRef.current);
-
   const run = async () => {
-    if (!EMERGENCY_BYPASS_COMMANDS.has(resolvedType)) {
-      const activation = finishMediaActivation(audioRef.current);
-      if (activation) await activation;
-    }
     commandExecutionDepthRef.current += 1;
     perfMark(MARKS.PLAYBACK_QUEUE_RESOLVED);
 

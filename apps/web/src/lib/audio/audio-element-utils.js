@@ -1,5 +1,3 @@
-import { requestMediaPlay, classifyMediaFailure } from "./media-play-request";
-import { supportsNativeHls } from "./playback-capabilities";
 /**
  * Audio element utilities.
  * Extracted verbatim from AudioContext.js (lines 272–295, 359–534, 681–709).
@@ -185,7 +183,7 @@ function clampRestorePosition(positionSeconds, durationSeconds) {
 }
 
 /** Set src, wait for loadeddata/canplay/error/timeout with abort support, then load(). */
-async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_READY_TIMEOUT_MS, readiness = "buffer" } = {}) {
+async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_READY_TIMEOUT_MS } = {}) {
   perfMark(MARKS.PLAYBACK_WAIT_SRC_START);
   if (!audio || typeof audio.load !== "function") {
     perfMark(MARKS.PLAYBACK_WAIT_SRC_END);
@@ -227,13 +225,6 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
     audio.src = src;
   }
 
-  // Native transport may load only metadata until play() is requested. Do not
-  // wait for decoded frames here; play owns readiness and its bounded promise.
-  if (readiness === "playback") {
-    if (audio.networkState !== 2) audio.load();
-    perfMark(MARKS.PLAYBACK_WAIT_SRC_END);
-    return;
-  }
   return waitForAudioElementReady(audio, { signal, timeoutMs, src });
 }
 
@@ -342,13 +333,13 @@ async function loadAudioSrcAndPlay(audio, src, {
   effectAuthorityMode,
   mediaIdentity,
 } = {}) {
-  await waitAudioSrcReady(audio, src, { signal, readiness: supportsNativeHls(audio) ? "playback" : "buffer" });
+  await waitAudioSrcReady(audio, src, { signal });
   try {
     if (!canBecomeAudible({ effectAuthorityMode, effectGuardRequired, effectAuthority, canApplyEffect, mediaIdentity, command, requestId, state, context })) {
       return null;
     }
     perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
-    await requestMediaPlay(audio, { signal });
+    await audio.play();
     perfMark(MARKS.PLAYBACK_PLAY_PROMISE_RESOLVED);
     return isAudioElementPlaying(audio);
   } catch (e) {
@@ -384,10 +375,8 @@ async function playAudioIfNotPaused(audio, isPlaying, {
   mediaIdentity,
   isCurrent = () => true,
   onStalePlay,
-  onFailure,
-  timeoutMs,
 } = {}) {
-  if (signal?.aborted || !isCurrent()) return null;
+  if (!isCurrent()) return null;
   if (!isPlaying) return true;
   if (!audio.paused) return true;
 
@@ -411,7 +400,7 @@ async function playAudioIfNotPaused(audio, isPlaying, {
         return null;
       }
       perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
-      await requestMediaPlay(audio, { signal, isCurrent, timeoutMs });
+      await audio.play();
       if (!isCurrent()) {
         onStalePlay?.();
         return null;
@@ -422,8 +411,6 @@ async function playAudioIfNotPaused(audio, isPlaying, {
       }
       return isAudioElementPlaying(audio);
     } catch (e) {
-      if (signal?.aborted || !isCurrent()) return null;
-      const category = classifyMediaFailure(e, audio);
       const isAbort = e?.name === "AbortError";
       if (isPlaybackTraceEnabled()) {
         console.warn("[PLAY-CHAIN] play() rejected", {
@@ -450,7 +437,6 @@ async function playAudioIfNotPaused(audio, isPlaying, {
         if (signal?.aborted) break;
         continue;
       }
-      onFailure?.({ category, name: e?.name || "Error", code: e?.code ?? null });
       reportPlaybackDiagnostic({
         level: isAbort ? "warn" : "error",
         code: "AUDIO_RESUME_FAILED",
@@ -458,7 +444,7 @@ async function playAudioIfNotPaused(audio, isPlaying, {
         requestId: requestId ?? null,
         state,
         error: e,
-        context: { ...context, attempt, failureCategory: category, stage: "media_play" },
+        context: { ...context, attempt },
       });
       return false;
     }

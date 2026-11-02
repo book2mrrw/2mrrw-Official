@@ -1,7 +1,5 @@
 "use client";
 
-import { supportsNativeHls } from "@/lib/audio/playback-capabilities";
-
 import { createHlsFallback } from "./hls-fallback";
 import { playbackStateMachine, PLAYBACK_ORCHESTRATION_EVENTS } from "@/media/PlaybackStateMachine";
 import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
@@ -162,8 +160,10 @@ export function attachStreamCommands(self) {
         }
       }
     }
-    // The dispatcher captures activation on this same cold playback element
-    // synchronously, and finishes preparation before source loading begins.
+    // iOS gesture unlock is handled synchronously in dispatchPlaybackCommand via a
+    // dedicated silent audio element — before any await, before any HLS src is assigned.
+    // This grants page-wide media autoplay permission on iOS 18 without triggering
+    // native HLS buffering on the main element. No async unlock cycle needed here.
 
     initWebAudio();
     await resumeWebAudioContextIfSuspended(audioCtxRef, "playTrack-entry");
@@ -904,18 +904,17 @@ export function attachStreamCommands(self) {
         // headroom for initial auth + signed URL resolution without stranding a paying user.
         if (!hlsDidLoad) {
           const srcReadyTimeout = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
-          await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout, readiness: supportsNativeHls(audio) ? "playback" : "buffer" });
+          await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout });
         }
         // Resolve on media events, abort, or lock. Hidden playback must not wait
         // for throttled JS timers; HTMLMediaElement.play owns its buffering then.
         if (!isSameTrack && !streamAbortController.signal.aborted) {
-          await waitForPlaybackBuffer(audio, { signal: streamAbortController.signal,
-            transport: hlsEngineRef.current?.transport || (supportsNativeHls(audio) ? "native-media" : "buffered") });
+          await waitForPlaybackBuffer(audio, { signal: streamAbortController.signal });
         }
         // HLS stall fallback: manifest loaded but segments never arrived (CORS error, CDN failure,
         // or ManagedMediaSource init race on iOS). readyState 0 = browser received zero bytes.
         // Fall back to progressive download so iOS users get audio instead of silence.
-        if (hlsDidLoad && hlsEngineRef.current?.transport === "mse-hls" && !streamAbortController.signal.aborted && audio.readyState < 2 &&
+        if (hlsDidLoad && !streamAbortController.signal.aborted && audio.readyState < 2 &&
             globalThis.document?.visibilityState !== "hidden") {
           const hlsEng = hlsEngineRef.current;
           if (hlsEng) { hlsEng.detach(); hlsEngineRef.current = null; }
@@ -966,14 +965,7 @@ export function attachStreamCommands(self) {
           hlsEngineRef.current.holdCurrentQualityForPlayback();
         }
         patchState({ hasStarted: true, playbackState: "ready" });
-        let playFailure = null;
-        const playContext = {
-          signal: streamAbortController.signal,
-          isCurrent: () => requestId === playRequestIdRef.current && !streamAbortController.signal.aborted && !pausedDuringCurrentLoadRef.current,
-          onFailure: failure => { playFailure = failure; },
-        };
-        let startedPlay = await playAudioIfNotPaused(audio, !pausedDuringCurrentLoadRef.current, {
-          ...playContext,
+        const startedPlay = await playAudioIfNotPaused(audio, !pausedDuringCurrentLoadRef.current, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
           state: stateRef.current,
@@ -981,28 +973,12 @@ export function attachStreamCommands(self) {
           signal: streamAbortController.signal,
           ...physicalEffectContext,
         });
-        // Native play drives playlist/key/segment loading. Only an actual
-        // recoverable startup failure may choose the protected progressive
-        // source, once, under the same intent and physical-effect authority.
-        if (startedPlay === false && hlsEngineRef.current?.transport === "native-hls" &&
-            ["network", "timeout", "media", "unsupported"].includes(playFailure?.category) && playContext.isCurrent()) {
-          hlsEngineRef.current.detach();
-          hlsEngineRef.current = null;
-          reportPlaybackDiagnostic({ level: "warn", code: "NATIVE_HLS_STARTUP_FALLBACK",
-            command: PLAYBACK_COMMANDS.PLAY_TRACK, requestId,
-            context: { failureCategory: playFailure.category, stage: "native_hls_startup" } });
-          await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, readiness: "playback" });
-          startedPlay = await playAudioIfNotPaused(audio, true, {
-            ...playContext, command: PLAYBACK_COMMANDS.PLAY_TRACK, requestId,
-            state: stateRef.current, ...physicalEffectContext,
-          });
-        }
         if (startedPlay === null) return false;
         if (!startedPlay) {
           patchState({
             isPlaying: false,
             isBuffering: false,
-            error: playFailure?.category === "permission" ? "Your browser blocked audio playback permission." : "Audio playback failed. Try again in a moment.",
+            error: "Audio playback failed. Try again in a moment.",
             playbackState: "paused",
             playbackNetworkState: "error_stream",
           });

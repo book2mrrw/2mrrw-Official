@@ -128,8 +128,11 @@ export function attachTransportCommands(self) {
     pausedDuringCurrentLoadRef.current = false;
 
     try {
-      // The dispatcher prepares the existing media element before this command.
-      // AudioContext activation remains a separate synchronous operation.
+      // dispatchPlaybackCommand plays a silent WAV element synchronously before any await,
+      // granting page-wide iOS media autoplay permission that persists for all subsequent
+      // audio.play() calls — so no play-then-pause unlock cycle is needed here.
+      // initWebAudio + ctx.resume() complete the AudioContext (Web Audio graph) unlock path,
+      // which is separate from the HTMLMediaElement permission on iOS Safari.
       initWebAudio();
       const iosGestureCtx = audioCtxRef.current;
       if (iosGestureCtx && iosGestureCtx.state !== "running") {

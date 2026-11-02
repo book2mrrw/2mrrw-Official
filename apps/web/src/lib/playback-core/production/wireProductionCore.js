@@ -11,7 +11,7 @@
  *         → AuthorityGate.register()                         [synchronous]
  *         → PlaybackCoreAdapter.execute(intent)              [synchronous]
  *           → dispatchPlaybackCommand(type, payload)         [REAL production fn]
- *             → initWebAudio + resumeSync + same-element activation    [SYNCHRONOUS — iOS gesture]
+ *             → initWebAudio + resumeSync + silent unlock    [SYNCHRONOUS — iOS gesture]
  *             → emergency bypass lane (PAUSE / STOP)
  *             → serial command queue
  *               → executePlaybackCommand
@@ -28,7 +28,7 @@
  *
  * iOS GESTURE PRESERVATION (critical — do not introduce awaits above this line):
  *   dispatchPlaybackCommand performs initWebAudioRef.current(), resumeSync(),
- *   and cold same-element activation SYNCHRONOUSLY at call time, before its first
+ *   and the silent-element unlock SYNCHRONOUSLY at call time, before its first
  *   await. Every hop in the Core chain above is likewise synchronous. If any
  *   future change introduces an await, a microtask hop, or a dynamic import
  *   between the gesture handler and dispatchPlaybackCommand, iOS Safari will

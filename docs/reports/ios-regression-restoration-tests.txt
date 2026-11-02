@@ -1,0 +1,1633 @@
+[PlaybackCore] DomainStore(test) listener error: Error: listener explosion
+    at file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback-core/__tests__/invariants.test.js:262:35
+    at DomainStore._applyCommit (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback-core/state/DomainStore.js:130:9)
+    at file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback-core/__tests__/invariants.test.js:265:37
+    at getActual (node:assert:611:5)
+    at strict.doesNotThrow (node:assert:779:32)
+    at TestContext.<anonymous> (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback-core/__tests__/invariants.test.js:265:12)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1306:25)
+    at Suite.processPendingSubtests (node:internal/test_runner/test:897:18)
+    at Test.postRun (node:internal/test_runner/test:1447:19)
+▶ INV-SEQ: IntentSequencer
+  ✔ produces monotonically increasing sequence numbers (2.223083ms)
+  ✔ sessionEpoch is a 128-bit UUID (crypto.randomUUID format) (0.188334ms)
+  ✔ sessionEpoch is stable across multiple next() calls (0.081708ms)
+  ✔ intentId format is <epoch>:<sequence> (0.073125ms)
+  ✔ two sequencers have different epochs (probabilistic) (0.082417ms)
+✔ INV-SEQ: IntentSequencer (3.309541ms)
+▶ INV-10: AuthorityGate — single authority
+  ✔ newly registered intent is authoritative (0.298417ms)
+  ✔ registering a second intent supersedes the first (INV-01 prerequisite) (0.075458ms)
+  ✔ only the most recently registered intent is authoritative (0.150583ms)
+  ✔ register throws for non-monotonic sequence (0.411542ms)
+  ✔ isAuthoritative returns false for null or malformed intent (0.1015ms)
+  ✔ hasAuthority is false before any registration (0.073917ms)
+✔ INV-10: AuthorityGate — single authority (1.271208ms)
+▶ INV-06: DomainStore — snapshot integrity and isolation
+  ✔ initial snapshot is frozen (0.182959ms)
+  ✔ snapshot reference is stable between commits (0.054167ms)
+  ✔ _applyCommit updates snapshot and version (0.834791ms)
+  ✔ _applyCommit notifies subscribers (0.119917ms)
+  ✔ subscribe returns an unsubscribe function (0.089042ms)
+  ✔ two stores have completely independent subscriptions (0.075042ms)
+  ✔ listener errors do not crash the commit (0.673459ms)
+✔ INV-06: DomainStore — snapshot integrity and isolation (2.152459ms)
+▶ INV-OWN: DomainOwnershipRegistry — single writer enforcement
+  ✔ all domains start LEGACY (0.113584ms)
+  ✔ transferToCore makes the domain Core-owned (0.052875ms)
+  ✔ transferToCore is idempotent — no error on double call (0.048125ms)
+  ✔ isOwnedByCore returns false for LEGACY, true for CORE (0.042417ms)
+  ✔ transferring one domain does not affect others (0.0405ms)
+  ✔ unknown domain defaults to LEGACY (0.036875ms)
+  ✔ getOwnershipMap returns current state as plain object (0.051958ms)
+✔ INV-OWN: DomainOwnershipRegistry — single writer enforcement (0.485833ms)
+▶ INV-01 + INV-02: CommitGate — the single write boundary
+  ✔ INV-01: superseded intent cannot commit state (SUPERSEDED rejection) (0.379125ms)
+  ✔ INV-02: LEGACY-owned domain cannot be committed through Core path (0.096708ms)
+  ✔ commit accepted when authoritative + Core-owned (0.122042ms)
+  ✔ commit rejected for unknown storeKey (0.094291ms)
+  ✔ extra validators are called and can reject (0.104209ms)
+✔ INV-01 + INV-02: CommitGate — the single write boundary (0.873833ms)
+▶ INV-17: sessionEpoch owned by PlaybackCore — never reset by auth
+  ✔ sessionEpoch is stable across many commands (0.209833ms)
+  ✔ two PlaybackCore instances have different sessionEpochs (0.289875ms)
+  ✔ epoch embedded in every intentId matches sessionEpoch (0.048791ms)
+✔ INV-17: sessionEpoch owned by PlaybackCore — never reset by auth (0.597833ms)
+▶ INV-LOG: CoreLogger — ring buffer and subscriptions
+  ✔ emits events and history is returned in order (0.096333ms)
+  ✔ ring buffer caps at 200 events (0.151ms)
+  ✔ ring buffer returns oldest-first after wrap (0.13375ms)
+  ✔ subscribe receives events and unsub stops delivery (0.063167ms)
+  ✔ disabled logger emits nothing (0.036125ms)
+  ✔ emitCoreInitialized stamps the session epoch (0.04225ms)
+✔ INV-LOG: CoreLogger — ring buffer and subscriptions (0.593833ms)
+▶ INV-PORT: PlaybackPort — complete stable API
+  ✔ play() dispatches without throwing (0.132ms)
+  ✔ pause() dispatches without throwing (0.055834ms)
+  ✔ resume() dispatches without throwing (0.049458ms)
+  ✔ seek() dispatches without throwing for valid position (0.068292ms)
+  ✔ seek() throws for negative position (0.066333ms)
+  ✔ next() dispatches without throwing (0.0565ms)
+  ✔ previous() dispatches without throwing (0.045917ms)
+  ✔ setQueue() dispatches without throwing for valid array (0.082125ms)
+  ✔ setQueue() throws for non-array (0.061542ms)
+  ✔ reorderQueue() dispatches without throwing (0.075959ms)
+  ✔ reorderQueue() throws for non-number indices (0.060792ms)
+  ✔ every command increments the intent sequence (0.090125ms)
+✔ INV-PORT: PlaybackPort — complete stable API (1.543667ms)
+▶ INV-CORE: PlaybackCore.create() — full wiring
+  ✔ create() returns a live core with a valid port (0.228291ms)
+  ✔ Core starts in CONSTRUCTING state before adapter is injected (0.075167ms)
+  ✔ port commands throw with READY error when Core is CONSTRUCTING (0.23575ms)
+  ✔ _injectExecutionEngine transitions Core to READY and port accepts commands (0.229125ms)
+  ✔ _injectExecutionEngine emits CORE_READY diagnostic event (0.125333ms)
+  ✔ port.play() is accepted without throwing when READY (0.101416ms)
+  ✔ _injectExecutionEngine fails closed when the physical effect guard is missing (0.142625ms)
+  ✔ _injectExecutionEngine fails closed when the current-media guard is missing (0.140458ms)
+  ✔ destroy() emits CORE_DESTROYED event (0.077833ms)
+  ✔ destroy() transitions Core to DISPOSED (0.04625ms)
+  ✔ destroy() prevents further port access (throws destroyed error) (0.066875ms)
+  ✔ destroy() is idempotent (0.06425ms)
+  ✔ logger emits CORE_INITIALIZED on create() (0.05525ms)
+✔ INV-CORE: PlaybackCore.create() — full wiring (1.711792ms)
+▶ INV-ADAPT: LegacyPlaybackAdapter — read-only seam
+  ✔ returns null for LEGACY-owned domain (Slice 0: all domains) (0.083125ms)
+  ✔ returns frozen snapshot after domain transferred to Core (0.057334ms)
+  ✔ subscribe returns null for LEGACY-owned domain (0.054833ms)
+  ✔ subscribe returns unsubscribe fn for Core-owned domain (0.046666ms)
+✔ INV-ADAPT: LegacyPlaybackAdapter — read-only seam (0.294292ms)
+▶ INV-FACTORY: IntentFactory — frozen intent shape
+  ✔ created intent is frozen (0.048042ms)
+  ✔ intent has all required fields (0.036875ms)
+  ✔ optional fields omitted when undefined (0.032625ms)
+  ✔ optional fields included when provided (0.241125ms)
+  ✔ source defaults to 'unknown' when omitted (0.030208ms)
+✔ INV-FACTORY: IntentFactory — frozen intent shape (0.439209ms)
+▶ INV-TYPES: Type constants — completeness and immutability
+  ✔ CoreCommandType has all 8 command types (0.049958ms)
+  ✔ ResumePolicy has all 5 variants (0.029083ms)
+  ✔ Domain has all 5 domains (0.027375ms)
+  ✔ StoreKey has all 8 store keys (0.027583ms)
+  ✔ type constant objects are frozen (0.030416ms)
+✔ INV-TYPES: Type constants — completeness and immutability (0.212ms)
+▶ INV-DEEP: Deep snapshot isolation — nested objects cannot mutate Core state
+  ✔ nested object mutation via returned snapshot is rejected (0.08625ms)
+  ✔ nested object mutation via original input reference is isolated (0.036959ms)
+  ✔ nested array push via returned snapshot is rejected (0.045375ms)
+  ✔ nested array push via original input reference is isolated (0.032583ms)
+  ✔ object inside nested array mutation via returned snapshot is rejected (0.044625ms)
+  ✔ object inside nested array mutation via original reference is isolated (0.035042ms)
+  ✔ deeply nested object mutation via returned snapshot is rejected (0.04725ms)
+  ✔ returned snapshot is deeply frozen at all nesting levels (0.042875ms)
+  ✔ initial snapshot passed to constructor is also deeply isolated (0.033834ms)
+✔ INV-DEEP: Deep snapshot isolation — nested objects cannot mutate Core state (0.523833ms)
+▶ INV-INTERLEAVE: Command interleaving and supersession
+  ✔ PLAY A → SEEK: SEEK supersedes PLAY A (0.101875ms)
+  ✔ PLAY A → PAUSE: PAUSE supersedes PLAY A (0.050709ms)
+  ✔ PLAY A → PAUSE → RESUME: RESUME is final authority (0.071792ms)
+  ✔ PLAY A → PLAY B: B supersedes A (0.063083ms)
+  ✔ PLAY A → PLAY B → PAUSE: PAUSE is final authority (0.056042ms)
+  ✔ PAUSE → SEEK → RESUME: RESUME is final authority (0.069792ms)
+  ✔ SEEK → SEEK → SEEK: only last SEEK is authoritative (0.069791ms)
+  ✔ rapid 100-command sequence: only last command is authoritative (0.145834ms)
+  ✔ superseded intent cannot commit state even after delayed resolution (out-of-order async) (0.069584ms)
+  ✔ randomized commit order: canonical state always reflects last-registered intent (0.159958ms)
+✔ INV-INTERLEAVE: Command interleaving and supersession (0.943666ms)
+▶ INV-SLICE1: Core Command Authority Integration
+  ✔ PLAY intent maps to PLAY_TRACK with track from queueEntries (0.962667ms)
+  ✔ PLAY intent maps to PLAY_TRACK with minimal track when no queueEntries (0.149208ms)
+  ✔ PAUSE intent maps to PAUSE (0.094167ms)
+  ✔ RESUME intent maps to RESUME (0.065833ms)
+  ✔ SEEK intent maps to SEEK with payload.time (not positionSeconds) (0.068791ms)
+  ✔ NEXT intent maps to NEXT_TRACK (dormant contract) (0.062166ms)
+  ✔ PREVIOUS intent maps to PREV_TRACK (dormant contract) (0.054792ms)
+  ✔ SET_QUEUE intent maps to PLAY_QUEUE with tracks and startIndex (dormant contract) (0.072291ms)
+  ✔ REORDER_QUEUE has no mapping even with scope widened (Slice 2) (0.095958ms)
+  ✔ superseded intent does NOT reach the dispatch function (0.073542ms)
+  ✔ HARDENING-B/PLAY A → SEEK: only SEEK reaches adapter (authority proven) (0.069417ms)
+  ✔ HARDENING-B/PLAY A → PLAY B: only PLAY B reaches adapter (0.077166ms)
+  ✔ HARDENING-B/rapid commands: only last command reaches adapter (0.122833ms)
+  ✔ HARDENING-B/randomized completion order: only last registered intent dispatches (0.116333ms)
+  ✔ SCOPE: default live scope is exactly PLAY, PAUSE, RESUME, SEEK (0.089042ms)
+  ✔ SCOPE: NEXT is refused by the default production scope (0.083875ms)
+  ✔ SCOPE: PREVIOUS is refused by the default production scope (0.038792ms)
+  ✔ SCOPE: SET_QUEUE is refused by the default production scope (0.036ms)
+  ✔ SCOPE: REORDER_QUEUE is refused by the default production scope (0.034667ms)
+  ✔ SCOPE: PLAY is admitted by the default production scope (0.060208ms)
+  ✔ SCOPE: PAUSE is admitted by the default production scope (0.034416ms)
+  ✔ SCOPE: RESUME is admitted by the default production scope (0.046375ms)
+  ✔ SCOPE: SEEK is admitted by the default production scope (0.03625ms)
+  ✔ PlaybackCoreAdapter constructor throws if dispatch is not a function (0.093ms)
+✔ INV-SLICE1: Core Command Authority Integration (2.83475ms)
+▶ INV-DESIRED: desired-state convergence
+  ✔ D2.1 PAUSE inherits requestedMediaIdentity from a prior PLAY (0.350042ms)
+  ✔ D2.2 SEEK inherits media identity — a seek can never target the wrong track (0.0825ms)
+  ✔ D2.3 RESUME inherits both media identity and position target (0.084792ms)
+  ✔ D2.4 a new PLAY replaces media identity and clears the position target (0.092667ms)
+  ✔ D2.5 transport intents cannot overwrite selection with stale caller media (0.069541ms)
+  ✔ D-REV.1 desiredRevision is monotonic across in-scope intents (0.088125ms)
+  ✔ D-REV.2 out-of-scope intents do not advance the revision (0.071708ms)
+  ✔ D-REV.3 desired state objects are frozen (0.078875ms)
+(node:16121) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback-core/__tests__/invariants.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✔ D1.1 a step planned against a stale revision is not dispatched (34.923125ms)
+  ✔ D3.1 convergence reaches the newest desired state, not an older one (22.892375ms)
+  ✔ D3.2 convergence is idempotent — a settled system takes no further steps (52.653ms)
+  ✔ D3.3 convergence terminates (no runaway loop) for a reachable target (22.027125ms)
+  ✔ D3.4 a repeated SEEK target is not re-issued as playback drifts (42.86275ms)
+  ✔ D4.1 PAUSE advances the desired revision before any effect is dispatched (0.298ms)
+  ✔ D4.2 PAUSE dispatches its effect SYNCHRONOUSLY within execute() (0.091209ms)
+  ✔ D4.3 PLAY dispatches LOAD synchronously (iOS gesture requirement) (0.0855ms)
+  ✔ D4.4 out-of-scope intents dispatch nothing and change nothing (0.058667ms)
+  ✔ D-DISPOSE.1 a disposed engine performs no further effects (22.567ms)
+  ✔ D-DISPOSE.2 PlaybackCore.destroy() disposes the execution engine (0.218834ms)
+✔ INV-DESIRED: desired-state convergence (200.133ms)
+▶ INV-EFFECT: audible physical effect authority
+  ✔ E1 current desired revision and media identity are allowed (0.266084ms)
+  ✔ E2/E3 stale revision is denied after harmless preparation (0.079375ms)
+  ✔ E4 current revision with a stale media identity is denied (0.054084ms)
+  ✔ E1 current revision is denied when desired transport is PAUSED (0.047916ms)
+  ✔ E7 a guard exception fails closed and emits a diagnostic (0.088833ms)
+  ✔ E8 epoch rotation invalidates every captured token (0.053208ms)
+  ✔ E8 disposal permanently invalidates an authority object (0.040917ms)
+  ✔ E8 Core A authority cannot authorize Core B runtime (0.054166ms)
+  ✔ diagnostics record request, allow, and reasoned rejection (0.087125ms)
+  ✔ E5 effect permission never grants canonical commit permission (0.11525ms)
+  ✔ E6 commit permission never grants physical effect permission (0.103916ms)
+✔ INV-EFFECT: audible physical effect authority (1.115167ms)
+▶ INV-HARDEN-A: DomainStore preflight hardening
+  ✔ A1 — structuredClone path is taken (runtime supports it) (0.066042ms)
+  ✔ A2 — deepFreeze is cycle-safe: two-node cycle does not stack overflow (0.079167ms)
+  ✔ A2 — deepFreeze is cycle-safe: self-referential object does not stack overflow (0.050375ms)
+  ✔ A2 — deepFreeze is cycle-safe: deep chain with shared node does not overflow (0.06175ms)
+  ✔ A2 — cycle-frozen snapshot still satisfies top-level frozen invariant (0.056041ms)
+✔ INV-HARDEN-A: DomainStore preflight hardening (0.3745ms)
+(node:16122) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/audio-engine-runtime.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  [DIFF-1.1] LEGACY-ONLY: {"mediaIdentity":"track-a","position":0,"transport":"PLAYING"}
+             order: pause → setQueue → playTrack → effect_requested → effect_legacy_unguarded → audio_play
+▶ DIFF-1 — PLAY A → PAUSE: legacy defect vs Core correction
+  ✔ DIFF-1.1 LEGACY path still ends PLAYING (defect unchanged, as expected) (87.257375ms)
+
+  [DIFF-1.2] CORE-PATH  : {"mediaIdentity":"track-a","position":0,"transport":"PAUSED"}
+             order: pause → setQueue → playTrack → effect_requested → effect_denied
+             desired: {"revision":2,"requestedMediaIdentity":"track-a","requestedMediaEntry":{"id":"track-a","slug":"track-a","title":"Track A"},"requestedOptions":null,"desiredTransport":"PAUSED","positionTarget":null,"resumePolicy":"RESUME_IF_AVAILABLE","sourceIntentId":"dd0fd6d5-c36e-40e7-bba5-6f6dc6866ccf:2"}
+  ✔ DIFF-1.2 CORE path converges to PAUSED (the Slice 1C fix) (89.212875ms)
+
+  [DIFF-1.3] legacy=PLAYING  core=PAUSED
+  ✔ DIFF-1.3 the two paths now DIVERGE — that divergence is the fix (179.350875ms)
+✔ DIFF-1 — PLAY A → PAUSE: legacy defect vs Core correction (356.486ms)
+
+  [DIFF-2.1] order: setQueue → playTrack → effect_requested → effect_denied → seek → resume → effect_requested → effect_allowed → audio_play
+             final: {"mediaIdentity":"track-a","position":92,"transport":"PLAYING"}
+▶ DIFF-2 — Where authority is actually enforced
+  ✔ DIFF-2.1 the superseded PLAY still loads its media (preparation is allowed) (87.391125ms)
+
+  [DIFF-2.2] revisions: PLAY@1 PAUSE@2 RESUME@3
+  ✔ DIFF-2.2 desired revision advances once per in-scope intent (86.761375ms)
+  ✔ DIFF-2.3 out-of-scope intents do NOT advance the desired revision (86.922875ms)
+✔ DIFF-2 — Where authority is actually enforced (261.338042ms)
+
+  [DIFF-3.1] order: setQueue → playTrack → effect_requested → effect_denied → seek → resume → effect_requested → effect_allowed → audio_play
+             final: {"mediaIdentity":"track-a","position":92,"transport":"PLAYING"}
+▶ DIFF-3 — Ordering and the emergency lane
+  ✔ DIFF-3.1 PLAY→SEEK ordering preserved under load latency (120.564125ms)
+
+  [DIFF-3.2] pause landed at ~6ms; order: pause → setQueue → playTrack → effect_requested → effect_denied
+             final: {"mediaIdentity":"track-a","position":0,"transport":"PAUSED"}
+  ✔ DIFF-3.2 emergency PAUSE lands early AND survives the later load (205.720583ms)
+✔ DIFF-3 — Ordering and the emergency lane (326.493042ms)
+[playback-diagnostic] {
+  code: 'PHYSICAL_EFFECT_GUARD_UNAVAILABLE',
+  command: 'PLAY',
+  requestId: null,
+  trackId: null,
+  trackSlug: null,
+  playbackState: null,
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  effectType: 'BECOME_AUDIBLE',
+  mediaIdentity: null,
+  at: '2026-11-02T02:46:59.964Z'
+}
+[playback-diagnostic] {
+  code: 'PHYSICAL_EFFECT_GUARD_UNAVAILABLE',
+  command: 'PLAY',
+  requestId: null,
+  trackId: null,
+  trackSlug: null,
+  playbackState: null,
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  effectType: 'BECOME_AUDIBLE',
+  mediaIdentity: null,
+  at: '2026-11-02T02:46:59.975Z'
+}
+[playback-diagnostic] {
+  code: 'PHYSICAL_EFFECT_GUARD_UNAVAILABLE',
+  command: 'PLAY',
+  requestId: null,
+  trackId: null,
+  trackSlug: null,
+  playbackState: null,
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  effectType: 'BECOME_AUDIBLE',
+  mediaIdentity: null,
+  at: '2026-11-02T02:46:59.976Z'
+}
+[playback-diagnostic] {
+  code: 'PHYSICAL_EFFECT_GUARD_ERROR',
+  command: 'PLAY',
+  requestId: null,
+  trackId: null,
+  trackSlug: null,
+  playbackState: null,
+  isPlaying: false,
+  errorMessage: 'synthetic guard failure',
+  errorCode: null,
+  errorStatus: null,
+  effectType: 'BECOME_AUDIBLE',
+  mediaIdentity: null,
+  at: '2026-11-02T02:46:59.976Z'
+}
+[playback-diagnostic] {
+  code: 'PHYSICAL_EFFECT_GUARD_UNAVAILABLE',
+  command: 'PLAY',
+  requestId: null,
+  trackId: null,
+  trackSlug: null,
+  playbackState: null,
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  effectType: 'BECOME_AUDIBLE',
+  mediaIdentity: null,
+  at: '2026-11-02T02:46:59.976Z'
+}
+▶ SLICE-1D/1 — generic leaf failure policy
+  ✔ unclassified, missing, partial, and throwing guards fail closed (13.409625ms)
+(node:16123) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/audio-engine-runtime.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✔ dispatcher metadata preserves fail-closed mode when the payload loses both guard fields (87.153042ms)
+[playback-diagnostic] {
+  code: 'PHYSICAL_EFFECT_DENIED',
+  command: 'PLAY',
+  requestId: null,
+  trackId: null,
+  trackSlug: null,
+  playbackState: null,
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  effectType: 'BECOME_AUDIBLE',
+  mediaIdentity: 'track-a',
+  at: '2026-11-02T02:47:00.366Z'
+}
+[playback-diagnostic] {
+  code: 'PHYSICAL_EFFECT_DENIED',
+  command: 'LIFECYCLE_RECOVERY',
+  requestId: null,
+  trackId: 'track-a',
+  trackSlug: 'track-a',
+  playbackState: null,
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  effectType: 'BECOME_AUDIBLE',
+  mediaIdentity: 'track-a',
+  authorityMode: 'CORE_CURRENT',
+  at: '2026-11-02T02:47:00.368Z'
+}
+[playback-diagnostic] {
+  code: 'PHYSICAL_EFFECT_DENIED',
+  command: 'LIFECYCLE_RECOVERY',
+  requestId: null,
+  trackId: 'track-b',
+  trackSlug: 'track-b',
+  playbackState: null,
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  effectType: 'BECOME_AUDIBLE',
+  mediaIdentity: 'track-b',
+  authorityMode: 'CORE_CURRENT',
+  at: '2026-11-02T02:47:00.368Z'
+}
+  ✔ every AbortError retry revalidates authority before another play() (302.283208ms)
+  ✔ current-media recovery cannot resurrect playback after authoritative PAUSE (2.036958ms)
+  ✔ destroying Core A cannot uninstall Core B's current-media guard (0.359709ms)
+✔ SLICE-1D/1 — generic leaf failure policy (406.02275ms)
+▶ SLICE-1D/2 — stale work never commits audibility
+  ✔ PLAY A → PLAY B denies A and allows only B (127.789417ms)
+  ✔ PLAY A → SEEK 92 denies stale start and allows current RESUME at 92 (89.438666ms)
+  ✔ preloaded Track X grants no authority to PLAY A after PAUSE (88.733916ms)
+  ✔ a PAUSE issued exactly before the physical commit denies that commit (87.402833ms)
+  ✔ PLAY A → PAUSE → PLAY A allows only the new A revision (125.1145ms)
+  ✔ PLAY A → PLAY B → PLAY A allows only the final selection (137.923709ms)
+  ✔ a lifecycle-style RESUME cannot outlive a newer PAUSE (251.460416ms)
+✔ SLICE-1D/2 — stale work never commits audibility (908.393375ms)
+(node:16124) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/audio-engine-runtime.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ GEO-1 repeated singleton re-entry never changes runtime/audio-element identity or disturbs in-flight playback (165.130042ms)
+✔ GEO-2 the detached <audio> element is created at most once per tab, never duplicated (0.214083ms)
+(node:16125) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/audio-engine-runtime.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ HARDENING-B/1 — PLAY A → SEEK 92 (physical)
+  ✔ HB-1.1 from idle: expect A @ 92 (89.90975ms)
+  ✔ HB-1.2 with Track X already loaded: expect A @ 92, NOT X @ 92 (88.239416ms)
+✔ HARDENING-B/1 — PLAY A → SEEK 92 (physical) (178.793667ms)
+▶ HARDENING-B/2 — PLAY A → PAUSE (physical)
+  ✔ HB-2.1 expect A selected, transport PAUSED (89.747375ms)
+  ✔ HB-2.2 with Track X loaded: must not leave X selected (86.766625ms)
+✔ HARDENING-B/2 — PLAY A → PAUSE (physical) (176.754ms)
+▶ HARDENING-B/3 — PLAY A → PAUSE → RESUME (physical)
+  ✔ HB-3.1 expect A, transport PLAYING (86.113042ms)
+✔ HARDENING-B/3 — PLAY A → PAUSE → RESUME (physical) (86.249042ms)
+▶ HARDENING-B/4 — PLAY A → PLAY B → SEEK 45 (physical)
+  ✔ HB-4.1 expect B @ 45 — not A @ 45, not old @ 45 (88.4725ms)
+✔ HARDENING-B/4 — PLAY A → PLAY B → SEEK 45 (physical) (88.62775ms)
+▶ HARDENING-B/5 — Emergency PAUSE bypass (physical)
+  ✔ HB-5.1 PAUSE during a 5s stalled PLAY completes immediately (113.115833ms)
+  ✔ HB-5.2 PAUSE during an indefinitely stalled PLAY still lands (62.012166ms)
+✔ HARDENING-B/5 — Emergency PAUSE bypass (physical) (175.835667ms)
+▶ HARDENING-B/6 — iOS gesture-time unlock (physical)
+  ✔ HB-6.1 initWebAudio runs SYNCHRONOUSLY inside port.play(), before any await (0.795541ms)
+  ✔ HB-6.2 RESUME also unlocks synchronously (gesture command) (0.299625ms)
+  ✔ HB-6.3 Core path unlock parity with direct legacy dispatch (0.178334ms)
+✔ HARDENING-B/6 — iOS gesture-time unlock (physical) (1.424834ms)
+▶ HARDENING-B/7 — Slice 1B production scope containment
+  ✔ HB-7.1 NEXT does not reach the media layer through Core (75.551ms)
+  ✔ HB-7.2 PREVIOUS does not reach the media layer through Core (75.070958ms)
+  ✔ HB-7.3 SET_QUEUE does not reach the media layer through Core (79.982458ms)
+  ✔ HB-7.4 in-scope commands still reach the media layer (84.562583ms)
+✔ HARDENING-B/7 — Slice 1B production scope containment (315.418875ms)
+▶ HARDENING-B/8 — Legacy direct-dispatch regression
+  ✔ HB-8.1 direct dispatchPlaybackCommand still plays a track (76.591375ms)
+  ✔ HB-8.2 direct SEEK uses payload.time and still applies (76.698834ms)
+  ✔ HB-8.3 legacy NEXT_TRACK is unaffected by Core scope gate (76.937417ms)
+✔ HARDENING-B/8 — Legacy direct-dispatch regression (230.43575ms)
+✔ the pre-hydration empty state is not a session (0.495916ms)
+✔ play time lifts a stale preview stamp for an owner onto the full stream of the right track (0.43525ms)
+✔ play time respects a deliberate release-lifecycle lock (owned preorder before release day) (0.066458ms)
+✔ play time does nothing before the session hydrates (0.051083ms)
+✔ play time never downgrades — revocation is Effect 5's job, not a play intent's (0.086292ms)
+✔ entitlement sync (Effect 5) still downgrades a lapsed track back to its preview (0.073083ms)
+✔ an entitled track that was built without a src gets the full stream (0.085375ms)
+✔ an unchanged track is returned by identity (no new objects, no re-render churn) (0.064791ms)
+✔ a release requested without a track resolves to its first track (0.122625ms)
+(node:16126) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/access-reconciliation.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:01.250Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[stream-client] library stream 403 for slug=album
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[2MRRW Storefront] NEXT_PUBLIC_CONTROL_SYSTEM_API_URL is not set — release catalog will fall back to hardcoded data only.
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'album',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: null,
+  src: '/api/library/stream?slug=album&trackSlug=song-three&redirect=1',
+  at: '1970-01-01T00:00:00.000Z'
+}
+✔ album error recovery retains song three, position, queue and authenticated request (12.229708ms)
+✔ album retry rejects a wrong-track response before applying it (0.747416ms)
+✔ album retry rejects a missing-track response before applying it (0.496333ms)
+✔ album retry rejects a wrong-release response before applying it (0.51825ms)
+✔ album retry rejects a opaque response before applying it (0.4145ms)
+✔ repeated resolution failures stop at three requests, including repeated error events (0.808917ms)
+✔ server entitlement denial remains terminal and never calls play (18.821292ms)
+✔ a late album response cannot replace different-song-same-album (0.819584ms)
+✔ a late album response cannot replace same-song-new-request (0.440917ms)
+✔ a late album response cannot replace pause (0.434459ms)
+✔ a rejected next-track handoff stays on the ended occurrence with an explicit retry state (1.220875ms)
+✔ missing album recording identity cannot silently request track one (0.560917ms)
+✔ an unresponsive resolver is aborted and stops at the same three-request bound (1.915792ms)
+✔ a first play with no prior selection resolves its exact recording (0.524792ms)
+✔ hard source recovery keeps the failed recording and its saved position (0.864666ms)
+✔ hard recovery cannot overlap a pending recording retry (0.419291ms)
+(node:16127) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/album-recovery.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2MRRW Storefront] NEXT_PUBLIC_R2_PUBLIC_URL is not set — using documented public CDN fallback for catalog media.
+✔ a track from a motion-cover release keeps coverArtType video (3.052959ms)
+✔ cover and baseCover stay distinct, so the player can show animated art (0.392375ms)
+✔ the static layer never receives a video URL (0.244584ms)
+✔ pressing play on the release card carries the same identity (0.151375ms)
+✔ a string track title inherits the identity too (0.227792ms)
+✔ a static-cover release is unaffected and never claims to be animated (0.182958ms)
+✔ the release's art wins over a track's own when played from its track list (0.198875ms)
+✔ an album track that is also a single uses the ALBUM's cover, not the single's (0.166ms)
+✔ same track as a bare title string also uses the album's cover (0.168958ms)
+✔ every track in a release resolves the same cover identity (0.372ms)
+(node:16128) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/album-track-cover-identity.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Core bounds false across convergence passes and permits a new intent (3.589541ms)
+✔ Core bounds reject across convergence passes and permits a new intent (0.967208ms)
+✔ Core bounds no-progress across convergence passes and permits a new intent (0.788417ms)
+(node:16129) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/bounded-convergence.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ installed hls.js excludes cached measurements but retains ABR bookkeeping and network sampling (6.904542ms)
+✔ aborting or destroying before the cache microtask prevents late delivery (0.174125ms)
+✔ an upstream exception cannot leave subsequent network measurement disabled (0.313833ms)
+(node:16130) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/cache-aware-abr.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ actual Chop cancellation disconnects its node after fading to dry (1.787875ms)
+✔ actual track identity change clears a running Chop burst (0.4115ms)
+✔ repeated actual Chop bursts release the predecessor and clear the final owner (0.355292ms)
+✔ Chop cancellation cannot later clear an actual Filter handoff (1.637916ms)
+✔ a stale Filter deactivation cannot clear a successor Chop node (0.346208ms)
+(node:16131) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/chop-cleanup.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ queue completion preserves progression and lifecycle guards with trace=0 (308.394125ms)
+✔ queue completion preserves progression and lifecycle guards with trace=1 (313.660667ms)
+(node:16132) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/completion-diagnostics.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16133) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16133) DeprecationWarning: mock.module(): options.namedExports is deprecated. Use options.exports instead.
+✔ actual hook connectivity registration: healthy (3.557583ms)
+✔ actual hook connectivity registration: suspended (0.653417ms)
+✔ actual hook connectivity registration: underrun (0.614958ms)
+✔ actual hook connectivity registration: denied (0.497ms)
+✔ actual hook connectivity registration: paused (0.751792ms)
+✔ actual hook connectivity registration: loading (1.382791ms)
+✔ offline status clears on healthy reconnect without forcing play; listeners clean up (0.616208ms)
+✔ reconnect clears offline status after user pause without resuming (0.900292ms)
+✔ offline status cannot overwrite a terminal access error (0.422584ms)
+(node:16133) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/connectivity-registration.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16134) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16134) DeprecationWarning: mock.module(): options.namedExports is deprecated. Use options.exports instead.
+✔ CS hold rate callbacks preserve live Screw and restore normal presentation (1.64075ms)
+✔ CS source preview saves the base presentation rather than baking in live Screw (2.031208ms)
+(node:16134) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/cs-presentation-paths.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ effect activation, replacement and removal keep primary routing and complementary gains (3.242708ms)
+✔ a superseded handoff only installs the latest effect (0.68625ms)
+✔ reselecting a fading owner cancels removal without rewiring it (0.279958ms)
+✔ unchanged filter updates do not allocate faders or repeat handoffs (0.233792ms)
+✔ a graph replacement cancels a stale effect timer (0.302625ms)
+✔ suspended output settles a pending effect handoff without a lingering timer (0.282417ms)
+✔ actual Chop gates are continuous at slow/middle/fast period 0 (11.372042ms)
+✔ actual Chop gates are continuous at slow/middle/fast period 0.5 (5.5815ms)
+✔ actual Chop gates are continuous at slow/middle/fast period 1 (5.24475ms)
+✔ actual rapid Filter → Chop → Filter restores the requested filter and survives stale cleanup (0.606916ms)
+✔ effect fades remain complementary when cancelAndHoldAtTime is unavailable (0.239542ms)
+✔ seek attenuation reaches zero before reposition and returns to unity across overlapping fades (0.68525ms)
+✔ seek timeout restores unity when the audio clock unexpectedly stops advancing (0.19075ms)
+(node:16135) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/effect-smoothing.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ encrypted song survives a new store instance; token renewal reuses bytes but replacement version cannot (21.685ms)
+✔ readiness is recomputed after eviction; missing one segment never advertises a complete song (1.973708ms)
+✔ a persistent read already in flight cannot resurrect a decoder-rejected fragment (0.513583ms)
+✔ bounded storage protects active bytes, rejects excess and never destroys playback on quota failure (1.571584ms)
+✔ legacy addresses remain memory-only and never qualify a persistent replay (0.224625ms)
+✔ playlist validation excludes live, plaintext, unsupported init/ranges and resolves relative encrypted URLs (0.890084ms)
+✔ scheduler retains the selected song and next opening without requesting a higher tier (2.144625ms)
+✔ buffer exhaustion, pause, and foreground decoder requests suspend background work (0.435167ms)
+✔ decoder demand aborts an in-flight warm request and a stopped generation cannot write late bytes (0.373041ms)
+✔ repeated warm failures are bounded and never fall through to higher-quality traffic (0.311083ms)
+✔ stalled response bodies abort at the download deadline and release the scheduler (0.742792ms)
+✔ concurrent cache owners enforce the shared budget under the browser write lock (0.739ms)
+(node:16138) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/full-song-download.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[HLSEngine] ABR downgraded to low bitrate { level: 2, bitrateKbps: 160, levels: 4 }
+(node:16139) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16139) DeprecationWarning: mock.module(): options.defaultExport is deprecated. Use options.exports.default instead.
+✔ 2g selects one rendition before any segment request (3.149417ms)
+✔ 3g selects one rendition before any segment request (0.327417ms)
+✔ 4g selects one rendition before any segment request (0.383375ms)
+✔ quality preferences apply to the next load and cannot reopen ABR on the playing song (0.736792ms)
+✔ installed hls.js recovery cannot clear or escape the 3g selected tier (4.019ms)
+✔ installed hls.js recovery cannot clear or escape the 4g selected tier (0.669167ms)
+✔ automatic quality is held at the selected startup rendition after the buffer gate (0.697417ms)
+✔ a late buffered event cannot replace the rendition selected before startup (0.239416ms)
+✔ a token refresh reloads the same rendition during the active play (0.22225ms)
+✔ an old async load cannot attach over a successor after detach (0.799125ms)
+✔ native HLS counts as loaded and unsupported browsers fall back (14.966875ms)
+✔ native manifest authorization failure never falls through to an uncontrolled adaptive master (0.372667ms)
+✔ a decoder-rejected cached fragment cannot survive recovery or a late prefetch (2.481416ms)
+(node:16139) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/hls-adaptation.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ detaching during native manifest retrieval aborts and cannot attach a stale source (5.516875ms)
+✔ key renewal remains bounded after manifest-only success (0.858209ms)
+✔ decrypt renewal remains bounded after manifest-only success (0.661041ms)
+✔ only active buffered media restores the renewal budget (0.29225ms)
+✔ a renewal cancelled by a track change cannot invoke fallback on its successor (1.295875ms)
+✔ a complete highest rendition seeds replay even on a weak link; eviction returns to the network hint (1.701792ms)
+✔ standby HLS initialization cannot steal the download lease; a committed deck swap transfers ownership (0.861833ms)
+[stream-client] library stream 403 for slug=album
+✔ an established quality lock cannot silently swap to a different progressive encode (2.195334ms)
+✔ post-startup HLS fallback preserves recording and saved position, coalesces errors and confirms advancement (10.69625ms)
+✔ a deliberate pause during fallback never resumes audio (0.747292ms)
+✔ an old HLS callback cannot replace a newer track or play request (0.310334ms)
+✔ a new selection during source readiness blocks stale seek and resume (0.472959ms)
+✔ failed fallback becomes an explicit retryable error without skipping a song (0.470875ms)
+✔ fresh authorization denial during fallback is terminal and never resumes cached audio (23.640958ms)
+(node:16140) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/hls-fallback.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a memory hit preempts unrelated speculative traffic and owns delivery through the decoder callback (1.566083ms)
+✔ a network decoder load retains encrypted bytes before transfer; a later loader reads persistent storage (15.289ms)
+✔ aborting during persistent lookup prevents late cache delivery and network fallback (0.625292ms)
+(node:16141) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/hls-persistent-loader.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ decoder transfer cannot detach retained segment bytes (1.00375ms)
+✔ cache owns a snapshot independent of the prefetch producer (0.139ms)
+✔ separate readers cannot mutate each other or the retained cache (0.124334ms)
+✔ empty, detached, and over-budget segments remain cache misses (0.138584ms)
+✔ cache retains its size bound and clearing removes owned bytes (4.900292ms)
+✔ real prefetch loader delivers intact bytes on repeated decoder consumption and falls back on empty input (1.258708ms)
+(node:16142) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/hls-segment-ownership.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[playback-diagnostic] {
+  code: 'AUDIO_RESUME_FAILED',
+  command: 'RECOVER',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: 'interaction required',
+  errorCode: null,
+  errorStatus: null,
+  source: 'output_change',
+  lightweight: true,
+  attempt: 0,
+  at: '1970-01-01T00:00:00.000Z'
+}
+[2MRRW Storefront] NEXT_PUBLIC_CONTROL_SYSTEM_API_URL is not set — release catalog will fall back to hardcoded data only.
+PLAYBACK INTERRUPTION CLASSIFICATION: {
+  likelyCause: 'A',
+  confidence: 'low',
+  evidence: [],
+  scores: { A: 0, B: 0, C: 0, D: 0 }
+}
+✔ interrupted isPlaying=false resumes existing media and confirms advancement before success (2.627291ms)
+✔ recovery never reports PLAYING when play reject (6.823583ms)
+✔ recovery never reports PLAYING when play resolve-paused (0.51675ms)
+✔ recovery never reports PLAYING when play resolve-no-progress (0.979292ms)
+✔ a deliberate pause is never resumed by recovery (0.308291ms)
+✔ overlapping recovery requests share one lightweight media operation (0.878167ms)
+✔ pending recovery cannot overwrite a newer pause (0.621042ms)
+✔ pending recovery cannot overwrite a newer track (0.421916ms)
+✔ pending recovery cannot overwrite a newer same-track-new-generation (0.321583ms)
+✔ stale recovery result cannot overwrite newer orchestration (0.140209ms)
+✔ an unsettled context promise has a deadline and cannot strand recovery (0.415666ms)
+✔ an unsettled play promise has a deadline and cannot strand recovery (0.364166ms)
+✔ a deliberate pause cancels a late play promise even after its command revision changes (0.24075ms)
+✔ native play during recovery does not publish PLAYING before progress is confirmed (1.530125ms)
+✔ pause/canplay interruption callbacks coalesce with route recovery (0.94925ms)
+(node:16143) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/interruption-recovery.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2MRRW Storefront] NEXT_PUBLIC_CONTROL_SYSTEM_API_URL is not set — release catalog will fall back to hardcoded data only.
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-11-02T02:47:00.596Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-1',
+  at: '2026-11-02T02:47:00.597Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-2',
+  at: '2026-11-02T02:47:00.597Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-3',
+  at: '2026-11-02T02:47:00.597Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-4',
+  at: '2026-11-02T02:47:00.597Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-11-02T02:47:00.598Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-1',
+  at: '2026-11-02T02:47:00.598Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-2',
+  at: '2026-11-02T02:47:00.598Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-3',
+  at: '2026-11-02T02:47:00.599Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-4',
+  at: '2026-11-02T02:47:00.600Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-11-02T02:47:00.600Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-1',
+  at: '2026-11-02T02:47:00.600Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-2',
+  at: '2026-11-02T02:47:00.600Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-3',
+  at: '2026-11-02T02:47:00.600Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:4',
+  trackSlug: 'track-4',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-4',
+  at: '2026-11-02T02:47:00.600Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'ending',
+  isPlaying: true,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-11-02T02:47:00.601Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'ending',
+  isPlaying: true,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-1',
+  at: '2026-11-02T02:47:00.601Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'ending',
+  isPlaying: true,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-2',
+  at: '2026-11-02T02:47:00.601Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'ending',
+  isPlaying: true,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-3',
+  at: '2026-11-02T02:47:00.601Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'ending',
+  isPlaying: true,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-4',
+  at: '2026-11-02T02:47:00.601Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-11-02T02:47:00.601Z'
+}
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'album:0',
+  trackSlug: 'track-0',
+  playbackState: 'idle',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'track-0',
+  at: '2026-11-02T02:47:00.601Z'
+}
+✔ shuffle visits every track once from index 0, then stops (0.80075ms)
+✔ shuffle visits every track once from index 2, then stops (0.1235ms)
+✔ shuffle visits every track once from index 4, then stops (0.067125ms)
+✔ shuffle repeat-all preloads the same track it advances to across repeated cycles (0.096708ms)
+✔ locked-screen completion plays an entire ordered album queue (1.815375ms)
+✔ locked-screen completion plays an entire shuffled album queue (0.449542ms)
+✔ late ended during a source swap never rewinds or stops the successor (0.137208ms)
+✔ preview completion never advances to the full queue (0.167166ms)
+✔ network hints seed startup without selecting manual bitrate, on weak and strong links (0.632834ms)
+✔ quality preference maps bitrate ordering and clearing the preference preserves the active selection (0.400708ms)
+✔ preloading uses real contiguous runway even without Network Information API (0.26225ms)
+✔ locking during buffer startup releases the gate without a timer tick (0.264458ms)
+✔ repeated canplay events recheck runway and abort removes listeners (0.121209ms)
+✔ duplicate ended events cannot advance twice while the next source is loading (0.158042ms)
+✔ completion respects userPausedRef instead of resuming the queue (0.092834ms)
+✔ completion respects userIntentPausedRef instead of resuming the queue (0.526583ms)
+✔ sleep after current track stops queue advancement (0.354917ms)
+✔ natural completion does not register interruption recovery (visible, ordered) (1.094375ms)
+✔ natural completion does not register interruption recovery (visible, shuffle) (0.283625ms)
+✔ natural completion does not register interruption recovery (locked, ordered) (0.201833ms)
+✔ natural completion does not register interruption recovery (locked, shuffle) (0.189333ms)
+✔ metadata refresh during completion does not cancel the next track (0.102625ms)
+✔ automatic playback preserves repeated playlist occurrences through Core selection (0.309375ms)
+✔ a replacement play request wins even when it selects the same track (0.089666ms)
+✔ a queue that starts with preview access can continue after access upgrades (0.1445ms)
+✔ home_single_card advances its full queue then stops on the final selection with repeat off (11.395167ms)
+✔ home_feature_card advances its full queue then stops on the final selection with repeat off (2.185375ms)
+✔ feature_card advances its full queue then stops on the final selection with repeat off (0.444333ms)
+✔ explicit repeat-all wraps the queue without completing transport (0.388333ms)
+✔ stopAfterEachTrack ends through the authoritative completion contract (0.137083ms)
+✔ sleepAfterCurrentTrack ends through the authoritative completion contract (0.1005ms)
+(node:16144) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/listening-continuity.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: true,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: 'blob:active-hls',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: true,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: 'blob:active-hls',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[stream-client] library stream 403 for slug=album
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: true,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: 'blob:active-hls',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: true,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: 'blob:active-hls',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: true,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: 'blob:active-hls',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: true,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: 'blob:active-hls',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: true,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: 'blob:active-hls',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: true,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: 'blob:active-hls',
+  at: '1970-01-01T00:00:00.000Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_ELEMENT_ERROR',
+  command: 'PLAY_TRACK',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: true,
+  errorMessage: null,
+  errorCode: null,
+  errorStatus: null,
+  slug: 'album',
+  mediaErrorCode: 2,
+  src: 'blob:active-hls',
+  at: '1970-01-01T00:00:00.000Z'
+}
+✔ online preserves healthy blob:active-hls playback and queue (3.704375ms)
+✔ online preserves healthy /recording.mp3 playback and queue (0.380875ms)
+✔ online leaves an attached HLS underrun with the existing stall owner (1.4695ms)
+✔ online resumes an interrupted element without replacing HLS or the queue (1.427583ms)
+✔ online coalesces actual source-error recovery and preserves the recording and queue (13.024417ms)
+✔ online error recovery respects fresh server denial and does not retry denied media (24.565042ms)
+✔ offline errors return through the bounded online recovery owner without a forced play listener (1.079458ms)
+✔ online restores a suspended context without replacing an attached HLS source (0.587334ms)
+✔ online does not recover userPaused (0.931417ms)
+✔ online does not recover userIntentPaused (0.30125ms)
+✔ online does not recover ended (0.260791ms)
+✔ online does not recover accessDenied (0.165ms)
+✔ online does not recover loading (1.094ms)
+✔ online does not recover noIntent (0.202959ms)
+✔ online recovery cannot apply a late response after pause (0.833292ms)
+✔ online recovery cannot apply a late response after track (0.445666ms)
+✔ online recovery cannot apply a late response after request (0.790166ms)
+✔ offline/online events do not replenish an exhausted media-error retry budget (0.385916ms)
+(node:16145) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/network-restore.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebAudio] resume failed: Error: route negotiating
+    at h.context.resume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:33:83)
+    at resumeWebAudioContextIfSuspended (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/audio/web-audio-context-utils.js:54:15)
+    at run (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/PlaybackHelperService.js:1296:38)
+    at Object.attemptLightweightPlaybackResume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/PlaybackHelperService.js:1334:25)
+    at resume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:9:30)
+    at run (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/output-route-recovery.js:30:24)
+    at MockTimers.tick (node:internal/test_runner/mock/mock_timers:704:7)
+    at TestContext.<anonymous> (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:34:66)
+    at Test.runInAsyncScope (node:async_hooks:227:14)
+    at Test.run (node:internal/test_runner/test:1306:25)
+[WebAudio] resume failed: Error: route negotiating
+    at h.context.resume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:33:83)
+    at resumeWebAudioContextIfSuspended (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/audio/web-audio-context-utils.js:54:15)
+    at run (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/PlaybackHelperService.js:1296:38)
+    at Object.attemptLightweightPlaybackResume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/PlaybackHelperService.js:1334:25)
+    at resume (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:9:30)
+    at run (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/output-route-recovery.js:30:24)
+    at MockTimers.tick (node:internal/test_runner/mock/mock_timers:704:7)
+    at TestContext.<anonymous> (file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js:35:17)
+    at async Test.run (node:internal/test_runner/test:1313:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:897:7)
+[playback-diagnostic] {
+  code: 'AUDIO_RESUME_FAILED',
+  command: 'RECOVER',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: 'gesture required',
+  errorCode: null,
+  errorStatus: null,
+  source: 'output_change',
+  lightweight: true,
+  attempt: 0,
+  at: '1970-01-01T00:00:00.150Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_RESUME_FAILED',
+  command: 'RECOVER',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: 'gesture required',
+  errorCode: null,
+  errorStatus: null,
+  source: 'output_change',
+  lightweight: true,
+  attempt: 0,
+  at: '1970-01-01T00:00:00.400Z'
+}
+[playback-diagnostic] {
+  code: 'AUDIO_RESUME_FAILED',
+  command: 'RECOVER',
+  requestId: null,
+  trackId: 'album:song-three',
+  trackSlug: 'album',
+  playbackState: 'paused',
+  isPlaying: false,
+  errorMessage: 'gesture required',
+  errorCode: null,
+  errorStatus: null,
+  source: 'output_change',
+  lightweight: true,
+  attempt: 0,
+  at: '1970-01-01T00:00:01.150Z'
+}
+✔ Bluetooth device/context hint storms coalesce without element, source, queue or position reset (2.83225ms)
+✔ already playing route changes verify progress without a redundant play or seek (0.617209ms)
+✔ delayed connect/disconnect readiness succeeds within three attempts (1.337209ms)
+✔ route failure reaches a bounded terminal state; repeated hints during cooldown do not loop (6.975542ms)
+✔ queued device recovery respects pause (0.411583ms)
+✔ queued device recovery respects new-track (0.250458ms)
+✔ queued device recovery respects loading (0.215125ms)
+✔ queued device recovery respects ended (0.387625ms)
+✔ queued device recovery respects dispose (0.77125ms)
+✔ a supported sinkchange reaches the same reconciliation callback without context recreation (0.227417ms)
+(node:16146) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/output-route-recovery.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ decoder reuses an exact in-flight segment, including while buffering, without a duplicate request (17.958083ms)
+✔ a slow borrowed transfer is abandoned once and falls back to the normal decoder loader (1.705458ms)
+✔ abort during a borrowed transfer never delivers stale bytes or starts fallback (0.593625ms)
+✔ a primed known miss bypasses disk, while an unknown urgent lookup falls back at 40 ms (1.313708ms)
+✔ readiness checks run in groups of eight and still reject a missing or replaced segment (3.410834ms)
+(node:16149) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/playback-polish.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ registered Screw survives presentation and restores base 1 (1.164209ms)
+✔ registered Screw survives presentation and restores base 0.75 (0.326916ms)
+✔ base rate changes under Screw become effective when the effect ends (0.35825ms)
+✔ locked effect preserves a new base presentation for the next recording (0.1725ms)
+✔ unchanged presentation does not rewrite native rate or pitch (0.114833ms)
+✔ presentation and live effect work without a Web Audio graph (0.087583ms)
+(node:16150) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/presentation-ownership.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16151) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/queue-completion.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ negative control: physical pause alone allows Core to replay an ended song (167.859959ms)
+✔ completed queue remains stopped across later Core reconciliation (241.111875ms)
+✔ stale completion cannot stop a newly selected track (89.160375ms)
+[2MRRW Storefront] NEXT_PUBLIC_R2_PUBLIC_URL is not set — using documented public CDN fallback for catalog media.
+[2MRRW Storefront] NEXT_PUBLIC_CONTROL_SYSTEM_API_URL is not set — release catalog will fall back to hardcoded data only.
+[playback-diagnostic] {
+  code: 'PLAYBACK_EVENT_POST_FAILED',
+  command: 'PLAYBACK_EVENT_POST',
+  requestId: null,
+  trackId: 'continuity-release:first',
+  trackSlug: 'continuity-release',
+  playbackState: 'ending',
+  isPlaying: false,
+  errorMessage: 'Failed to parse URL from /api/media/playback',
+  errorCode: null,
+  errorStatus: null,
+  eventType: 'complete',
+  slug: 'continuity-release',
+  at: '1970-01-01T00:00:00.000Z'
+}
+✔ shared release artwork cache never replaces track data (4.131834ms)
+✔ normalization cache notices still-only artwork changes (0.436917ms)
+✔ album: queue and repeated normalization retain release art despite single aliases (1.189208ms)
+✔ mixtape: queue and repeated normalization retain release art despite single aliases (0.371542ms)
+✔ ep: queue and repeated normalization retain release art despite single aliases (0.368125ms)
+✔ static release suppresses a track's single animation (0.307041ms)
+✔ standalone single keeps its own artwork (0.179875ms)
+✔ natural ended handoff carries the same release motion and still to the next recording (10.947041ms)
+✔ legacy title tracks resolved through single lookup inherit release art and retain titles (0.828958ms)
+(node:16152) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/release-artwork-continuity.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ owned stalled position repositions once and restores gain (3.556125ms)
+✔ delayed recovery does not reposition after source (0.733125ms)
+✔ delayed recovery does not reposition after seek (3.279791ms)
+✔ delayed recovery does not reposition after pause (0.4335ms)
+✔ delayed recovery does not reposition after graph (0.247667ms)
+✔ delayed recovery does not reposition after suspend (0.188667ms)
+✔ resetForNewTrack cancels pending reposition through the shared owner (0.205917ms)
+✔ notifyStreamUpgrade cancels pending reposition through the shared owner (0.163667ms)
+✔ onPlaybackResumed cancels pending reposition through the shared owner (0.181625ms)
+✔ superseding a faded operation retains the original restoration target (0.303459ms)
+(node:16154) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/reposition-lifecycle.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16155) ExperimentalWarning: Module mocking is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16155) DeprecationWarning: mock.module(): options.namedExports is deprecated. Use options.exports instead.
+✔ early media preparation: same-hls (1.674625ms)
+✔ early media preparation: same-native (0.11975ms)
+✔ early media preparation: same-progressive (0.091958ms)
+✔ early media preparation: next-album-recording (0.947042ms)
+✔ early media preparation: ended (0.129042ms)
+✔ early media preparation: error (0.116042ms)
+✔ early media preparation: empty (0.147333ms)
+✔ early media preparation: access-upgrade (0.121167ms)
+✔ early media preparation: access-downgrade (0.191791ms)
+✔ early media preparation: replacement-source (0.150875ms)
+✔ early media preparation: loading (0.097833ms)
+(node:16155) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/same-recording-load.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ home_single_card: start and explicit restart retain the whole section queue (0.987542ms)
+✔ home_single_card: tapping an active song toggles only its own section queue (0.145875ms)
+✔ home_feature_card: start and explicit restart retain the whole section queue (0.075584ms)
+✔ home_feature_card: tapping an active song toggles only its own section queue (0.050459ms)
+✔ feature_card: start and explicit restart retain the whole section queue (0.061417ms)
+✔ feature_card: tapping an active song toggles only its own section queue (0.047333ms)
+✔ filtering unavailable songs preserves the clicked song index (0.086542ms)
+(node:16156) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/section-queue.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2MRRW Storefront] NEXT_PUBLIC_CONTROL_SYSTEM_API_URL is not set — release catalog will fall back to hardcoded data only.
+✔ shared full-song seek fades, tolerates normal advancement and waits for seek readiness (2.226459ms)
+✔ rapid scrubbing commits only the latest target and restores the original fader (0.322709ms)
+✔ pending user seek cannot apply after pause (0.222125ms)
+✔ pending user seek cannot apply after request (0.207292ms)
+✔ pending user seek cannot apply after recording (0.212208ms)
+✔ pending user seek cannot apply after access (0.187459ms)
+✔ pending user seek cannot apply after source (0.170917ms)
+✔ pending user seek cannot apply after external-seek (0.173166ms)
+✔ pending user seek cannot apply after suspend (0.153875ms)
+✔ pending user seek cannot apply after graph (0.169416ms)
+✔ paused seeks are immediate and never play or allocate a graph (0.11725ms)
+✔ loading seeks remain queued and preview seeks remain denied (0.1105ms)
+✔ missing seeked event has a bounded unmute and stale events cannot affect the next seek (0.162875ms)
+✔ rapid relative skip commands accumulate against the latest owned seek target (0.235542ms)
+(node:16163) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/2mrrw/Desktop/2mrrw-Official-main%20-%20Copy%20(2)/ios-regression-investigation-20261101/apps/web/src/lib/playback/__tests__/seek-envelope.test.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/2mrrw/Desktop/2mrrw-Official-main - Copy (2)/ios-regression-investigation-20261101/apps/web/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 455
+ℹ suites 31
+ℹ pass 455
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 36009.519042

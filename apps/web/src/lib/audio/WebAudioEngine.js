@@ -1,4 +1,3 @@
-import { shouldSuppressActivationEvents } from "./media-activation";
 /**
  * Standalone Web Audio graph manager — lives entirely outside React.
  * Owns the AudioContext, MediaElementSourceNode, and all downstream nodes.
@@ -681,10 +680,6 @@ export class WebAudioEngine extends AudioEngineBase {
       ["ratechange",     () => this._emit(E.RATE_CHANGE,    { playbackRate: el.playbackRate })],
     ];
 
-    // Activation is preparation, never a track play/pause/end/error event.
-    this._elListeners = this._elListeners.map(([evt, fn]) => [evt, (...args) => {
-      if (!shouldSuppressActivationEvents(el)) fn(...args);
-    }]);
     for (const [evt, fn] of this._elListeners) {
       el.addEventListener(evt, fn);
     }

@@ -317,24 +317,11 @@ test('standby HLS initialization cannot steal the download lease; a committed de
   assert.equal(downloads.session.audio, second, 'destroying the old deck cannot stop its successor');
 });
 
-test('native HLS wins when the browser supports both native and MSE; prefetch follows the same policy', async t => {
-  environment(t,'4g');
-  FakeHls.supported=true;
-  const { getAudioEngineRuntime }=await import('../audio-engine-runtime.js');
-  const { isHlsJsActive }=await import('../../audio/HLSEngine.js');
-  t.mock.method(globalThis,'fetch',async()=>new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n/native-selected'));
-  const audio={canPlayType:()=> 'probably'};
-  getAudioEngineRuntime().refs.audioRef.current=audio;
-  const engine=new HLSEngine();t.after(()=>engine.destroy());
-  assert.equal(await engine.loadTrack('/native-dual.m3u8',audio),true);
-  assert.equal(engine.transport,'native-hls');assert.equal(engine._hls,null);
-  assert.equal(audio.src,'https://www.2mrrw.com/native-selected');assert.equal(isHlsJsActive(),false);
-});
-
-test('native HLS without Network Information API uses the shared highest-rendition fallback',async t=>{
-  environment(t,undefined);delete globalThis.navigator.connection;
-  t.mock.method(globalThis,'fetch',async()=>new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n/low\n#EXT-X-STREAM-INF:BANDWIDTH=320000\n/high'));
+test('native format support alone does not replace the established MSE/Web Audio transport',async t=>{
+  environment(t,'4g');FakeHls.supported=true;
+  t.mock.method(globalThis,'fetch',async()=>new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=320000\n/variant'));
   const engine=new HLSEngine();t.after(()=>engine.destroy());const audio={canPlayType:()=> 'probably'};
-  assert.equal(await engine.loadTrack('/unknown-network',audio),true);
-  assert.equal(audio.src,'https://www.2mrrw.com/high');assert.equal(engine._trackQualityCap,0);
+  assert.equal(await engine.loadTrack('/master',audio),true);
+  assert.ok(engine._hls instanceof FakeHls,'format support does not certify native compatibility with the Web Audio graph');
+  assert.equal(engine._native,false);
 });
