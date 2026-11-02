@@ -11,3 +11,9 @@ Verification: source/dependency review and git diff --check passed. Eight focuse
 The verification container used existing image 86f6f70144d7, no network or credentials, non-root UID1001/GID999, read-only root/source, bounded writable scratch, dropped capabilities. This is actual container encoding evidence, not acceptance of a newly built immutable successor image or production playback/listening proof.
 
 Expected benefit: valid silent outputs can qualify without bypassing quality checks; corrupt ciphertext and decoder failures still block publication and remove private bytes. No production deployment, migration, source rebuild or physical listening verification was performed. Retained logs: deployment-evidence/playback-deep-audit-20261027/verification-20261101/ in the parent workspace.
+
+## Built-image verification
+
+The independent successor image subsequently built successfully on the existing Mac Lima Linux ARM64 VM. Image content ID: `sha256:ab0b2a9511f8174655fa435f4023387cb42724c12705bbf457cea86b2914e303`; source label `9e8cf71f5c65c0d4e3ea6e0e9a7c6548de6fd4d9`; release fingerprint `6bd6beb707b8ddcaa23e21b38c364d55518e2e5d2e9e50fcc3039b4d1833e0c7`. Labels were read back from Docker. This is a local image content ID, not a published registry digest.
+
+With no source overrides, actual image codec/encryption acceptance passed 9/9 and worker regressions passed 173/173. Missing credentials correctly refused queue-consumer startup with exit 1. All 44 foundation tests passed after allowing loopback-only test sockets. Logs and machine-readable result.json are retained in the parent workspace evidence directory linked above. The cloud preparer, codec input lock and status now point at this committed successor, and preparation generated 64 credential-free inputs. No image push, production worker deployment, DB migration or catalog rebuild occurred. Physical playback and delivered production media remain unverified.
