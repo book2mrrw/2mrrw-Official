@@ -9,7 +9,7 @@ import fs from "fs";
 import os from "os";
 import crypto from "crypto";
 import { pipeline } from "stream/promises";
-import { runAudioFfmpeg, measureTruePeak, initialHeadroomGain, nextHeadroomGain, TRUE_PEAK_CEILING_DBTP, MAX_HEADROOM_PASSES } from "./audio-headroom.js";
+import { runAudioFfmpeg, measureTruePeak, measureEncryptedTsPeak, initialHeadroomGain, nextHeadroomGain, TRUE_PEAK_CEILING_DBTP, MAX_HEADROOM_PASSES } from "./audio-headroom.js";
 import { measureAudioRendition } from "./audio-rendition-metadata.js";
 import { logger } from "./logger.js";
 import { downloadStream, upload } from "./r2.js";
@@ -60,7 +60,7 @@ async function writeKeyInfoFile(tmpDir, key, iv) {
 /**
  * Encode and measure one encrypted MPEG-TS rendition without publishing it.
  */
-async function transcodeOneBitrate({ sourcePath, gainDb, bitrate, slug, trackSlug, tmpDir, keyInfoFile }) {
+async function transcodeOneBitrate({ sourcePath, gainDb, bitrate, slug, trackSlug, tmpDir, keyInfoFile, key, iv }) {
   const bitrateDir = path.join(tmpDir, bitrate);
   fs.rmSync(bitrateDir, { recursive: true, force: true });
   fs.mkdirSync(bitrateDir, { recursive: true });
@@ -107,10 +107,10 @@ async function transcodeOneBitrate({ sourcePath, gainDb, bitrate, slug, trackSlu
   const segmentPaths = segments.map(({ name }) => path.join(bitrateDir, name));
   const durationSeconds = segments.reduce((total, segment) => total + segment.duration, 0);
   logger.info("ffmpeg done", { bitrate, segments: segmentPaths.length, durationSeconds });
-  // The published playlist substitutes a signed key URI. Locally use the same key bytes.
-  const verificationPath = path.join(bitrateDir, "verify.m3u8");
-  fs.writeFileSync(verificationPath, playlistText.replace('URI="placeholder"', 'URI="../enc.key"'));
-  const decodedPeak = await measureTruePeak(verificationPath, { encrypted: true });
+  // Verify the actual ciphertext without guessing the known segment format.
+  const decodedPeak = await measureEncryptedTsPeak(segmentPaths, {
+    key, iv, verificationPath: path.join(bitrateDir, "verify.ts"),
+  });
   return { segmentPaths, durationSeconds, metadata, decodedPeak };
 }
 
@@ -139,7 +139,7 @@ export async function transcode({ job }) {
     for (let pass = 1; pass <= MAX_HEADROOM_PASSES; pass++) {
       const ladder = [];
       for (const bitrate of bitrates) {
-        const output = await transcodeOneBitrate({ sourcePath, gainDb, bitrate, slug, trackSlug, tmpDir, keyInfoFile });
+        const output = await transcodeOneBitrate({ sourcePath, gainDb, bitrate, slug, trackSlug, tmpDir, keyInfoFile, key, iv });
         ladder.push({ bitrate, ...output });
       }
       const nextGain = nextHeadroomGain(gainDb, ladder.map(r => r.decodedPeak));

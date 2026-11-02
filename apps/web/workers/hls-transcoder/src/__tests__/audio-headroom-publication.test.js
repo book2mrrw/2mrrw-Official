@@ -11,8 +11,8 @@ mock.module('../audio-headroom.js',{namedExports:{...policy,
   encodes.push(args[args.indexOf('-af')+1]);
   const file=args.at(-1);fs.writeFileSync(file,'#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nseg_00000.ts\n#EXT-X-ENDLIST\n');fs.writeFileSync(path.join(path.dirname(file),'seg_00000.ts'),Buffer.alloc(100));
  },
- measureTruePeak:async(_,opts)=>{
-  if(!opts?.encrypted)return 0.6;
+ measureTruePeak:async()=>0.6,
+ measureEncryptedTsPeak:async()=>{
   assert.equal(uploads,0,'all decoded measurements precede publication');
   measurements++;return failAlways||measurements<=failedMeasurements?0.5:-2;
  }

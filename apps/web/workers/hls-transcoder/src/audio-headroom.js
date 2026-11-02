@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import { decryptSegmentBuffer } from './engine/packaging.js';
 
 export const TRUE_PEAK_CEILING_DBTP = -1;
 // AAC peaks need not decrease monotonically with input gain. Production
@@ -32,11 +34,38 @@ export function parseTruePeak(stderr) {
   return peak;
 }
 
-export async function measureTruePeak(input, { encrypted = false, ...options } = {}) {
+export async function measureTruePeak(input, { encrypted = false, transportStream = false, ...options } = {}) {
   const stderr = await runAudioFfmpeg(['-hide_banner', '-nostats', '-xerror',
     ...(encrypted ? ['-allowed_extensions', 'ALL', '-protocol_whitelist', 'file,crypto,data'] : []),
+    ...(transportStream ? ['-f', 'mpegts'] : []),
     '-i', input, '-map', '0:a:0', '-af', 'ebur128=peak=true', '-f', 'null', '-'], options);
   return parseTruePeak(stderr);
+}
+
+/**
+ * Measure the actual encrypted output as the known MPEG-TS transport.
+ * Tiny/silent TS is valid but can be too small for automatic format probing.
+ * Decrypt each segment independently (including its own PKCS7 padding), keep
+ * published ciphertext untouched, and remove private verification bytes on
+ * success, decryption failure or decoder failure.
+ */
+export async function measureEncryptedTsPeak(segmentPaths, {
+  key, iv, verificationPath, measure = measureTruePeak,
+}) {
+  if (!segmentPaths.length) throw new Error('No encrypted audio segments to verify');
+  const fd = fs.openSync(verificationPath, 'wx', 0o600);
+  try {
+    try {
+      for (const segment of segmentPaths) {
+        fs.writeFileSync(fd, decryptSegmentBuffer(fs.readFileSync(segment), key, iv));
+      }
+    } finally {
+      fs.closeSync(fd);
+    }
+    return await measure(verificationPath, { transportStream: true });
+  } finally {
+    fs.rmSync(verificationPath, { force: true });
+  }
 }
 
 export function initialHeadroomGain(sourcePeak) {
