@@ -12,6 +12,7 @@ import { usePlaybackIdentity } from "@/context/AudioContext";
 import { useReleaseCoverLifecycle } from "@/hooks/useReleasePresentation";
 import { COVER_SIZES, coverSrcSet } from "@/lib/media/cover-srcset";
 import { useCoverReady } from "@/hooks/useCoverReady";
+import { usePanelLoadAhead } from "@/hooks/usePanelLoadAhead";
 import {
   getReleasePresentation,
   recordReleasePresentationEvent,
@@ -297,13 +298,27 @@ function VideoArt({
   const isThisReleasePlaying = Boolean(releaseId && currentTrackId && currentTrackSlug === releaseId);
   const shouldDefer = audioPriority.startupActive && !isThisReleasePlaying;
   const shouldDeferRef = useRef(shouldDefer);
+  // In a prepared tab panel the cover loads before it is seen, so it is
+  // already animating the moment its tab or row comes into view. Loads once
+  // per source; a cover still waiting out a track start loads when the src
+  // effect re-runs.
+  const loadAheadSrcRef = useRef(null);
+  const loadAheadNow = () => {
+    const el = videoRef.current;
+    if (!el || inViewRef.current || !el.src || loadAheadSrcRef.current === el.src) return;
+    if (shouldDeferRef.current && el.readyState < 2) return;
+    loadAheadSrcRef.current = el.src;
+    el.preload = "auto";
+    if (el.readyState === 0) el.load();
+  };
+  const loadAheadRef = usePanelLoadAhead(loadAheadNow);
 
   useLayoutEffect(() => {
     shouldDeferRef.current = shouldDefer;
   }, [shouldDefer]);
 
-  // Imperative src update. For offscreen elements, defer el.load() to the
-  // IntersectionObserver callback so the browser does not pre-fetch invisible media.
+  // Imperative src update. Offscreen elements load only when their panel is
+  // prepared; otherwise the IntersectionObserver loads them on approach.
   useLayoutEffect(() => {
     const el = videoRef.current;
     if (!el) return;
@@ -325,9 +340,10 @@ function VideoArt({
         () => { if (el.paused && !el.ended) el.play().catch(() => {}); },
         () => { if (!el.paused) el.pause(); }
       );
+    } else if (loadAheadRef.current) {
+      loadAheadNow();
     }
-    // Offscreen: IO will call load() when the element enters rootMargin.
-  }, [src, shouldDefer]);
+  }, [src, shouldDefer, loadAheadRef]);
 
   // Viewport-aware decoder management via VideoResourceManager (VRM).
   // Carousel videos use data-single-carousel and are managed by
@@ -354,8 +370,9 @@ function VideoArt({
           inViewRef.current = true;
           if (shouldDeferRef.current && el.readyState < 2) return;
           el.preload = "auto";
-          // Load if src was set while offscreen (readyState 0 = HAVE_NOTHING).
-          if (el.readyState === 0 && el.src) el.load();
+          // Load if src was set while offscreen (readyState 0 = HAVE_NOTHING)
+          // and is not already loading ahead.
+          if (el.readyState === 0 && el.src && loadAheadSrcRef.current !== el.src) el.load();
           VRM.requestPlay(
             el,
             () => { if (el.paused && !el.ended) el.play().catch(() => {}); },
@@ -364,7 +381,7 @@ function VideoArt({
         } else {
           inViewRef.current = false;
           VRM.requestPause(el);
-          el.preload = "none";
+          if (!loadAheadRef.current) el.preload = "none";
           if (!el.paused) el.pause();
         }
       },

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { usePanelLoadAhead } from "@/hooks/usePanelLoadAhead";
 import { getMerchOptions, merchCartItem } from "@/lib/commerce/merch-options";
 
 const selectStyle = {
@@ -12,6 +13,11 @@ const selectStyle = {
 // keys by media URLs and can retain old variants/prices after a catalog sync.
 export default function MerchProductCard({ item, addToCart, onCheckoutNow }) {
   const [selection, setSelection] = useState({});
+  // A prepared tab loads its product images before the shop is opened.
+  const imageRef = useRef(null);
+  usePanelLoadAhead(() => {
+    if (imageRef.current) imageRef.current.loading = "eager";
+  });
   const { variants, sizes, colors, size, color, variant, price } = getMerchOptions(item, selection);
   const cartItem = merchCartItem(item, variant);
   const unavailable = !variants.length;
@@ -21,7 +27,7 @@ export default function MerchProductCard({ item, addToCart, onCheckoutNow }) {
     <article className="catalog-adaptive-card" aria-label={item.title} style={{ background: "#0a0a0a", borderRadius: 16, overflow: "hidden", border: "1px solid #1a1a1a" }}>
       {/* Printful supplies the finished product mockup as an ordinary image. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={item.cover || undefined} alt={item.title} loading="lazy" style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block" }} />
+      <img ref={imageRef} src={item.cover || undefined} alt={item.title} loading="lazy" style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block" }} />
       <div className="catalog-adaptive-card__meta" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div className="catalog-adaptive-card__title" style={{ fontWeight: 700 }}>{item.title}</div>
         <div className="catalog-adaptive-card__price" aria-live="polite" style={{ color: "#00ffff", fontWeight: 700 }}>

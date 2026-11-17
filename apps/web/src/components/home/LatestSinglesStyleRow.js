@@ -18,6 +18,7 @@ import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import { getMediaSignature } from "@/lib/media/media-determinism";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
+import { usePanelLoadAhead } from "@/hooks/usePanelLoadAhead";
 import { usePlaybackIdentity } from "@/context/AudioContext";
 import {
   createReleasePresentationIdentity,
@@ -44,6 +45,18 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
   const isThisReleasePlaying = Boolean(currentTrackId && currentTrackSlug === mediaItem?.slug);
   const shouldDefer = audioPriority.startupActive && !isThisReleasePlaying;
   const coverLifecycle = useReleaseCoverLifecycle(presentationIdentity, assignedSrc || coverDisplay?.src);
+  // In a prepared tab panel the card loads before it is scrolled to (it still
+  // starts playing only once seen), so it is already animating on arrival.
+  const loadAheadRef = usePanelLoadAhead(() => {
+    const el = videoRef.current;
+    if (cardMedia !== "video" || !el || !assignedSrc || hasEnteredView) return;
+    if (shouldDefer && el.readyState < 2) return; // the layout effect loads it when the lease ends
+    if (el.getAttribute("src") !== assignedSrc) {
+      el.src = assignedSrc;
+      el.preload = "auto";
+      el.load();
+    }
+  });
 
   // One-shot gate on the *first* load only. storefront-persistent-media.js
   // owns this element's play/pause for the rest of its life on the explicit
@@ -74,7 +87,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     if (cardMedia !== "video") return;
     const el = videoRef.current;
     if (!el) return;
-    if (!assignedSrc || !hasEnteredView) {
+    if (!assignedSrc || !(hasEnteredView || loadAheadRef.current)) {
       if (!el.paused) el.pause();
       el.preload = "none";
       if (el.hasAttribute("src")) {
@@ -92,8 +105,8 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
       el.preload = "auto";
       el.load();
     }
-    if (!document.hidden && el.paused) el.play().catch(() => {});
-  }, [cardMedia, assignedSrc, shouldDefer, hasEnteredView]);
+    if (hasEnteredView && !document.hidden && el.paused) el.play().catch(() => {});
+  }, [cardMedia, assignedSrc, shouldDefer, hasEnteredView, loadAheadRef]);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;

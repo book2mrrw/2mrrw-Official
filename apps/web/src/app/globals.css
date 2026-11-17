@@ -6602,3 +6602,16 @@ body.is-player-modal-open::before {
     animation-duration: 2s;
   }
 }
+/* Hidden Home tab panels (KeepAliveTab / TabPanel). content-visibility keeps a
+   hidden tab's layout, scroll positions, decoded images and finished animations,
+   so showing it again paints it exactly as it was left. Browsers without it
+   fall back to display:none. */
+.tab-panel-hidden {
+  content-visibility: hidden;
+}
+
+@supports not (content-visibility: hidden) {
+  .tab-panel-hidden {
+    display: none;
+  }
+}

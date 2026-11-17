@@ -7,6 +7,7 @@ import { VRM } from "@/lib/media/video-resource-manager";
 import { isMediaElementReady } from "@/lib/media/element-readiness";
 import { COVER_SIZES, coverSrcSet } from "@/lib/media/cover-srcset";
 import { useCoverReady } from "@/hooks/useCoverReady";
+import { usePanelLoadAhead } from "@/hooks/usePanelLoadAhead";
 import SkeletonBase from "./SkeletonBase";
 import ProgressiveReveal from "./ProgressiveReveal";
 
@@ -29,6 +30,17 @@ function VideoArt({
   const videoRef = useRef(null);
   const prevSrcRef = useRef(null);
   const inViewRef = useRef(false);
+  // In a prepared tab panel the cover loads before it is seen, once per
+  // source (see CoverArt).
+  const loadAheadSrcRef = useRef(null);
+  const loadAheadNow = () => {
+    const el = videoRef.current;
+    if (!el || inViewRef.current || !el.src || loadAheadSrcRef.current === el.src) return;
+    loadAheadSrcRef.current = el.src;
+    el.preload = "auto";
+    if (el.readyState === 0) el.load();
+  };
+  const loadAheadRef = usePanelLoadAhead(loadAheadNow);
 
   useLayoutEffect(() => {
     const el = videoRef.current;
@@ -36,7 +48,8 @@ function VideoArt({
     prevSrcRef.current = src;
     el.src = src;
     if (inViewRef.current) el.load();
-  }, [src]);
+    else if (loadAheadRef.current) loadAheadNow();
+  }, [src, loadAheadRef]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -63,7 +76,7 @@ function VideoArt({
         if (entry.isIntersecting) {
           inViewRef.current = true;
           el.preload = "auto";
-          if (el.readyState === 0 && el.src) el.load();
+          if (el.readyState === 0 && el.src && loadAheadSrcRef.current !== el.src) el.load();
           VRM.requestPlay(
             el,
             () => { if (el.paused && !el.ended) el.play().catch(() => {}); },
@@ -72,7 +85,7 @@ function VideoArt({
         } else {
           inViewRef.current = false;
           VRM.requestPause(el);
-          el.preload = "none";
+          if (!loadAheadRef.current) el.preload = "none";
           if (!el.paused) el.pause();
         }
       },

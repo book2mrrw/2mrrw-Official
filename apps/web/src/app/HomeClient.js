@@ -109,7 +109,8 @@ const InlineAudioVisualzManager = dynamic(() => import("@/components/admin/Inlin
 const SyncPrintfulButton = dynamic(() => import("@/components/admin/SyncPrintfulButton"), { ssr: false });
 import EntitlementSurfaceIsland from "@/components/storefront/EntitlementSurfaceIsland";
 import HomeStorefrontIsland from "@/components/storefront/HomeStorefrontIsland";
-import KeepAliveTab from "@/components/storefront/KeepAliveTab";
+import KeepAliveTab, { TabPanel } from "@/components/storefront/KeepAliveTab";
+import PublicVaultIsland, { loadPublicVault } from "@/components/vault/PublicVaultIsland";
 import MusicTabCatalogPanels from "@/components/storefront/MusicTabCatalogPanels";
 import {
   CatalogSurfaceProvider,
@@ -1351,7 +1352,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const [printfulLoading, setPrintfulLoading]     = useState(false);
   const [inventory, setInventory]                 = useState({});
   const [exclusiveCatalog, setExclusiveCatalog] = useState(exclusiveItemsBase);
-  const [publicVault, setPublicVault]             = useState(null);
   const [mobileCartOpen, setMobileCartOpen]       = useState(false);
   const [mobileNavOpen, setMobileNavOpen]         = useState(false);
   const [mobileNavClosing, setMobileNavClosing]   = useState(false);
@@ -1757,20 +1757,11 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     };
   }, [activeTab]);
 
+  // The Vault state loads when its tabs are built (PublicVaultIsland), ahead of
+  // any visit; opening either tab only revalidates it, and an unchanged answer
+  // re-renders nothing.
   useEffect(() => {
-    if (activeTab !== "innercircle" && activeTab !== "vault") return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const payload = await warmJson("/api/public/vault");
-        if (!cancelled && payload) setPublicVault(payload);
-      } catch {
-        if (!cancelled) setPublicVault(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    if (activeTab === "innercircle" || activeTab === "vault") void loadPublicVault();
   }, [activeTab]);
 
   const [shopError, setShopError] = useState(null);
@@ -2696,11 +2687,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
             <div data-tab-panel>
 
               {/* ══ HOME (Phase 17A/17B: persist mount + render islands) ══ */}
-              <div
-                data-home-storefront
-                style={{ display: activeTab === "home" ? undefined : "none" }}
-                aria-hidden={activeTab !== "home"}
-              >
+              <TabPanel data-home-storefront active={activeTab === "home"}>
                 <HomeStorefrontIsland
                   onGiftRequest={setGiftSheetRelease}
                   onDonateOpen={handleDonateOpen}
@@ -2741,10 +2728,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   onOpenCollection={openCollection}
                   onOpenVault={openVault}
                 />
-              </div>
+              </TabPanel>
 
               {/* ══ MUSIC TAB ══ */}
-              <div hidden={!MUSIC_TAB_IDS.has(activeTab)} aria-hidden={!MUSIC_TAB_IDS.has(activeTab)} inert={MUSIC_TAB_IDS.has(activeTab) ? undefined : ""}>
+              <TabPanel active={MUSIC_TAB_IDS.has(activeTab)}>
                 <EntitlementSurfaceIsland islandId="music-tab">
                   {(ent) => (
                     <AuthSurfaceIsland islandId="music-tab" onGiftRequest={setGiftSheetRelease}>
@@ -2844,7 +2831,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     </AuthSurfaceIsland>
                   )}
                 </EntitlementSurfaceIsland>
-              </div>
+              </TabPanel>
 
               {/* ══ SHOP ══ */}
               <KeepAliveTab active={activeTab==="shop"}>
@@ -2864,13 +2851,14 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               </KeepAliveTab>
 
               {/* ══ CARDS (app shell only; the website routes to its own page) ══ */}
-              <KeepAliveTab active={activeTab==="cards" && isAppShell()}><CollectorsCardsGrid embedded /></KeepAliveTab>
+              <KeepAliveTab active={activeTab==="cards" && isAppShell()} prebuild={isAppShell()}><CollectorsCardsGrid embedded /></KeepAliveTab>
 
               {/* ══ VAULT ══ */}
               <KeepAliveTab active={activeTab==="vault"}>
                 <>
                   <h2 className="section-heading">Vault</h2>
                   <div style={{marginTop:28}}>
+                    <PublicVaultIsland>{(publicVault) => (
                     <VaultDoorGate
                       canUnlock={Boolean(publicVault?.unlocked)}
                       sections={publicVault?.sections || []}
@@ -2883,6 +2871,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                           : "The Vault is sealed for now. Exclusive drops will unlock here when they launch."
                       }
                     />
+                    )}</PublicVaultIsland>
                   </div>
                 </>
               </KeepAliveTab>
@@ -3120,7 +3109,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                             <div style={{fontSize:18,fontWeight:800,marginBottom:8}}>The stories behind the music.</div>
                             <div style={{fontSize:13,color:"#555",lineHeight:1.8}}>Not for everyone. Written for the people who actually listen.</div>
                           </div>
-                          {publicVault?.unlocked ? (
+                          <PublicVaultIsland>{(publicVault) => publicVault?.unlocked ? (
                             <div style={{marginBottom:32}}>
                               <VaultDoorGate
                                 sections={publicVault.sections || []}
@@ -3129,7 +3118,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                                 vaultAccess={publicVault.vaultAccess}
                               />
                             </div>
-                          ) : null}
+                          ) : null}</PublicVaultIsland>
                           <div style={{display:"flex",flexDirection:"column",gap:18}}>
                             {innerCirclePosts.map((post,i)=>(
                               <div key={post.id} onClick={()=>setInnerCirclePost(post)} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:16,padding:"clamp(18px,3cqi,24px)",cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.1}s forwards`,transition:"border-color 0.25s,box-shadow 0.25s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#a259ff55";e.currentTarget.style.boxShadow="0 0 20px rgba(162,89,255,0.1)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a1a";e.currentTarget.style.boxShadow="none";}}>
@@ -3203,14 +3192,14 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               </KeepAliveTab>
 
               {/* ══ MANAGE RELEASES (admin only) ══ */}
-              <KeepAliveTab active={activeTab==="manage-releases"}>
+              <KeepAliveTab active={activeTab==="manage-releases"} prebuild={false}>
                 <AuthSurfaceIsland islandId="manage-releases-tab">
                   {(auth) => auth.isAdminStable ? <InlineReleasesManager /> : null}
                 </AuthSurfaceIsland>
               </KeepAliveTab>
 
               {/* ══ MANAGE AUDIO VISUALZ (admin only) ══ */}
-              <KeepAliveTab active={activeTab==="manage-audio-visualz"}>
+              <KeepAliveTab active={activeTab==="manage-audio-visualz"} prebuild={false}>
                 <AuthSurfaceIsland islandId="manage-audio-visualz-tab">
                   {(auth) => auth.isAdminStable ? <InlineAudioVisualzManager /> : null}
                 </AuthSurfaceIsland>
@@ -3220,7 +3209,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   Uploads into the eight Vault sections. Same gated-sibling-tab
                   pattern as the two managers above; a wholly separate pipeline
                   from the release/audio uploader, sharing no route or table. */}
-              <KeepAliveTab active={activeTab==="vault-manager"}>
+              <KeepAliveTab active={activeTab==="vault-manager"} prebuild={false}>
                 <AuthSurfaceIsland islandId="vault-manager-tab">
                   {(auth) => auth.isAdminStable ? <VaultManager /> : null}
                 </AuthSurfaceIsland>

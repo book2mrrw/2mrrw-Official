@@ -7,6 +7,7 @@ import FeaturesRail from "@/components/home/FeaturesRail";
 import CatalogGrid from "@/components/home/CatalogGrid";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
 import MyMusicTab from "@/components/music/MyMusicTab";
+import { TabPanel } from "@/components/storefront/KeepAliveTab";
 import { useCatalogSurface } from "@/components/storefront/catalog-surface-context";
 import { resolveContentAccess } from "@/lib/music-access";
 import { resolveCatalogPlaybackItem, toPlaybackTrack } from "@/lib/music-playback";
@@ -75,7 +76,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
 
   return (
     <>
-      <section hidden={activeTab !== "singles"} aria-hidden={activeTab !== "singles"}>
+      <TabPanel as="section" active={activeTab === "singles"}>
         <h2 className="section-heading" style={{ marginBottom: 14 }}>
           Singles
         </h2>
@@ -121,8 +122,8 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           onAudioVisualsFocused={handleAudioVisualsFocused}
           onAudioVisualsExit={handleAudioVisualsExit}
         />
-      </section>
-      <section hidden={activeTab !== "albums"} aria-hidden={activeTab !== "albums"}>
+      </TabPanel>
+      <TabPanel as="section" active={activeTab === "albums"}>
         <h2 className="section-heading" style={{ marginBottom: 16 }}>
           Albums
         </h2>
@@ -144,8 +145,8 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           onGift={openGiftSheet}
           onLibraryChange={handleLibraryChange}
         />
-      </section>
-      <section hidden={activeTab !== "mixtapes"} aria-hidden={activeTab !== "mixtapes"}>
+      </TabPanel>
+      <TabPanel as="section" active={activeTab === "mixtapes"}>
         <h2 className="section-heading" style={{ marginBottom: 16 }}>
           Mixtapes & EPs
         </h2>
@@ -167,8 +168,8 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           onGift={openGiftSheet}
           onLibraryChange={handleLibraryChange}
         />
-      </section>
-      <section hidden={activeTab !== "mymusic"} aria-hidden={activeTab !== "mymusic"}>
+      </TabPanel>
+      <TabPanel as="section" active={activeTab === "mymusic"}>
       <MyMusicTab
         features={displayFeatures}
         singles={displaySingles}
@@ -184,7 +185,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           setAlbumTracklistRelease(resolved || album);
         }}
       />
-      </section>
+      </TabPanel>
     </>
   );
 });
