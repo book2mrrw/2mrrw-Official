@@ -109,6 +109,7 @@ const InlineAudioVisualzManager = dynamic(() => import("@/components/admin/Inlin
 const SyncPrintfulButton = dynamic(() => import("@/components/admin/SyncPrintfulButton"), { ssr: false });
 import EntitlementSurfaceIsland from "@/components/storefront/EntitlementSurfaceIsland";
 import HomeStorefrontIsland from "@/components/storefront/HomeStorefrontIsland";
+import KeepAliveTab from "@/components/storefront/KeepAliveTab";
 import MusicTabCatalogPanels from "@/components/storefront/MusicTabCatalogPanels";
 import {
   CatalogSurfaceProvider,
@@ -2846,7 +2847,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               </div>
 
               {/* ══ SHOP ══ */}
-              {activeTab==="shop" && (
+              <KeepAliveTab active={activeTab==="shop"}>
                 <>
                   <h2 className="section-heading" style={{marginBottom:16}}>Merch</h2>
                   <AuthSurfaceIsland islandId="shop-tab-admin">
@@ -2860,13 +2861,13 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     </>
                   )}
                 </>
-              )}
+              </KeepAliveTab>
 
               {/* ══ CARDS (app shell only; the website routes to its own page) ══ */}
-              {activeTab==="cards" && isAppShell() && <CollectorsCardsGrid embedded />}
+              <KeepAliveTab active={activeTab==="cards" && isAppShell()}><CollectorsCardsGrid embedded /></KeepAliveTab>
 
               {/* ══ VAULT ══ */}
-              {activeTab==="vault" && (
+              <KeepAliveTab active={activeTab==="vault"}>
                 <>
                   <h2 className="section-heading">Vault</h2>
                   <div style={{marginTop:28}}>
@@ -2884,11 +2885,11 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     />
                   </div>
                 </>
-              )}
+              </KeepAliveTab>
 
               {/* ══ SHOWS ══ */}
               <AuthSurfaceIsland islandId="shows-tab">
-                {(auth) => activeTab==="shows" && (
+                {(auth) => (<KeepAliveTab active={activeTab==="shows"}>
                   <>
                     <h2 className="section-heading" style={{marginBottom:20}}>Shows & Events</h2>
 
@@ -2947,7 +2948,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
                     {auth.userId && <MyTicketsPanel userId={auth.userId} />}
                   </>
-                )}
+                </KeepAliveTab>)}
               </AuthSurfaceIsland>
 
               {/* ══ LIVE ══ */}
@@ -2970,12 +2971,12 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               </AuthSurfaceIsland>
 
               {/* ══ HELP & SUPPORT ══ */}
-              {activeTab==="help" && (
+              <KeepAliveTab active={activeTab==="help"}>
                 <PageAuthHelpSupport />
-              )}
+              </KeepAliveTab>
 
               {/* ══ BLOG ══ */}
-              {activeTab==="blog" && (
+              <KeepAliveTab active={activeTab==="blog"}>
                 <>
                   {blogPost ? (
                     <div>
@@ -3010,10 +3011,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     </>
                   )}
                 </>
-              )}
+              </KeepAliveTab>
 
               {/* ══ VISION ══ */}
-              {activeTab==="vision" && (
+              <KeepAliveTab active={activeTab==="vision"}>
                 <>
                   <h2 className="section-heading">Vision</h2>
                   <div style={{background:"linear-gradient(135deg,#080808,#0e0e0e)",border:"1px solid #1a1a1a",borderRadius:24,padding:"clamp(28px,6cqi,48px) clamp(20px,5cqi,40px)",marginBottom:28,textAlign:"center",position:"relative",overflow:"hidden"}}>
@@ -3033,10 +3034,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   </div>
                   <div style={{marginTop:32,padding:"28px 30px",borderTop:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:13,color:"#555",lineHeight:2}}>You are not just a listener.<br/><span style={{color:"#00ffff",fontWeight:700}}>You are early.</span></div></div>
                 </>
-              )}
+              </KeepAliveTab>
 
               {/* ══ CIRCLE ══ */}
-              {activeTab==="circle" && (
+              <KeepAliveTab active={activeTab==="circle"}>
                 <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
                 {(pa) => (
                 <>
@@ -3074,10 +3075,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 </>
                 )}
                 </PageAuthSessionBridge>
-              )}
+              </KeepAliveTab>
 
               {/* ══ INNER CIRCLE ══ */}
-              {activeTab==="innercircle" && (
+              <KeepAliveTab active={activeTab==="innercircle"}>
                 <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
                 {(pa) => (
                 <>
@@ -3147,10 +3148,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 </>
                 )}
                 </PageAuthSessionBridge>
-              )}
+              </KeepAliveTab>
 
               {/* ══ ACCOUNT ══ */}
-              {activeTab==="account" && (
+              <KeepAliveTab active={activeTab==="account"}>
                 <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
                 {(pa) => (
                 <>
@@ -3199,31 +3200,31 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 </>
                 )}
                 </PageAuthSessionBridge>
-              )}
+              </KeepAliveTab>
 
               {/* ══ MANAGE RELEASES (admin only) ══ */}
-              {activeTab === "manage-releases" && (
+              <KeepAliveTab active={activeTab==="manage-releases"}>
                 <AuthSurfaceIsland islandId="manage-releases-tab">
                   {(auth) => auth.isAdminStable ? <InlineReleasesManager /> : null}
                 </AuthSurfaceIsland>
-              )}
+              </KeepAliveTab>
 
               {/* ══ MANAGE AUDIO VISUALZ (admin only) ══ */}
-              {activeTab === "manage-audio-visualz" && (
+              <KeepAliveTab active={activeTab==="manage-audio-visualz"}>
                 <AuthSurfaceIsland islandId="manage-audio-visualz-tab">
                   {(auth) => auth.isAdminStable ? <InlineAudioVisualzManager /> : null}
                 </AuthSurfaceIsland>
-              )}
+              </KeepAliveTab>
 
               {/* ══ VAULT MANAGER (admin only) ══
                   Uploads into the eight Vault sections. Same gated-sibling-tab
                   pattern as the two managers above; a wholly separate pipeline
                   from the release/audio uploader, sharing no route or table. */}
-              {activeTab === "vault-manager" && (
+              <KeepAliveTab active={activeTab==="vault-manager"}>
                 <AuthSurfaceIsland islandId="vault-manager-tab">
                   {(auth) => auth.isAdminStable ? <VaultManager /> : null}
                 </AuthSurfaceIsland>
-              )}
+              </KeepAliveTab>
 
             </div>{/* end tab panel */}
             </ScrollPaddingShell>

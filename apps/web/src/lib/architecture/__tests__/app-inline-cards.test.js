@@ -21,7 +21,7 @@ test("isAppShell is false on the website and true only when the app sets its fla
 test("the website still opens Collector's Cards on its own page; only the app renders them inline", () => {
   const home = read("src/app/HomeClient.js");
   assert.match(home, /if \(tabId === "cards" && !isAppShell\(\)\) \{\s*router\.push\(COLLECTORS_CARDS_ROUTE\);\s*return;/);
-  assert.match(home, /\{activeTab==="cards" && isAppShell\(\) && <CollectorsCardsGrid embedded \/>\}/);
+  assert.match(home, /<KeepAliveTab active=\{activeTab==="cards" && isAppShell\(\)\}><CollectorsCardsGrid embedded \/><\/KeepAliveTab>/);
   assert.match(home, /window\.addEventListener\("2mrrw:open-tab", onOpenTab\)/);
 });
 
