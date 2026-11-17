@@ -8,11 +8,12 @@ export const dynamic = "force-dynamic";
 const R2_BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME;
 
 /**
- * The CORS policy applied here targets the S3-compatible endpoint
- * (*.r2.cloudflarestorage.com). The Cloudflare dashboard CORS only
- * covers the public CDN (pub-*.r2.dev) — it does NOT apply here.
- * Without this, crossOrigin="anonymous" audio elements get CORS-blocked
- * by iOS Safari when the direct-redirect signed URL is served.
+ * The bucket's one CORS policy. R2 serves it on both the S3-compatible
+ * endpoint (*.r2.cloudflarestorage.com, signed URLs) and the public CDN
+ * (pub-*.r2.dev: covers, previews, HLS segments) — the CDN answers with
+ * exactly these origins, methods and expose headers. Without it,
+ * crossOrigin="anonymous" audio elements and HLS segment fetches get
+ * CORS-blocked by iOS Safari.
  */
 const CORS_POLICY = {
   CORSRules: [
@@ -25,6 +26,9 @@ const CORS_POLICY = {
         "https://2mrrw-official.vercel.app",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        // 2MRRW iOS app: WKWebView serves the website interface as this origin
+        // (the Android app already runs as https://www.2mrrw.com).
+        "capacitor://www.2mrrw.com",
       ],
       AllowedMethods: ["GET", "HEAD", "PUT", "DELETE"],
       AllowedHeaders: ["*"],
