@@ -25,7 +25,13 @@ function stripTrackForStorage(t) {
     artist: t.artist,
     album: t.album,
     cover: t.cover || t.coverArt || t.baseCover || null,
+    // Full cover identity: `cover` alone is overloaded (image or video), and a
+    // restored track without its type and still shows no artwork in the player.
+    baseCover: t.baseCover || null,
+    coverArtType: t.coverArtType || null,
+    video: t.video || null,
     csCover: t.csCover || null,
+    csCoverType: t.csCoverType || null,
     gainDb: t.gainDb ?? null,
     duration: typeof t.duration === "number" ? t.duration : null,
     source: t.source ?? null,
@@ -43,6 +49,35 @@ function stripTrackForStorage(t) {
         }
       : null,
   };
+}
+
+/**
+ * Sessions saved before the cover identity was stored carry only `cover`.
+ * When that is a visual-discovery URL (/api/media/visual: the animated cover,
+ * falling back to the image), restore it as an animated cover whose still is
+ * the URL's legacyImage — the player shows the animation, and falls back to
+ * the still only if the release has none.
+ */
+export function restoreTrackCoverIdentity(track) {
+  if (!track || track.coverArtType || track.baseCover || !track.cover) return track;
+  let url;
+  try {
+    url = new URL(String(track.cover), "https://www.2mrrw.com/");
+  } catch {
+    return track;
+  }
+  if (url.pathname !== "/api/media/visual") return track;
+  const still = url.searchParams.get("legacyImage");
+  return {
+    ...track,
+    coverArtType: "video",
+    baseCover: still ? `/${still.replace(/^\/+/, "")}` : null,
+  };
+}
+
+function restoreSessionCoverIdentity(session) {
+  if (!session?.queue?.length) return session;
+  return { ...session, queue: session.queue.map(restoreTrackCoverIdentity) };
 }
 
 export function savePlaybackSession(userId, { queue, queueIndex, shuffle, repeatMode }) {
@@ -78,7 +113,7 @@ export function loadPlaybackSession(userId) {
     const parsed = JSON.parse(raw);
     if (!parsed || parsed.v !== SESSION_VERSION) return null;
     if (Date.now() - (parsed.savedAt || 0) > SESSION_TTL_MS) return null;
-    return parsed;
+    return restoreSessionCoverIdentity(parsed);
   } catch {
     return null;
   }
@@ -149,14 +184,14 @@ export async function fetchQueueFromServer() {
     if (!res.ok) return null;
     const data = await res.json();
     if (!data?.queue?.length) return null;
-    return {
+    return restoreSessionCoverIdentity({
       v: SESSION_VERSION,
       queue: data.queue,
       queueIndex: data.queueIndex ?? 0,
       shuffle: Boolean(data.shuffle),
       repeatMode: data.repeatMode || "off",
       savedAt: data.savedAt ? new Date(data.savedAt).getTime() : Date.now(),
-    };
+    });
   } catch {
     return null;
   }

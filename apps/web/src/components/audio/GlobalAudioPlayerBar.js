@@ -347,37 +347,22 @@ const MiniCoverHit = memo(function MiniCoverHit({
     onOpenRelease?.();
   }, [onOpenRelease]);
 
-  // Record the next visual identity without starting a media request. Audio is
-  // the critical path; the animated cover is attached only after playback has
-  // settled so it cannot contend with manifests, keys, or the first fragment.
+  // Animated first: the animated cover is attached the moment the track's
+  // cover identity is known and keeps playing (muted, decorative) whether or
+  // not audio is playing — the bar never sits on a still or a placeholder
+  // while an animation exists. It is the same file the release's own card
+  // already decoded, and the first-play chain is served from memory
+  // (hls-start-warm.js), so attaching it does not contend with audio startup.
   useLayoutEffect(() => {
     const el = videoRef.current;
     if (!el || !animatedCoverUrl) return;
-    if (el.getAttribute("data-src") !== animatedCoverUrl) {
-      el.setAttribute("data-src", animatedCoverUrl);
-      if (!el.paused) el.pause();
-      el.removeAttribute("src");
+    if (el.getAttribute("src") !== animatedCoverUrl) {
+      el.src = animatedCoverUrl;
+      el.preload = "auto";
       el.load();
     }
+    if (el.paused) el.play().catch(() => {});
   }, [animatedCoverUrl]);
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el || !animatedCoverUrl || !isPlaying) return;
-    const timer = setTimeout(() => {
-      if (el.getAttribute("data-src") !== animatedCoverUrl) return;
-      if (el.src !== animatedCoverUrl) {
-        el.src = animatedCoverUrl;
-        el.preload = "auto";
-        el.load();
-      }
-      el.play().catch(() => {});
-    }, 1000);
-    return () => {
-      clearTimeout(timer);
-      if (!el.paused) el.pause();
-    };
-  }, [animatedCoverUrl, isPlaying]);
 
   const letter = (title && String(title).trim()[0]) || "♪";
   const showVideo = Boolean(animatedCoverUrl) && !videoFailed;
@@ -418,7 +403,8 @@ const MiniCoverHit = memo(function MiniCoverHit({
           loop
           muted
           playsInline
-          preload="none"
+          autoPlay
+          preload="auto"
           poster={baseCoverUrl || undefined}
           className="player-bar-cover-img player-bar-cover-img--base"
           onError={() => markFailed(videoAssetKey)}
