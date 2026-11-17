@@ -10,9 +10,12 @@
  *
  * Bounded by design:
  * - one warm at a time; intent jumps the queue, visibility waits its turn, and
- *   background (visibility) warms wait until the page's initial load settles so
- *   they never compete with it — on a congested launch a 1 KB master measured
- *   26 s; intent warms go immediately; a failed warm is retried once, later;
+ *   background (visibility) warms start once the main thread is first idle
+ *   (at most 2 s) so they do not compete with the page's initial work — on a
+ *   congested launch a 1 KB master measured 26 s. (Not the `load` event: media
+ *   elements delay it until each has a frame, which on a page full of animated
+ *   covers can take tens of seconds.) Intent warms go immediately; a failed
+ *   warm is retried once, later;
  * - at most WARM_STARTS_PER_MINUTE new tracks per minute (the master route
  *   allows 60/min/user, the key route 30/min/user, and real plays need room);
  * - only the rendition the engine will start on (same rule as HLSEngine's
@@ -49,15 +52,12 @@ let retryTimer = null;
 const retryTimers = new Set();
 let settled = null;
 
-/** Resolves once the page's initial load is done and the main thread is idle. */
+/** Resolves once the main thread is first idle (at most 2 s). */
 function pageSettled() {
-  if (typeof document === "undefined" || typeof window === "undefined") return Promise.resolve();
+  if (typeof window === "undefined") return Promise.resolve();
   settled ||= new Promise((resolve) => {
-    const idle = () => (typeof window.requestIdleCallback === "function"
-      ? window.requestIdleCallback(() => resolve(), { timeout: 3000 })
-      : setTimeout(resolve, 1000));
-    if (document.readyState === "complete") idle();
-    else window.addEventListener("load", idle, { once: true });
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(() => resolve(), { timeout: 2000 });
+    else setTimeout(resolve, 1000);
   });
   return settled;
 }
