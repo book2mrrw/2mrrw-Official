@@ -2520,7 +2520,7 @@ function AlbumModalView({
 
         {sheet === "share" ? <ShareSheet title={`Share ${album?.type || "Album"}`} sub={`${album?.title} · ${album?.artist}`} t={t} onClose={() => setSheet(null)} /> : null}
         {sheet === "credits" ? (
-          <div className="bsheet" style={{ background: t.dark, maxHeight: "80vh", overflowY: "auto" }}>
+          <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(28px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)", maxHeight: "80vh", overflowY: "auto" }}>
           <label style={{ display: "block", padding: 16, color: "white" }}>Credits for
             <select aria-label="Credits scope" value={creditScope} onChange={e => setCreditScope(e.target.value)}>
               <option value="release">Release</option>

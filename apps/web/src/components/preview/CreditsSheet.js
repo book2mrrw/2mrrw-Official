@@ -1,7 +1,10 @@
 "use client";
 export default function CreditsSheet({ title, sub, t, rows, onClose, status = "ready", onRetry, embedded = false }) {
   return (
-    <div role="region" aria-label={title} className="bsheet" style={{ position: embedded ? "relative" : undefined, maxHeight: "80vh", overflowY: "auto", background: t.dark, paddingBottom: "max(28px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
+    <div role="region" aria-label={title} className="bsheet" style={embedded
+      // Inside another sheet, which owns the screen-edge safe-area insets.
+      ? { position: "relative", background: t.dark }
+      : { maxHeight: "80vh", overflowY: "auto", background: t.dark, paddingBottom: "max(28px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
       <button type="button" aria-label="Close credits" onClick={onClose} style={{ float: "right", margin: 12, background: "transparent", color: "white", border: "1px solid #666", borderRadius: 6, padding: "8px 12px", cursor: "pointer" }}>Close</button>
       <div className="sheet-hdl" aria-hidden="true" />
       <div style={{ padding: "6px 22px 10px" }}>
