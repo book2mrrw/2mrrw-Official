@@ -719,7 +719,7 @@ function FloatingPlayer({
           type="button"
           className="c-sm"
           aria-label="Skip back 15 seconds"
-          onClick={onSkipBack ?? undefined}
+          onClick={onSkipBack ? () => onSkipBack() : undefined}
           style={!onSkipBack ? dimStyle : undefined}
         >
           <I.SkipBack />
@@ -751,7 +751,7 @@ function FloatingPlayer({
           type="button"
           className="c-sm"
           aria-label="Skip forward 15 seconds"
-          onClick={onSkipFwd ?? undefined}
+          onClick={onSkipFwd ? () => onSkipFwd() : undefined}
           style={!onSkipFwd ? dimStyle : undefined}
         >
           <I.SkipFwd />

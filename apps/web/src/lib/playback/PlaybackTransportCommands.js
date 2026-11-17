@@ -299,18 +299,24 @@ export function attachTransportCommands(self) {
     });
   };
 
+  // `seconds` must be a finite number; anything else (e.g. a click event
+  // forwarded by an onClick={seekBack} binding) means the default 15 s step —
+  // otherwise the arithmetic yields NaN and seekInternal silently drops it.
+  const skipStep = (seconds) => (Number.isFinite(seconds) && seconds > 0 ? seconds : 15);
+
   self.seekBack = function seekBack(seconds = 15) {
     const audio = self._deps.audioRef.current;
     if (!audio) return;
-    self.seekInternal(Math.max(0, getWebAudioEngine().getSeekPosition(audio) - seconds));
+    self.seekInternal(Math.max(0, getWebAudioEngine().getSeekPosition(audio) - skipStep(seconds)));
   };
 
   self.seekForward = function seekForward(seconds = 15) {
     const audio = self._deps.audioRef.current;
     if (!audio) return;
+    const step = skipStep(seconds);
     const position = getWebAudioEngine().getSeekPosition(audio);
-    const max = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : position + seconds;
-    self.seekInternal(Math.min(max, position + seconds));
+    const max = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : position + step;
+    self.seekInternal(Math.min(max, position + step));
   };
 
   self.setPlaybackRateInternal = function setPlaybackRateInternal(rate) {
