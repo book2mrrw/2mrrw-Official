@@ -19,6 +19,7 @@ import GiftIcon from "@/components/gifts/GiftIcon";
 import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
 import GiftsSentSection from "@/components/gifts/GiftsSentSection";
 import { useListeningHistory } from "@/hooks/useListeningHistory";
+import { useStableOrder } from "@/hooks/useStableOrder";
 import { buildRecommendations } from "@/lib/recommendations";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 import { usePointerCapability } from "@/hooks/usePointerCapability";
@@ -441,6 +442,8 @@ function LibraryCarousel({
   );
 }
 
+const releaseGroupKey = (group) => group.key;
+
 function RecentlyPlayedSection({
   items,
   singles,
@@ -472,8 +475,12 @@ function RecentlyPlayedSection({
     }
     return [...map.values()];
   }, [items, singles, albums, mixtapesAndEps]);
+  // Playing a track moves it to the front of the live history; the rail on
+  // screen keeps its order so no card (or its animated cover) moves under the
+  // listener. See useStableOrder.
+  const shownGroups = useStableOrder(groups, releaseGroupKey);
 
-  if (!groups.length) return null;
+  if (!shownGroups.length) return null;
 
   const cardWidth = isMobile ? 204 : 224;
 
@@ -492,7 +499,7 @@ function RecentlyPlayedSection({
         overscrollBehaviorX: "contain",
         touchAction: "pan-x pan-y",
       }}>
-        {groups.map(({ key, release, coverDisplay, tracks }, groupIdx) => (
+        {shownGroups.map(({ key, release, coverDisplay, tracks }, groupIdx) => (
           <div key={key} style={{ flex: `0 0 ${cardWidth}px`, width: cardWidth, scrollSnapAlign: "start", background: "#0a0a0a", border: "1px solid #1a1a1a", borderRadius: 14, overflow: "hidden" }}>
             <CoverArt
               src={coverDisplay.src}
