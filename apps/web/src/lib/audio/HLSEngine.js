@@ -33,6 +33,7 @@ import { createCacheAwareAbrController } from "./cache-aware-abr";
 import { createPrefetchLoaderClass } from "./hls-prefetch-loader";
 import { encryptedSegmentStore } from "./encrypted-segment-store";
 import { hlsDownloadManager, parseVariants } from "./hls-download-manager";
+import { createWarmLoaderClasses, takeWarmPlaylist } from "./hls-start-warm";
 
 async function importHls() {
   if (typeof window === "undefined") return null;
@@ -153,11 +154,15 @@ export class HLSEngine {
       this._cancelPendingLoad = cancel;
       const timer = setTimeout(cancel, manifestTimeoutMs);
       try {
-        const response = await fetch(manifestUrl, { credentials: 'same-origin', signal: controller.signal });
-        if (!response.ok) return false;
-        const body = await response.text();
+        // A warm master (hls-start-warm.js) skips the first round trip.
+        const warmBody = takeWarmPlaylist(manifestUrl);
+        const response = warmBody == null
+          ? await fetch(manifestUrl, { credentials: 'same-origin', signal: controller.signal })
+          : null;
+        if (response && !response.ok) return false;
+        const body = warmBody ?? await response.text();
         if (controller.signal.aborted || this._destroyed || version !== this._manifestVersion) return false;
-        const base = response.url || new URL(manifestUrl, globalThis.location?.href || 'https://www.2mrrw.com/').href;
+        const base = response?.url || new URL(manifestUrl, globalThis.location?.href || 'https://www.2mrrw.com/').href;
         const variants = parseVariants(body, base);
         const tier = this._trackQualityCap ?? (this._currentLevel >= 0 ? this._currentLevel : getStartupQualityLevel());
         const selected = variants[Math.min(tier, variants.length - 1)];
@@ -187,6 +192,9 @@ export class HLSEngine {
     // (hls-segment-cache) with zero CDN latency. Falls through to the default
     // XHR loader on cache miss — no behavioral change for uncached segments.
     const fLoader = _getPrefetchLoaderClass(Hls) ?? undefined;
+    // Playlist and key loaders: serve the first-play chain warmed by
+    // hls-start-warm.js from memory; otherwise the default loader, unchanged.
+    const warmLoaders = createWarmLoaderClasses(Hls.DefaultConfig.loader);
 
     const hls = new Hls({
       abrController: createCacheAwareAbrController(Hls.DefaultConfig.abrController),
@@ -242,6 +250,8 @@ export class HLSEngine {
       // Custom fragment loader: serves pre-fetched segment bytes from memory.
       // undefined = default XHR loader (when createPrefetchLoaderClass fails or SSR).
       fLoader,
+      pLoader: warmLoaders.pLoader,
+      loader: warmLoaders.loader,
 
       // Debug (disable in production)
       debug: process.env.NODE_ENV === "development",

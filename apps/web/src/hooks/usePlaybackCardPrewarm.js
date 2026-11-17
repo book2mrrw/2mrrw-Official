@@ -11,13 +11,27 @@ import {
   cancelEagerPrime,
 } from "@/lib/playback/redirect-resolve-cache";
 import { prewarmHLS } from "@/lib/audio/HLSEngine";
+import { warmHlsStart } from "@/lib/audio/hls-start-warm";
+import { parseStreamSlugFromSrc, parseStreamTrackSlugFromSrc } from "@/lib/playback/stream-client";
 
 const DEFAULT_THRESHOLD = 0.15;
 const DEFAULT_ROOT_MARGIN = "80px 0px";
 
 /**
- * When a release card enters the viewport, warm playback descriptors in memory.
- * No autoplay, no audio bytes, no signed URL fetch, no entitlement consumption.
+ * Warms the HLS first-play chain (master, starting variant, key, opening
+ * encrypted segment) for an entitled card, so a tap starts from memory.
+ * Bounded and free of server side effects -- see hls-start-warm.js.
+ */
+function warmHlsStartFor(streamPath, intent) {
+  const slug = parseStreamSlugFromSrc(streamPath);
+  const trackSlug = parseStreamTrackSlugFromSrc(streamPath);
+  if (slug) warmHlsStart(slug, trackSlug !== slug ? trackSlug : null, { intent });
+}
+
+/**
+ * When a release card enters the viewport, warm playback descriptors in memory
+ * and, for entitled listeners, the HLS first-play chain (warmHlsStartFor).
+ * No autoplay, no stream session, no entitlement consumption.
  */
 export function usePlaybackCardPrewarm(
   containerRef,
@@ -91,6 +105,7 @@ export function usePlaybackCardPrewarm(
             // Warm hls.js module now so there is no parse/compile freeze when
             // the user taps play. No-op after the first call (module is cached).
             prewarmHLS();
+            warmHlsStartFor(urlDescriptor.streamPath, false);
             if (cfg.isFirstCard) {
               // First card: buffer audio bytes, not just the redirect URL.
               eagerPrimeFirstCard(releaseSlug, urlDescriptor.streamPath);
@@ -152,6 +167,7 @@ export function usePlaybackCardPrewarm(
       const { releaseSlug, urlDescriptor } = bundle;
       if (urlDescriptor?.streamPath && urlDescriptor.accessSnapshot?.canStream) {
         prewarmHLS();
+        warmHlsStartFor(urlDescriptor.streamPath, true);
         if (cfg.isFirstCard) {
           // Keep the eager-prime warm on interaction (deduped internally).
           eagerPrimeFirstCard(releaseSlug, urlDescriptor.streamPath);

@@ -65,6 +65,7 @@ import {
 } from "@/lib/media-session-artwork";
 import { recordAudioContextState } from "@/lib/dev/performanceMarks";
 import { prefetchHlsSegmentsForTrack } from "@/lib/audio/hls-segment-prefetcher";
+import { warmHlsStart } from "@/lib/audio/hls-start-warm";
 import { evictOverflowingCaches } from "@/lib/playback/playback-cache-manager";
 import { nextQueueIndex } from "./queue-order";
 import { bufferedAhead, canPreloadAudio } from "@/lib/audio/playback-buffer";
@@ -1559,14 +1560,16 @@ export function createPlaybackHelpers(initialDeps) {
         if (!normalized) return;
         if (kind === SOURCE_KIND.REDIRECT) {
           if (track.metadata?.access?.canStream) {
-            // HLS-eligible tracks: pre-fetch the manifest (~200 bytes) into the
-            // HTTP cache so hls.js gets an instant cache hit on loadSource().
+            // HLS-eligible tracks: warm the whole first-play chain (master,
+            // starting variant, key, opening segment) so play() starts from
+            // memory. The master is no-store and mints fresh tokens per request,
+            // so only the warm cache hls.js reads (hls-start-warm.js) can be hit.
             // Loading the redirect URL into intentPrewarmRef is wasted here —
             // hls.js ignores it and loads the MSE manifest directly.
+            // Same slug/trackSlug normalization PlaybackStreamCommands plays with.
             const slug = parseStreamSlugFromSrc(track.src) || track.slug;
-            if (slug) {
-              fetch(`/api/library/hls?slug=${encodeURIComponent(slug)}`, { priority: "low" }).catch(() => {});
-            }
+            const trackSlug = track.metadata?.trackSlug || parseStreamTrackSlugFromSrc(track.src) || null;
+            if (slug) warmHlsStart(slug, trackSlug !== slug ? trackSlug : null, { intent: true });
             return;
           }
           const preloadSrc = normalized.includes("preload=1")

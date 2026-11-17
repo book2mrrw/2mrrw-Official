@@ -47,6 +47,7 @@ import { notifyMediaEngineBridge } from "@/media/mediaEngineBridge";
 import { preloadCoverImage } from "@/lib/media/preload";
 import { waitForPlaybackBuffer } from "@/lib/audio/playback-buffer";
 import { getHLSEngine } from "@/lib/audio/HLSEngine";
+import { hlsMasterPath } from "@/lib/audio/hls-start-warm";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import { getQualityLevel as getHLSQualityLevel, getManifestTimeoutMs } from "@/lib/audio/network-quality";
 import { getResolvedCdnUrl, setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
@@ -838,9 +839,9 @@ export function attachStreamCommands(self) {
           // For singles, trackSlug equals the product slug — no real sub-track identifier.
           // Normalize to null so the HLS manifest query matches track_slug IS NULL in the DB.
           const hlsTrackSlug = (hlsTrackSlugRaw && hlsTrackSlugRaw !== streamSlug) ? hlsTrackSlugRaw : null;
-          const hlsParams = new URLSearchParams({ slug: streamSlug });
-          if (hlsTrackSlug) hlsParams.set("trackSlug", hlsTrackSlug);
-          const hlsManifestUrl = `/api/library/hls?${hlsParams}`;
+          // One builder for play and warm (hls-start-warm.js), so a warmed
+          // first-play chain is always found under the URL played here.
+          const hlsManifestUrl = hlsMasterPath(streamSlug, hlsTrackSlug);
 
           const hlsEngine = getHLSEngine();
           hlsEngine.detach();
