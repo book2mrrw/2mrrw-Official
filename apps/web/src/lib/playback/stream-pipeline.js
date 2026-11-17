@@ -7,6 +7,13 @@ function isMissingTable(error) {
   return code === "42P01" || /relation .* does not exist/i.test(msg);
 }
 
+// These writes run with the service-role client, which bypasses RLS, and the
+// row ids come from the client. Every mutation is scoped to its owner here so
+// no route can end or clear another listener's stream rows.
+function requireOwner(userId, operation) {
+  if (!userId) throw new TypeError(`[stream-pipeline] ${operation} requires the owning user id`);
+}
+
 export async function resolveProductIdBySlug(admin, slug) {
   const { data, error } = await admin.from("products").select("id").eq("slug", slug).maybeSingle();
   if (error) throw error;
@@ -52,9 +59,14 @@ export async function createStreamSession(admin, userId, productId) {
   return data?.session_id || null;
 }
 
-export async function clearStreamSession(admin, sessionId) {
+export async function clearStreamSession(admin, userId, sessionId) {
+  requireOwner(userId, "clearStreamSession");
   if (!sessionId) return;
-  const { error } = await admin.from("stream_sessions").delete().eq("session_id", sessionId);
+  const { error } = await admin
+    .from("stream_sessions")
+    .delete()
+    .eq("session_id", sessionId)
+    .eq("user_id", userId);
   if (error && !isMissingTable(error)) throw error;
 }
 
@@ -84,7 +96,8 @@ export async function insertStreamEvent(admin, userId, productId) {
   return data?.id || null;
 }
 
-export async function endStreamEvent(admin, streamEventId, { durationSeconds = 0, completed = false } = {}) {
+export async function endStreamEvent(admin, userId, streamEventId, { durationSeconds = 0, completed = false } = {}) {
+  requireOwner(userId, "endStreamEvent");
   if (!streamEventId) return;
   const { error } = await admin
     .from("stream_events")
@@ -93,7 +106,8 @@ export async function endStreamEvent(admin, streamEventId, { durationSeconds = 0
       duration_seconds: Math.max(0, Math.floor(Number(durationSeconds) || 0)),
       completed: Boolean(completed),
     })
-    .eq("id", streamEventId);
+    .eq("id", streamEventId)
+    .eq("user_id", userId);
 
   if (error && !isMissingTable(error)) throw error;
 }
@@ -116,5 +130,5 @@ export async function endStreamEventForUser(admin, userId, productId, { duration
     throw error;
   }
   if (!data?.id) return;
-  await endStreamEvent(admin, data.id, { durationSeconds, completed });
+  await endStreamEvent(admin, userId, data.id, { durationSeconds, completed });
 }

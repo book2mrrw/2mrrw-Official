@@ -127,7 +127,7 @@ async function buildPreviewStreamResponse(req, user, slug, { trackSlug = null, t
     }
     return proxySignedR2Get(req, url, { timing });
   }
-  const proxySrc = libraryStreamRedirectSrc(slug);
+  const proxySrc = libraryStreamRedirectSrc(slug, { trackSlug: trackSlug || null });
   return applyMediaCors(
     req,
     NextResponse.json({
@@ -414,7 +414,7 @@ export async function DELETE(req) {
   try {
     const admin = getAdminClient();
     if (sessionId) {
-      await clearStreamSession(admin, sessionId);
+      await clearStreamSession(admin, user.id, sessionId);
     } else {
       const productId = await resolveProductIdBySlug(admin, slug);
       if (productId) {

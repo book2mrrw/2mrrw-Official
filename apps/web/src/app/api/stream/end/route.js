@@ -27,14 +27,14 @@ export async function POST(req) {
 
   try {
     const admin = getAdminClient();
-    await endStreamEvent(admin, streamEventId, { durationSeconds, completed });
+    await endStreamEvent(admin, user.id, streamEventId, { durationSeconds, completed });
     // Redirect-path plays never receive a streamEventId — fall back to finding the
     // most recent open event for this user+product via slug lookup.
     if (!streamEventId && slug) {
       const productId = await resolveProductIdBySlug(admin, slug);
       if (productId) await endStreamEventForUser(admin, user.id, productId, { durationSeconds, completed });
     }
-    await clearStreamSession(admin, sessionId);
+    await clearStreamSession(admin, user.id, sessionId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[stream/end] failed", { userId: user.id, streamEventId, slug, err: err?.message });
