@@ -88,9 +88,18 @@ test("the tracks query selects the new preview columns, and the merge prefers th
   assert.match(body, /const previewKey = dbTrack\.preview_r2_key \|\| bodyTrack\?\.preview_key \|\| null;/);
 });
 
-test("the phantom single/feature track placeholder (id: null) can no longer match a real track row via position", () => {
+test("the phantom single/feature track placeholder (id: null) can no longer match a real track row via position", async () => {
+  // Recording identity is the id alone (publicationTrackOverrides); a display
+  // position never selects a recording.
   const src = read("src/app/api/admin/releases/[id]/publish/route.js");
-  assert.match(src, /bt\.id === dbTrack\.id \|\| \(bt\.id != null && Number\(bt\.position\) === Number\(dbTrack\.position\)\)/);
+  assert.match(src, /const bodyTrack = trackOverrides\.get\(dbTrack\.id\);/);
+  const { publicationTrackOverrides } = await import("@/lib/credits/publication");
+  const recordings = [{ id: "rec-1", position: 1, upload_status: "ready" }];
+  const placeholder = { id: null, position: 1, title: "Untitled placeholder" };
+  const single = publicationTrackOverrides([placeholder], recordings, { allowPlaceholder: true });
+  assert.equal(single.size, 0, "the placeholder overrides nothing, even at the real track's position");
+  assert.equal(single.get("rec-1"), undefined);
+  assert.throws(() => publicationTrackOverrides([placeholder], recordings), /does not belong to this release/);
 });
 
 test("for single/feature releases, resolvedPreviewKey prefers the merged track's own (durable-first) preview_key over the raw request body field", () => {
