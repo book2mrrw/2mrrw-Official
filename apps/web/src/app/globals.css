@@ -45,6 +45,7 @@ body {
   justify-content: center;
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .storefront-adaptive-modal-panel {
@@ -55,6 +56,7 @@ body {
   padding: 20px 20px max(20px, env(safe-area-inset-bottom, 0px));
   border-radius: 20px 20px 0 0;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
 }
 
@@ -1319,6 +1321,7 @@ body {
   flex: 1 1 38%;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   justify-content: flex-start;
@@ -2010,6 +2013,7 @@ body {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -2077,6 +2081,7 @@ body {
 
 .modal-immersive-panel--scroll {
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   touch-action: manipulation;
   overscroll-behavior: contain;
@@ -2874,6 +2879,7 @@ body {
   gap: clamp(8px, 1.4cqi, 16px);
   padding: clamp(10px, 2cqi, 26px);
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   text-align: center;
   /* The screen carries its own ground rather than letting the chassis show
@@ -3188,16 +3194,31 @@ body {
 }
 
 /* Range inputs carry a browser look that fights everything around them, so
-   track and thumb are both drawn here. */
+   track and thumb are both drawn here. The input itself is a finger-sized
+   target (24px, pulled back into the line's own space by the negative margin)
+   around the thin track, and owns the gesture: dragging it never pans or
+   scrolls the chamber. */
 .vault-audio-transport__seek {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
+  height: 24px;
+  margin: calc((clamp(3px, 0.4cqi, 5px) - 24px) / 2) 0;
+  background: transparent;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.vault-audio-transport__seek::-webkit-slider-runnable-track {
   height: clamp(3px, 0.4cqi, 5px);
-  margin: 0;
   border-radius: 999px;
   background: rgba(140, 200, 225, 0.28);
-  cursor: pointer;
+}
+
+.vault-audio-transport__seek::-moz-range-track {
+  height: clamp(3px, 0.4cqi, 5px);
+  border-radius: 999px;
+  background: rgba(140, 200, 225, 0.28);
 }
 
 .vault-audio-transport__seek::-webkit-slider-thumb {
@@ -3205,6 +3226,8 @@ body {
   appearance: none;
   width: clamp(7px, 0.85cqi, 12px);
   height: clamp(7px, 0.85cqi, 12px);
+  /* WebKit tops the thumb on the track; center it on the line. */
+  margin-top: calc((clamp(3px, 0.4cqi, 5px) - clamp(7px, 0.85cqi, 12px)) / 2);
   border: none;
   border-radius: 50%;
   background: #7fe6fb;
@@ -4262,6 +4285,7 @@ body.is-player-modal-open::before {
   flex-direction: column;
   padding: max(12px, env(safe-area-inset-top, 0px)) 20px max(24px, env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .player-immersive-expanded__ambient {
@@ -5211,6 +5235,7 @@ body.is-player-modal-open::before {
   width: min(420px, calc(100vw - 32px));
   max-height: 90vh;
   overflow-y: auto;
+  overflow-x: hidden;
   background: linear-gradient(180deg, #0d0d1a 0%, #080810 100%);
   border: 1px solid #00bfff22;
   border-radius: 24px;
@@ -6364,6 +6389,7 @@ body.is-player-modal-open::before {
     flex: 1;
     height: 100%;
     overflow-y: auto;
+    overflow-x: hidden;
     border-radius: 0 24px 24px 0;
   }
   .modal-immersive-body--desktop .drag-pill {

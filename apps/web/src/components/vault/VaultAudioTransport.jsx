@@ -222,13 +222,24 @@ export function VaultAudioTransport({ slug, title, onEnded }) {
     else el.pause();
   }, [slug]);
 
-  const scrub = useCallback((e) => {
+  // Dragging moves the thumb silently; the audio seeks once, where it is let
+  // go (release, key up or focus leaving) — never on every step of the drag.
+  const dragValueRef = useRef(null);
+  const [dragValue, setDragValue] = useState(null);
+  const followScrub = useCallback((e) => {
+    dragValueRef.current = Number(e.target.value);
+    setDragValue(dragValueRef.current);
+  }, []);
+  const commitScrub = useCallback(() => {
+    const value = dragValueRef.current;
+    dragValueRef.current = null;
+    setDragValue(null);
     const el = audioRef.current;
-    if (!el || !Number.isFinite(el.duration)) return;
-    el.currentTime = (Number(e.target.value) / 1000) * el.duration;
+    if (value == null || !el || !Number.isFinite(el.duration)) return;
+    el.currentTime = (value / 1000) * el.duration;
   }, []);
 
-  const pct = duration > 0 ? (current / duration) * 1000 : 0;
+  const pct = dragValue ?? (duration > 0 ? (current / duration) * 1000 : 0);
   const busy = status === "loading";
   const blocked = status === "denied" || status === "error";
 
@@ -274,7 +285,11 @@ export function VaultAudioTransport({ slug, title, onEnded }) {
                 max={1000}
                 step={1}
                 value={pct}
-                onChange={scrub}
+                onChange={followScrub}
+                onPointerUp={commitScrub}
+                onTouchEnd={commitScrub}
+                onKeyUp={commitScrub}
+                onBlur={commitScrub}
                 disabled={busy || !duration}
                 aria-label="Seek"
               />

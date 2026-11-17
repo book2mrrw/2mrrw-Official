@@ -514,6 +514,8 @@ function Waveform({ playing, t, bars = 26 }) {
 // the drag (or tap) ends — scrubbing is silent, like a native player. After the
 // commit the chosen position is held briefly while the engine lands there.
 const SCRUB_SETTLE_MS = 350;
+// Above and below the 4px track: a 44px-tall target to grab.
+const SCRUB_HIT_PAD_PX = 20;
 
 function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
   const barRef = useRef(null);
@@ -585,8 +587,11 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
   const shownPct = dragRatio != null ? dragRatio * 100 : pct;
 
   return (
+    // The hit area is a finger tall while the track stays a 4px line, and it
+    // owns the gesture (touch-action: none): dragging the scrubber never
+    // scrolls or pans the sheet around it. It shrinks to fit between the two
+    // time labels instead of pushing them off the screen.
     <div
-      ref={barRef}
       onMouseDown={onMouseDown}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -597,15 +602,24 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
       aria-disabled={isPreview || undefined}
       tabIndex={isPreview ? -1 : 0}
       style={{
+        flex: "1 1 0%",
+        minWidth: 0,
         width: "100%",
-        height: 4,
-        background: "rgba(255,255,255,.12)",
-        borderRadius: 4,
+        padding: `${SCRUB_HIT_PAD_PX}px 0`,
+        margin: `-${SCRUB_HIT_PAD_PX}px 0`,
         cursor: isPreview ? "default" : "pointer",
-        position: "relative",
-        flexShrink: 0,
+        touchAction: isPreview ? "auto" : "none",
       }}
     >
+      <div
+        ref={barRef}
+        style={{
+          height: 4,
+          background: "rgba(255,255,255,.12)",
+          borderRadius: 4,
+          position: "relative",
+        }}
+      >
       {isPreview ? (
         <div
           style={{
@@ -645,6 +659,7 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
             }}
           />
         ) : null}
+      </div>
       </div>
     </div>
   );
@@ -688,7 +703,7 @@ function FloatingPlayer({
         zIndex: 10,
         padding: "10px 20px 16px",
         maxHeight: "100%",
-        overflowY: "auto",
+        overflowX: "hidden", overflowY: "auto",
         background: "linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.55) 60%,transparent 100%)",
         ...vars,
       }}
@@ -961,7 +976,7 @@ function PlaylistPickerSheet({ track, album, userId, t, onClose }) {
   }, [userId, trackRef, album, canAdd, saving, onClose]);
 
   return (
-    <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(32px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)", maxHeight: "70vh", overflowY: "auto" }}>
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(32px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)", maxHeight: "70vh", overflowX: "hidden", overflowY: "auto" }}>
       <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
       <div style={{ padding: "4px 22px 14px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
         <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 18, fontWeight: 400, color: "white" }}>Add to Playlist</div>
@@ -1119,7 +1134,7 @@ function QueueSheet({ queue, queueIndex, t, onRemove, onMove, onClear, onSaveAsP
 
       {tab === "queue" ? (
         <>
-          <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div style={{ flex: 1, overflowX: "hidden", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
             {nowPlaying ? (
               <>
                 <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".2em", color: "rgba(255,255,255,.3)", padding: "10px 22px 4px" }}>NOW PLAYING</div>
@@ -1148,7 +1163,7 @@ function QueueSheet({ queue, queueIndex, t, onRemove, onMove, onClear, onSaveAsP
           </div>
         </>
       ) : (
-        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ flex: 1, overflowX: "hidden", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
           {history.length ? history.map((h, i) => (
             <div key={h.id ?? h.slug ?? i} style={{ padding: "10px 22px", borderBottom: "1px solid rgba(255,255,255,.04)", display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.2)", flexShrink: 0, minWidth: 16 }}>{i + 1}</span>
@@ -1466,7 +1481,7 @@ export function SingleModal({
         </div>
 
         <div style={{ flex: "0 0 auto", display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
-          <div style={{ padding: "14px 22px", display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+          <div style={{ padding: "14px 22px", display: "flex", flexDirection: "column", gap: 10, overflowX: "hidden", overflowY: "auto" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 21, fontWeight: 500, color: "white", lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -2353,7 +2368,7 @@ function AlbumModalView({
             </button>
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
+          <div style={{ flex: 1, overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
             {!tracks.length ? (
               <div style={{ padding: "24px 20px", fontSize: 12, color: "rgba(255,255,255,.45)", textAlign: "center" }}>
                 Track list unavailable for this release.
@@ -2520,7 +2535,7 @@ function AlbumModalView({
 
         {sheet === "share" ? <ShareSheet title={`Share ${album?.type || "Album"}`} sub={`${album?.title} · ${album?.artist}`} t={t} onClose={() => setSheet(null)} /> : null}
         {sheet === "credits" ? (
-          <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(28px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)", maxHeight: "80vh", overflowY: "auto" }}>
+          <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(28px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)", maxHeight: "80vh", overflowX: "hidden", overflowY: "auto" }}>
           <label style={{ display: "block", padding: 16, color: "white" }}>Credits for
             <select aria-label="Credits scope" value={creditScope} onChange={e => setCreditScope(e.target.value)}>
               <option value="release">Release</option>

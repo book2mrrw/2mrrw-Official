@@ -3287,7 +3287,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   animate={{ y: mobileNavClosing ? "100%" : 0 }}
                   transition={{ duration: MOBILE_NAV_SHEET_MS / 1000, ease: [0.4, 0, 0.2, 1] }}
                   onClick={e=>e.stopPropagation()}
-                  style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:"max(32px, env(safe-area-inset-bottom))",border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}
+                  style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:"max(32px, env(safe-area-inset-bottom))",border:"1px solid #1e1e1e",maxHeight:"80vh",overflowX:"hidden",overflowY:"auto"}}
                 >
                   <motion.div
                     onClick={closeMobileNav}
@@ -3387,7 +3387,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 <motion.div
                   {...SHEET_UP}
                   onClick={e=>e.stopPropagation()}
-                  style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 max(32px, env(safe-area-inset-bottom))",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowY:"auto"}}
+                  style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 max(32px, env(safe-area-inset-bottom))",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowX:"hidden",overflowY:"auto"}}
                 >
                   <motion.div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 0"}}/>
                   <motion.div style={{padding:"16px 20px 0"}}><h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart {cart.length>0&&`(${cart.length})`}</h3></motion.div>

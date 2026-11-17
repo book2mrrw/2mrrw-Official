@@ -200,6 +200,7 @@ export default function GiftBottomSheet({
           <div
             style={{
               flex: 1,
+              overflowX: "hidden",
               overflowY: "auto",
               WebkitOverflowScrolling: "touch",
               padding: "0 20px 12px",

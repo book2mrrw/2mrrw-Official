@@ -1233,7 +1233,7 @@ function GlobalAudioPlayerBar() {
         <div
           ref={queueListRef}
           style={{
-            overflowY: "auto",
+            overflowX: "hidden", overflowY: "auto",
             flex: 1,
             padding: "4px 0 max(16px, env(safe-area-inset-bottom, 0px))",
             touchAction: dragQueue ? "none" : "pan-y",
