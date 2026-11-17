@@ -100,7 +100,12 @@ test("skip-back/skip-forward buttons and lyric click-to-seek are disabled (not j
   assert.match(src, /onSkipFwd=\{isPreview \? undefined : seekForward\}/);
   assert.match(src, /onSkipBack=\{isPreview && activeTrack && !activeTrack\?\.free \? undefined : seekBack\}/);
   assert.match(src, /onSkipFwd=\{isPreview && activeTrack && !activeTrack\?\.free \? undefined : seekForward\}/);
-  assert.match(src, /onSeek=\{isPreview && activeTrack && !activeTrack\?\.free \? undefined : seek\}/);
+  // Lyric click-to-seek: both modals withhold seek for a preview, and also when
+  // the engine itself reports the playing track as preview-only.
+  const previewOnly = String.raw`engineTrack\?\.metadata\?\.access\?\.previewOnly === true`;
+  assert.match(src, new RegExp(String.raw`onSeek=\{isPreview \|\| ${previewOnly} \? undefined : seek\}`), "single modal lyrics");
+  assert.match(src, new RegExp(String.raw`onSeek=\{\(isPreview && activeTrack && !activeTrack\?\.free\) \|\| ${previewOnly} \? undefined : seek\}`), "album modal lyrics");
+  assert.equal((src.match(/onSeek=\{/g) || []).length, 2, "every lyric panel seek is covered above");
 });
 
 test("the preview duration label matches the real enforced cap (PREVIEW_HARD_CAP_SEC), not a stale hardcoded value", () => {
