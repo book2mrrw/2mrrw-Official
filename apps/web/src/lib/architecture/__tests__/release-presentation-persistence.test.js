@@ -36,10 +36,16 @@ test("latest-single artwork videos never expose native mobile playback controls"
   const latest = read("src/components/home/LatestSinglesStyleRow.js");
   const styles = read("src/app/globals.css");
 
-  assert.equal((latest.match(/className="release-card-artwork-video"/g) || []).length, 2);
-  assert.equal((latest.match(/controls=\{false\}/g) || []).length, 2);
-  assert.equal((latest.match(/disablePictureInPicture/g) || []).length, 2);
-  assert.equal((latest.match(/disableRemotePlayback/g) || []).length, 2);
+  // Every artwork <video> in the row (one since the 2026-09-07 single-element
+  // rewrite), each carrying all of the no-native-controls attributes.
+  const videos = latest.match(/<video\b[\s\S]*?(?:\/>|<\/video>)/g) || [];
+  assert.ok(videos.length >= 1);
+  for (const tag of videos) {
+    assert.match(tag, /className="release-card-artwork-video"/);
+    assert.match(tag, /controls=\{false\}/);
+    assert.match(tag, /disablePictureInPicture/);
+    assert.match(tag, /disableRemotePlayback/);
+  }
   assert.match(styles, /\.release-card-artwork-video::\-webkit-media-controls-overlay-play-button/);
   assert.match(styles, /\.release-card-artwork-video::\-webkit-media-controls-start-playback-button/);
 });
