@@ -40,7 +40,9 @@ test("the draft insert persists content_kind and echoes it back on both the fres
 
 test("publish selects content_kind from the release and stamps it onto the products upsert — the one place a podcast episode is tagged for storefront filtering", () => {
   const src = read("src/app/api/admin/releases/[id]/publish/route.js");
-  assert.match(src, /\.select\("id, slug, status, release_type, content_kind, cover_art_r2_key, metadata"\)/);
+  // The release must be loaded with its content_kind (an explicit column list or "*").
+  const releaseSelect = src.match(/\.from\("releases"\)\s*\.select\("([^"]+)"\)/)?.[1];
+  assert.ok(releaseSelect === "*" || /\bcontent_kind\b/.test(releaseSelect || ""), `release select "${releaseSelect}" drops content_kind`);
   assert.match(src, /content_kind:\s*release\.content_kind \|\| "music",/);
 });
 
@@ -142,7 +144,8 @@ test("UploadWizard threads contentKind into the draft-creation request body and 
   const src = read("src/components/admin/UploadWizard.js");
   assert.match(src, /export function UploadWizard\(\{ onComplete, onDismiss, initialReleaseId = null, contentKind = "music" \}\)/);
   assert.match(src, /body: JSON\.stringify\(\{\s*\n\s*release_type: data\.release_type,\s*\n\s*content_kind: contentKind,/);
-  assert.match(src, /const commonProps = \{ data, onChange: setField, onNext: next, onBack: back, releaseId, draftSlug, contentKind \};/);
+  // Every step receives contentKind (commonProps also carries the publish/draft handlers).
+  assert.match(src, /const commonProps = \{[^}]*\bcontentKind\b[^}]*\};/);
 });
 
 test("the upload session key is namespaced per contentKind so a podcast draft-in-progress can never resume as a music draft or vice versa", () => {
