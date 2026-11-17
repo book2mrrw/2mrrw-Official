@@ -76,9 +76,12 @@ export async function GET(req) {
     );
   }
 
+  // Public fallbacks resolve to a site path (/images/albums/ad.jpg); a
+  // redirect needs an absolute URL or Next throws and the request 500s —
+  // which is what every mixtape cover without motion art did.
   return applyMediaCors(
     req,
-    NextResponse.redirect(resolved.url, {
+    NextResponse.redirect(new URL(resolved.url, req.nextUrl), {
       status: 302,
       headers: {
         "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
