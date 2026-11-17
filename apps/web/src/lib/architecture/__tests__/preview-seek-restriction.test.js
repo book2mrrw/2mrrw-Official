@@ -70,7 +70,8 @@ test("the naturally-shorter-than-cap onEnded path already had this reset — con
 test("the global player bar scrubber is fully non-interactive for preview — no drag-state, no seek, on any input path", () => {
   const src = read("src/components/audio/GlobalAudioPlayerBar.js");
   const scrubFnAt = src.indexOf("const PlayerBarScrub = memo(");
-  const scrubBody = src.slice(scrubFnAt, scrubFnAt + 6000);
+  // The whole component, however long it grows.
+  const scrubBody = src.slice(scrubFnAt, src.indexOf("// ─── Cover art thumbnail", scrubFnAt));
   assert.match(scrubBody, /if \(previewOnly \|\| !maxSeek\) return;/,
     "seekFromEvent must no-op for preview before computing or applying any ratio");
   assert.match(scrubBody, /const onScrubStart = useCallback\(\s*\(e\) => \{\s*if \(previewOnly\) return;/,
@@ -82,7 +83,8 @@ test("the global player bar scrubber is fully non-interactive for preview — no
 test("the immersive preview modal's own ScrubBar (a second, separate scrub implementation) is also non-interactive for preview", () => {
   const src = read("src/components/preview/ImmersivePreviewModal.js");
   const scrubFnAt = src.indexOf("function ScrubBar(");
-  const scrubBody = src.slice(scrubFnAt, scrubFnAt + 3000);
+  // The whole component, however long it grows.
+  const scrubBody = src.slice(scrubFnAt, scrubFnAt + src.slice(scrubFnAt).search(/\r?\n\}\r?\n/) + 3);
   assert.match(scrubBody, /const seekAt = useCallback\(\(e\) => \{\s*\/\/[^\n]*\n[^\n]*\n[^\n]*\n\s*if \(isPreview\) return;/);
   assert.match(scrubBody, /const onMouseDown = useCallback\(\(e\) => \{\s*if \(isPreview\) return;/);
   assert.match(scrubBody, /const onTouchMove = useCallback\(\(e\) => \{\s*if \(isPreview\) return;/);

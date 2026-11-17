@@ -39,17 +39,43 @@ function fmtTime(sec) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+// ─── Scrub preview ────────────────────────────────────────────────────────────
+// While the scrubber is dragged, the bar and the time label follow the finger
+// but audio does not move: one seek is committed where the drag ends, so
+// scrubbing is silent, like a native player. Module-level because there is one
+// global bar, and so the sibling time label can follow without re-rendering.
+const scrubPreview = { seconds: null, listeners: new Set() };
+
+function setScrubPreview(seconds) {
+  scrubPreview.seconds = seconds;
+  scrubPreview.listeners.forEach((listener) => listener());
+}
+
+function subscribeScrubPreview(listener) {
+  scrubPreview.listeners.add(listener);
+  return () => scrubPreview.listeners.delete(listener);
+}
+
+// After a committed seek, the bar holds the chosen position this long while
+// the engine lands there, so it never flickers back to the old position.
+const SCRUB_SETTLE_MS = 350;
+
 // ─── Live current-time label (DOM-mutated, no React re-renders per frame) ────
 const PlayerBarCurrentTime = memo(function PlayerBarCurrentTime() {
   const spanRef = useRef(null);
   const { subscribeProgress, getProgressSnapshot } = useAudioPlayer();
   useEffect(() => {
     function apply() {
-      const { currentTime } = getProgressSnapshot();
+      const currentTime = scrubPreview.seconds ?? getProgressSnapshot().currentTime;
       if (spanRef.current) spanRef.current.textContent = fmtTime(currentTime);
     }
     apply();
-    return subscribeProgress(apply);
+    const stopProgress = subscribeProgress(apply);
+    const stopPreview = subscribeScrubPreview(apply);
+    return () => {
+      stopProgress();
+      stopPreview();
+    };
   }, [subscribeProgress, getProgressSnapshot]);
   return (
     <span ref={spanRef} style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", color: "rgba(255,255,255,0.45)", fontFamily: "monospace", flexShrink: 0, minWidth: 28 }}>
@@ -66,6 +92,13 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
   const handleRef = useRef(null);
   const durationRef = useRef(duration);
   const [dragging, setDragging] = useState(false);
+  // The drag owns the bar from touch-down until the committed seek settles.
+  const scrubbingRef = useRef(false);
+  const pendingSecondsRef = useRef(null);
+  const settleTimerRef = useRef(null);
+  // After a touch, mobile browsers also fire compatibility mouse events at the
+  // same spot; those must not start a second scrub (and a second seek).
+  const lastTouchAtRef = useRef(-Infinity);
   const { subscribeProgress, getProgressSnapshot } = useAudioPlayer();
 
   const maxSeek = useMemo(() => {
@@ -86,6 +119,7 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
 
   useEffect(() => {
     function applyProgress() {
+      if (scrubbingRef.current) return;
       const { currentTime } = getProgressSnapshot();
       const dur = durationRef.current;
       const pct = dur > 0 ? Math.min(100, (currentTime / dur) * 100) : 0;
@@ -113,44 +147,81 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
     [duration, maxSeek, previewOnly]
   );
 
-  const seekFromEvent = useCallback(
+  // Moves the bar and the time label to the pointer without seeking.
+  const followFromEvent = useCallback(
     (e) => {
       // Preview is fixed-position by design — the bar may show progress, but
       // it is non-interactive. Enforced again server-side in seekInternal;
       // this just prevents the dead click/drag interaction from engaging at
       // all, rather than silently clamping to a spot the user didn't pick.
       if (previewOnly || !maxSeek) return;
-      const ratio = ratioFromEvent(e);
-      onSeek(ratio * maxSeek);
+      const seconds = ratioFromEvent(e) * maxSeek;
+      pendingSecondsRef.current = seconds;
+      const dur = durationRef.current;
+      const pct = dur > 0 ? Math.min(100, (seconds / dur) * 100) : 0;
+      if (fillRef.current) fillRef.current.style.width = `${pct}%`;
+      if (handleRef.current) handleRef.current.style.left = `${pct}%`;
+      if (scrubRef.current) scrubRef.current.setAttribute("aria-valuenow", String(seconds));
+      setScrubPreview(seconds);
     },
-    [maxSeek, onSeek, previewOnly, ratioFromEvent]
+    [maxSeek, previewOnly, ratioFromEvent]
   );
+
+  // One seek, where the drag (or tap) ends.
+  const commitScrub = useCallback(() => {
+    const seconds = pendingSecondsRef.current;
+    pendingSecondsRef.current = null;
+    setDragging(false);
+    if (seconds != null) onSeek(seconds);
+    clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => {
+      scrubbingRef.current = false;
+      setScrubPreview(null);
+    }, SCRUB_SETTLE_MS);
+  }, [onSeek]);
 
   const onScrubStart = useCallback(
     (e) => {
       if (previewOnly) return;
+      if (e.type === "touchstart") lastTouchAtRef.current = performance.now();
+      else if (performance.now() - lastTouchAtRef.current < 800) return;
       e.preventDefault();
+      clearTimeout(settleTimerRef.current);
+      scrubbingRef.current = true;
       setDragging(true);
-      seekFromEvent(e);
+      followFromEvent(e);
     },
-    [previewOnly, seekFromEvent]
+    [previewOnly, followFromEvent]
   );
 
   useEffect(() => {
     if (!dragging) return undefined;
-    const onMove = (e) => seekFromEvent(e);
-    const onEnd = () => setDragging(false);
+    const onMove = (e) => {
+      if (e.cancelable) e.preventDefault(); // the drag scrubs; it never scrolls the page
+      followFromEvent(e);
+    };
+    const onTouchEnd = () => {
+      lastTouchAtRef.current = performance.now();
+      commitScrub();
+    };
     window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onEnd);
+    window.addEventListener("mouseup", commitScrub);
     window.addEventListener("touchmove", onMove, { passive: false });
-    window.addEventListener("touchend", onEnd);
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchEnd);
     return () => {
       window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onEnd);
+      window.removeEventListener("mouseup", commitScrub);
       window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onEnd);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [dragging, seekFromEvent]);
+  }, [dragging, followFromEvent, commitScrub]);
+
+  useEffect(() => () => {
+    clearTimeout(settleTimerRef.current);
+    if (scrubbingRef.current) setScrubPreview(null);
+  }, []);
 
   const capPct = previewOnly && duration > 0 ? Math.min(100, (maxSeek / duration) * 100) : null;
 
@@ -167,9 +238,6 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
       style={previewOnly ? { cursor: "default" } : undefined}
       onMouseDown={onScrubStart}
       onTouchStart={onScrubStart}
-      onTouchMove={seekFromEvent}
-      onTouchEnd={seekFromEvent}
-      onClick={seekFromEvent}
     >
       <div className="player-bar-scrub__track">
         <div ref={fillRef} className="player-bar-scrub-fill" style={{ width: "0%" }} />

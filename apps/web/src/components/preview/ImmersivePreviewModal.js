@@ -510,9 +510,20 @@ function Waveform({ playing, t, bars = 26 }) {
   );
 }
 
+// While dragging, the bar follows the pointer but audio seeks only once, where
+// the drag (or tap) ends — scrubbing is silent, like a native player. After the
+// commit the chosen position is held briefly while the engine lands there.
+const SCRUB_SETTLE_MS = 350;
+
 function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
   const barRef = useRef(null);
   const draggingRef = useRef(false);
+  const dragRatioRef = useRef(null);
+  const settleTimerRef = useRef(null);
+  // After a touch, mobile browsers also fire compatibility mouse events at the
+  // same spot; those must not start a second scrub (and a second seek).
+  const lastTouchAtRef = useRef(-Infinity);
+  const [dragRatio, setDragRatio] = useState(null);
 
   const seekAt = useCallback((e) => {
     // Preview is fixed-position by design — non-interactive, even though this
@@ -521,23 +532,39 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
     if (isPreview) return;
     const rect = (barRef.current || e.currentTarget).getBoundingClientRect();
     const cx = e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX;
-    onSeekRatio(Math.max(0, Math.min(1, (cx - rect.left) / rect.width)));
-  }, [isPreview, onSeekRatio]);
+    const ratio = Math.max(0, Math.min(1, (cx - rect.left) / rect.width));
+    clearTimeout(settleTimerRef.current);
+    dragRatioRef.current = ratio;
+    setDragRatio(ratio);
+  }, [isPreview]);
+
+  const commit = useCallback(() => {
+    draggingRef.current = false;
+    const ratio = dragRatioRef.current;
+    dragRatioRef.current = null;
+    if (ratio == null) return;
+    onSeekRatio(ratio);
+    clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => setDragRatio(null), SCRUB_SETTLE_MS);
+  }, [onSeekRatio]);
+
+  useEffect(() => () => clearTimeout(settleTimerRef.current), []);
 
   const onMouseDown = useCallback((e) => {
     if (isPreview) return;
+    if (performance.now() - lastTouchAtRef.current < 800) return;
     e.preventDefault();
     draggingRef.current = true;
     seekAt(e);
     const onMove = (ev) => { if (draggingRef.current) seekAt(ev); };
     const onUp = () => {
-      draggingRef.current = false;
+      commit();
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [isPreview, seekAt]);
+  }, [commit, isPreview, seekAt]);
 
   const onTouchMove = useCallback((e) => {
     if (isPreview) return;
@@ -545,14 +572,28 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
     seekAt(e);
   }, [isPreview, seekAt]);
 
+  const onTouchStart = useCallback((e) => {
+    lastTouchAtRef.current = performance.now();
+    seekAt(e);
+  }, [seekAt]);
+
+  const onTouchEnd = useCallback(() => {
+    lastTouchAtRef.current = performance.now();
+    commit();
+  }, [commit]);
+
+  const shownPct = dragRatio != null ? dragRatio * 100 : pct;
+
   return (
     <div
       ref={barRef}
       onMouseDown={onMouseDown}
-      onTouchStart={seekAt}
+      onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
       role="slider"
-      aria-valuenow={pct}
+      aria-valuenow={shownPct}
       aria-disabled={isPreview || undefined}
       tabIndex={isPreview ? -1 : 0}
       style={{
@@ -580,16 +621,16 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
       ) : null}
       <div
         style={{
-          width: `${Math.min(100, pct)}%`,
+          width: `${Math.min(100, shownPct)}%`,
           height: "100%",
           borderRadius: 4,
           background: `linear-gradient(90deg,${t.p1},${t.accent})`,
           boxShadow: `0 0 8px ${t.glow}`,
-          transition: "width .1s linear",
+          transition: dragRatio != null ? "none" : "width .1s linear",
           position: "relative",
         }}
       >
-        {pct > 2 ? (
+        {shownPct > 2 ? (
           <div
             style={{
               position: "absolute",
