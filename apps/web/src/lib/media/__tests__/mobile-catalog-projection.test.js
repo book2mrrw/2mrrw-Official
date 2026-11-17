@@ -43,7 +43,7 @@ test("mobile projection includes mixtapes and preserves exact Love Hz and A.D me
     /\/videos\/mixtapes-and-eps\/love-hz-vol-1\/love-hz-vol-1\.mp4$/
   );
   assert.equal(loveHz.coverArtType, "video");
-  assert.equal(ad.cover, "https://www.2mrrw.com/images/albums/ad.JPG");
+  assert.equal(ad.cover, "https://www.2mrrw.com/images/albums/ad.jpg");
   assert.equal(ad.video, null);
   assert.equal(ad.coverArtType, "image");
 });

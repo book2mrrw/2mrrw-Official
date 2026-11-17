@@ -4,13 +4,13 @@
  *
  * WHY THIS EXISTS
  *
- * Covers shipped their masters straight into the grid: `ad.JPG` is 1600x1600 /
+ * Covers shipped their masters straight into the grid: `ad.jpg` is 1600x1600 /
  * 200 KB rendered into a 220-330 px cell, roughly 6x the pixels needed. Nothing
  * resized them, because no surface owned cover delivery — each one just handed
  * the raw catalog URL to an `<img>`.
  *
  * Next's built-in optimizer already solves this; it was simply never pointed at
- * the covers. Measured on `ad.JPG` (200,772 bytes original):
+ * the covers. Measured on `ad.jpg` (200,772 bytes original):
  *
  *     w=256  ->   4,578 bytes  (2.2%)
  *     w=384  ->   7,288 bytes  (3.6%)

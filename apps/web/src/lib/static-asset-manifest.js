@@ -32,7 +32,7 @@
  *
  * On the TTLs: every prefix whose filenames carry no content hash gets a
  * bounded TTL, never `immutable`. Replacing the bytes at a stable path —
- * /images/albums/ad.JPG, say — would otherwise serve the old asset for the
+ * /images/albums/ad.jpg, say — would otherwise serve the old asset for the
  * whole TTL. Only /_next/static/ is content-hashed by the build, which is why
  * it is the one entry that may be immutable (and Next already sets that).
  */

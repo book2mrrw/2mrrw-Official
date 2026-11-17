@@ -174,7 +174,7 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     release_date: "2024-03-24",
     price_cents: 999,
     legacy_cover_stem: "ad",
-    legacy_cover: "/images/albums/ad.JPG",
+    legacy_cover: "/images/albums/ad.jpg",
   },
   {
     slug: "tbh",

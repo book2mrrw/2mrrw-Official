@@ -69,7 +69,7 @@ const nextConfig = {
     //
     // Deliberately one day, not one year. A derivative is keyed by
     // (source URL, width, quality, format), and cover URLs carry no revision
-    // yet — so replacing the bytes at /images/albums/ad.JPG in place would keep
+    // yet — so replacing the bytes at /images/albums/ad.jpg in place would keep
     // serving the old derivative for the whole TTL. One day bounds that to
     // something a redeploy comfortably outlives. Raise this to 31536000 only
     // once the cover URL carries artwork_revision and is genuinely immutable.
@@ -88,6 +88,18 @@ const nextConfig = {
       // immutable -- see the manifest for why.
       ...staticAssetCacheHeaders(),
     ];
+  },
+  async rewrites() {
+    return {
+      // After the static-file lookup only: route matching is case-insensitive,
+      // so a redirect (which runs first) would also catch ad.jpg and loop.
+      afterFiles: [
+        // The (A.D) cover is ad.jpg — the name every catalog row, migration and
+        // R2 key uses. It was published as ad.JPG until 2026-11-17; URLs saved
+        // with that name (playback sessions, sent emails) keep resolving.
+        { source: "/images/albums/ad.JPG", destination: "/images/albums/ad.jpg" },
+      ],
+    };
   },
   async redirects() {
     return [

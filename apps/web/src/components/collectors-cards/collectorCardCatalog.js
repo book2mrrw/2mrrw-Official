@@ -33,7 +33,7 @@ export const COLLECTOR_CARDS_CATALOG = [
     price: 99.99,
     editionSize: 200,
     accentColor: "#ff6b35",
-    artwork: "/images/albums/ad.JPG",
+    artwork: "/images/albums/ad.jpg",
     faceType: "image",
   },
   {

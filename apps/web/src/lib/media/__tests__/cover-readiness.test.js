@@ -31,7 +31,7 @@ function imageElements(source) {
 // never replayed. Element state is the only thing that can still report it.
 
 test("an image that settled before any listener attached is still reported ready", () => {
-  const settledBeforeHydration = { src: "/images/albums/ad.JPG", complete: true, naturalWidth: 1600 };
+  const settledBeforeHydration = { src: "/images/albums/ad.jpg", complete: true, naturalWidth: 1600 };
 
   assert.equal(mediaElementOutcome(settledBeforeHydration, "image"), MEDIA_READY);
   assert.equal(isMediaElementReady(settledBeforeHydration, "image"), true);
@@ -59,7 +59,7 @@ test("an intrinsically sizeless SVG is ready on complete, not treated as a decod
   // decode successfully and still report naturalWidth 0.
   const svg = { src: "/images/placeholder/artwork.svg", complete: true, naturalWidth: 0 };
   const svgWithQuery = { src: "/icons/mark.svgz?v=3", complete: true, naturalWidth: 0 };
-  const raster = { src: "/images/albums/ad.JPG", complete: true, naturalWidth: 0 };
+  const raster = { src: "/images/albums/ad.jpg", complete: true, naturalWidth: 0 };
 
   assert.equal(mediaElementOutcome(svg, "image"), MEDIA_READY);
   assert.equal(mediaElementOutcome(svgWithQuery, "image"), MEDIA_READY);
@@ -75,7 +75,7 @@ test("a source-less or detached element is pending, never failed", () => {
 });
 
 test("currentSrc alone is enough to consider a source resolved", () => {
-  const resolved = { currentSrc: "/images/albums/ad.JPG", complete: true, naturalWidth: 1600 };
+  const resolved = { currentSrc: "/images/albums/ad.jpg", complete: true, naturalWidth: 1600 };
 
   assert.equal(mediaElementOutcome(resolved, "image"), MEDIA_READY);
 });

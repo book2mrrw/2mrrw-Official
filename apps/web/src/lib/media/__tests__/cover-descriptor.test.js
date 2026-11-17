@@ -42,10 +42,10 @@ test("a discovery URL is motion-shaped and never a still", () => {
 test("real artwork passes as a still and never as motion", () => {
   for (const url of [
     "/images/singles/turnt.jpg",
-    "/images/albums/ad.JPG",
+    "/images/albums/ad.jpg",
     "https://pub-643e.r2.dev/images/mixtapes-and-eps/tbh/tbh.jpg",
     "/images/features/n-2-k-5.png",
-    "/_next/image?url=%2Fimages%2Falbums%2Fad.JPG&w=640&q=75",
+    "/_next/image?url=%2Fimages%2Falbums%2Fad.jpg&w=640&q=75",
   ]) {
     assert.equal(isStillUrl(url), true, `${url} should be a still`);
     assert.equal(isMotionUrl(url), false, `${url} must not read as motion`);
