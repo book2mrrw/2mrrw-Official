@@ -39,8 +39,20 @@ function routeFiles(directory) {
 test("F0-ADMIN-1 every /api/admin route declares a canonical authority boundary", () => {
   const root = path.join(SRC, "app/api/admin");
   const accepted = /getAdminSessionUser|requireAdminActor|requireAdminOrCapability|requireServiceCapability/;
+  const matrix = JSON.parse(readFileSync(path.join(SRC, "../docs/audit/E1M-ROUTE-AUTHORITY-MATRIX-2026-08-25.json"), "utf8"));
+  // Or through the route helper the authority matrix names for this route,
+  // and only while that helper itself calls requireAdminActor.
+  const viaHelper = (file, source) => {
+    const relative = path.relative(path.join(SRC, ".."), file).split(path.sep).join("/");
+    const helper = matrix.routes.find((item) => item.file === relative)?.evidence.match(/via (\w+) \((src\/[^)]+)\)/);
+    return Boolean(helper) && new RegExp(`\\b${helper[1]}\\b`).test(source) &&
+      /\brequireAdminActor\(/.test(readFileSync(path.join(SRC, "..", helper[2]), "utf8"));
+  };
   const violations = routeFiles(root)
-    .filter((file) => !accepted.test(readFileSync(file, "utf8")))
+    .filter((file) => {
+      const source = readFileSync(file, "utf8");
+      return !accepted.test(source) && !viaHelper(file, source);
+    })
     .map((file) => path.relative(SRC, file));
   assert.deepEqual(violations, []);
 });
