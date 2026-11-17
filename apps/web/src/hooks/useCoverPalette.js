@@ -11,6 +11,30 @@ const MONO_PRIMARY = [210, 208, 202];
 const MONO_SECONDARY = [138, 136, 128];
 
 const MOTION_EXT_RE = /\.(mp4|webm|gif)(\?|#|$)/i;
+// A palette needs a frame's dominant colors, not its detail: video frames are
+// sampled at this long edge instead of full resolution (1080x1080 covers made
+// the frame snapshot one of the main thread's heaviest single costs).
+const PALETTE_SAMPLE_EDGE = 160;
+// Palettes are a pure function of the cover file, so every surface showing the
+// same cover (card, player bar, modal) shares one extraction -- one download
+// and decode -- instead of each repeating it.
+const PALETTE_CACHE_LIMIT = 64;
+const paletteCache = new Map();
+
+function cachedPalette(key, extract) {
+  let pending = paletteCache.get(key);
+  if (!pending) {
+    pending = extract();
+    paletteCache.set(key, pending);
+    pending.catch(() => {
+      if (paletteCache.get(key) === pending) paletteCache.delete(key); // let a later mount retry
+    });
+    if (paletteCache.size > PALETTE_CACHE_LIMIT) {
+      paletteCache.delete(paletteCache.keys().next().value);
+    }
+  }
+  return pending;
+}
 
 export function isMotionCoverMedia(src, type = "image") {
   if (type === "video" || type === "motion") return true;
@@ -176,9 +200,12 @@ async function extractFromVideoUrl(url, animated) {
     });
   }
 
+  const frameWidth = video.videoWidth || 64;
+  const frameHeight = video.videoHeight || 64;
+  const scale = Math.min(1, PALETTE_SAMPLE_EDGE / Math.max(frameWidth, frameHeight));
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, video.videoWidth || 64);
-  canvas.height = Math.max(1, video.videoHeight || 64);
+  canvas.width = Math.max(1, Math.round(frameWidth * scale));
+  canvas.height = Math.max(1, Math.round(frameHeight * scale));
   canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
 
   const img = new Image();
@@ -219,9 +246,12 @@ export function useCoverPalette(coverSrc, coverType = "image") {
 
     (async () => {
       try {
-        const next = isVideoCoverFile(coverSrc) || coverType === "video"
-          ? await extractFromVideoUrl(url, true).catch(() => extractFromImageUrl(url, true))
-          : await extractFromImageUrl(url, animated);
+        const isVideo = isVideoCoverFile(coverSrc) || coverType === "video";
+        const next = await cachedPalette(`${isVideo ? "video" : "image"}:${animated}:${url}`, () =>
+          isVideo
+            ? extractFromVideoUrl(url, true).catch(() => extractFromImageUrl(url, true))
+            : extractFromImageUrl(url, animated)
+        );
 
         if (!cancelled) setPalette(next);
       } catch {

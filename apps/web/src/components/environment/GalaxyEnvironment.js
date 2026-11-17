@@ -94,14 +94,14 @@
  * always the exact same decoded frame. No experimental codec alpha
  * feature involved either way — this is ordinary, hardware-decoded video.
  *
- * Each frame, the hidden decode-source video's top half (color) is drawn
- * straight onto the visible canvas and its bottom half (alpha) is drawn to
- * a scratch canvas; the scratch's luminance is then copied into the
- * canvas image's alpha channel before it's painted — genuine per-pixel
+ * Each frame, the hidden decode-source video's top half (color) and bottom
+ * half (alpha mask) are composited onto the visible canvas on the GPU (one
+ * WebGL shader, see packed-alpha-renderer.js) — genuine per-pixel
  * transparency that follows the real object silhouette, computed from
- * real matted asset data, not a synthetic mask shape. This is throttled to
- * ~15fps (matching the source encode) inside the SAME shared RAF loop as
- * everything else below — no new render loop, no setState.
+ * real matted asset data, not a synthetic mask shape, with no pixel
+ * readback or per-pixel JavaScript on the main thread. This runs at the
+ * sources' encoded rate inside the SAME shared RAF loop as everything else
+ * below — no new render loop, no setState.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -114,6 +114,7 @@ import { resolveMood } from "./mood-table";
 import { getTimeOfDayTarget } from "./time-of-day";
 import { getPerformanceTier, TIER_PARAMS } from "./performance-tier";
 import { lerp } from "./galaxy-engine";
+import { packedAlphaRendererFor } from "./packed-alpha-renderer";
 import "./environment.css";
 
 const TIME_CHECK_INTERVAL_MS = 60000;
@@ -158,11 +159,6 @@ export default function GalaxyEnvironment() {
   const galaxyVideoRef = useRef(null);
   const galaxyCanvasRef = useRef(null);
   const galaxyActiveRef = useRef(false);
-  // Scratch canvas used to decode each object's alpha-mask video frame long
-  // enough to read its pixels -- reused across all three objects since the
-  // RAF loop draws them one at a time, never concurrently. Never attached
-  // to the DOM.
-  const scratchCanvasRef = useRef(null);
   const lastCombineRef = useRef(0);
   const combineRoundRobinRef = useRef(0);
 
@@ -385,60 +381,18 @@ export default function GalaxyEnvironment() {
   useEffect(() => {
     let cancelled = false;
 
-    // Draws the top half of `video`'s current frame (real color) to
-    // `canvas`, then replaces its alpha channel with the bottom half's
-    // luminance (the matted alpha mask, stacked into the same file at
-    // encode time) -- genuine per-pixel transparency read from a real,
-    // content-matted asset, not a shape computed at render time. A single
-    // packed video (not two separate color/alpha videos) guarantees color
-    // and alpha are always the same decoded frame -- see the header
-    // comment for why that matters (two independent <video> elements
-    // visibly flickered when their decode timing drifted). readyState < 2
-    // means the video has no decoded frame yet -- skip rather than draw a
-    // blank/stale one.
+    // Composites `video`'s current frame onto `canvas`: real color from the
+    // top half, alpha from the bottom half's luminance (the matted alpha
+    // mask, stacked into the same file at encode time) -- genuine per-pixel
+    // transparency read from a real, content-matted asset, not a shape
+    // computed at render time. A single packed video (not two separate
+    // color/alpha videos) guarantees color and alpha are always the same
+    // decoded frame -- see the header comment for why that matters (two
+    // independent <video> elements visibly flickered when their decode
+    // timing drifted). The compositor skips a video with no decoded frame
+    // yet rather than draw a blank/stale one.
     function combinePacked(canvas, video, brightness) {
-      if (!canvas || !video || video.readyState < 2) return;
-      const scratch = scratchCanvasRef.current;
-      if (!scratch) return;
-      const ctx = canvas.getContext("2d");
-      const scratchCtx = scratch.getContext("2d");
-      if (!ctx || !scratchCtx) return;
-      const w = canvas.width;
-      const h = canvas.height;
-      const vw = video.videoWidth;
-      const vh = video.videoHeight / 2; // top half color, bottom half alpha
-      if (!vw || !vh) return;
-
-      ctx.drawImage(video, 0, 0, vw, vh, 0, 0, w, h);
-      const rgbData = ctx.getImageData(0, 0, w, h);
-
-      scratch.width = w;
-      scratch.height = h;
-      scratchCtx.drawImage(video, 0, vh, vw, vh, 0, 0, w, h);
-      const alphaData = scratchCtx.getImageData(0, 0, w, h);
-
-      const rgbPixels = rgbData.data;
-      const alphaPixels = alphaData.data;
-      // The packed alpha mask never decodes as a true 0..255. Measured in a
-      // real browser: background floors at 14-33 (not 0) and an object's own
-      // disk tops out at 196-237 (not 255) -- limited/TV-range H.264 signalling,
-      // plus, on the moon, its own lit/unlit alpha split (196 vs 223). Copied
-      // straight across, that left every "solid" object only 77-93% opaque,
-      // which is why the star-background layer visibly showed through the moon.
-      // Normalising 40..190 to a full 0..255 clamps background to truly
-      // invisible and the disk to truly opaque; the narrow band between still
-      // carries the anti-aliased rim, so edges stay smooth.
-      const b = brightness || 1;
-      for (let i = 0; i < rgbPixels.length; i += 4) {
-        const a = (alphaPixels[i] - 40) * 255 / 150;
-        rgbPixels[i + 3] = a < 0 ? 0 : a > 255 ? 255 : a;
-        if (b !== 1) {
-          rgbPixels[i] = Math.min(255, rgbPixels[i] * b);
-          rgbPixels[i + 1] = Math.min(255, rgbPixels[i + 1] * b);
-          rgbPixels[i + 2] = Math.min(255, rgbPixels[i + 2] * b);
-        }
-      }
-      ctx.putImageData(rgbData, 0, 0);
+      packedAlphaRendererFor(canvas)?.draw(video, brightness);
     }
 
     // `respectActive`: gate each object on VRM's onGranted/onRevoked
@@ -449,11 +403,11 @@ export default function GalaxyEnvironment() {
     // (reduced-motion/low-tier) always draws regardless, matching prior
     // behavior -- combinePacked's own readyState check already prevents it
     // from drawing anything before the video has decoded a first frame.
-    // `roundRobin`: on iOS, recombine only one object per call (cycling
-    // through in turn) instead of all four, halving peak per-frame
-    // getImageData/putImageData cost -- iOS Safari enforces a stricter
-    // per-frame budget than desktop/Android, where all four still update
-    // every call.
+    // `roundRobin`: recombine only one object per call (cycling through in
+    // turn) instead of all of them -- only for iOS on the CPU fallback
+    // compositor, whose getImageData/putImageData cost iOS Safari's stricter
+    // per-frame budget can't absorb. GPU compositing updates every object
+    // every call on every platform.
     function drawCelestialBodies({ respectActive = false, roundRobin = false } = {}) {
       const objects = [
         { active: moonActiveRef.current, draw: () => combinePacked(moonCanvasRef.current, moonVideoRef.current, MOON_BRIGHTNESS) },
@@ -488,15 +442,17 @@ export default function GalaxyEnvironment() {
 
     // The combine sources are encoded at up to 30fps (earth) -- recombining
     // faster than that on every RAF tick (which can run well past 60fps)
-    // would just burn CPU on getImageData/putImageData for pixel data
-    // that hasn't changed. Matches the fastest source so no asset is ever
-    // bottlenecked below its own encoded rate. Throttled independently of
-    // the nebula/opacity lerps above, which stay smooth every frame. iOS
+    // would just redo work for frames that haven't changed. Matches the
+    // fastest source so no asset is ever bottlenecked below its own encoded
+    // rate. Throttled independently of the nebula/opacity lerps above,
+    // which stay smooth every frame. Only iOS on the CPU fallback compositor
     // gets a slower rate (paired with the round-robin single-object update
-    // below) since its stricter per-frame budget makes the full-rate,
-    // all-objects-every-tick cost that Android/desktop absorbs comfortably
-    // relatively more expensive there.
-    const COMBINE_INTERVAL_MS = platform.isIOS ? 1000 / 15 : 1000 / 30;
+    // below), since its stricter per-frame budget can't absorb the CPU path
+    // at full rate; GPU compositing runs full rate everywhere.
+    const gpuCompositing = [moonCanvasRef, earthCanvasRef, galaxyCanvasRef]
+      .every((ref) => packedAlphaRendererFor(ref.current)?.gpu);
+    const cpuBudgetLimited = platform.isIOS && !gpuCompositing;
+    const COMBINE_INTERVAL_MS = cpuBudgetLimited ? 1000 / 15 : 1000 / 30;
 
     function frame(ts) {
       if (cancelled) return;
@@ -525,14 +481,10 @@ export default function GalaxyEnvironment() {
       applyNebulaStyles(cur);
       if (ts - lastCombineRef.current >= COMBINE_INTERVAL_MS) {
         lastCombineRef.current = ts;
-        drawCelestialBodies({ respectActive: true, roundRobin: platform.isIOS });
+        drawCelestialBodies({ respectActive: true, roundRobin: cpuBudgetLimited });
       }
 
       rafRef.current = requestAnimationFrame(frame);
-    }
-
-    if (!scratchCanvasRef.current) {
-      scratchCanvasRef.current = document.createElement("canvas");
     }
 
     rafRef.current = requestAnimationFrame(frame);
