@@ -17,7 +17,12 @@ const fadeUp = {
   transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] },
 };
 
-export function CollectorsCardsGrid() {
+/**
+ * The Collector's Cards page. `embedded` renders it inside the app's Home
+ * shell (see lib/platform/app-shell.js): no page background, page padding,
+ * wordmark header, or "Back to 2MRRW" link — Home provides those.
+ */
+export function CollectorsCardsGrid({ embedded = false } = {}) {
   const [selected, setSelected] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const { getLeft, decrement } = useCollectorInventory();
@@ -41,10 +46,15 @@ export function CollectorsCardsGrid() {
     return () => mql.removeEventListener("change", onChange);
   }, []);
 
+  const Root = embedded ? motion.section : motion.main;
   return (
-    <motion.main
+    <Root
       {...fadeUp}
-      style={{
+      style={embedded ? {
+        color: "white",
+        fontFamily: "'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif",
+        padding: isMobile ? "8px 0 32px" : "16px 0 48px",
+      } : {
         minHeight: "100vh",
         background: "#050505",
         color: "white",
@@ -54,17 +64,19 @@ export function CollectorsCardsGrid() {
     >
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <div style={{ textAlign: "center", marginBottom: isMobile ? 28 : 40 }}>
-          <div
-            style={{
-              fontSize: isMobile ? 22 : 28,
-              fontWeight: 900,
-              letterSpacing: 6,
-              textShadow: "0 0 24px rgba(0,255,255,0.45)",
-              marginBottom: 8,
-            }}
-          >
-            2MRRW
-          </div>
+          {embedded ? null : (
+            <div
+              style={{
+                fontSize: isMobile ? 22 : 28,
+                fontWeight: 900,
+                letterSpacing: 6,
+                textShadow: "0 0 24px rgba(0,255,255,0.45)",
+                marginBottom: 8,
+              }}
+            >
+              2MRRW
+            </div>
+          )}
           <div
             style={{
               fontSize: 10,
@@ -126,7 +138,7 @@ export function CollectorsCardsGrid() {
           </div>
         </section>
 
-        <div style={{ textAlign: "center", marginTop: 36 }}>
+        {embedded ? null : <div style={{ textAlign: "center", marginTop: 36 }}>
           <Link
             href="/"
             style={{
@@ -142,7 +154,7 @@ export function CollectorsCardsGrid() {
           >
             ← Back to 2MRRW
           </Link>
-        </div>
+        </div>}
       </div>
 
       {selected && (
@@ -154,6 +166,6 @@ export function CollectorsCardsGrid() {
           onPurchaseComplete={handlePurchaseComplete}
         />
       )}
-    </motion.main>
+    </Root>
   );
 }

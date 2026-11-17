@@ -28,6 +28,11 @@ const VaultDoorGate = dynamic(
   () => import("@/components/vault/VaultDoorGate").then((mod) => ({ default: mod.VaultDoorGate })),
   { ssr: false }
 );
+// App shell only (see lib/platform/app-shell.js): Collector's Cards inline.
+const CollectorsCardsGrid = dynamic(
+  () => import("@/components/collectors-cards/CollectorsCardsGrid").then((mod) => ({ default: mod.CollectorsCardsGrid })),
+  { ssr: false }
+);
 const AlbumTracklistSheet = dynamic(() => import("@/components/music/AlbumTracklistSheet"), { ssr: false });
 const VaultManager = dynamic(() => import("@/components/admin/VaultManager"), { ssr: false });
 import { getPageAuthRef } from "@/lib/storefront/page-auth-ref";
@@ -88,6 +93,7 @@ import {
   setHomeScrollSection,
 } from "@/lib/home-scroll-section-store";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
+import { isAppShell } from "@/lib/platform/app-shell";
 import { catalogCoverUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
 import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
 import { LiveCountdownProvider, useTwitchEmbedConfig } from "@/components/home/LiveCountdownContext";
@@ -2330,7 +2336,9 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   }, []);
 
   const switchTab = useCallback((tabId) => {
-    if (tabId === "cards") {
+    // The website opens Collector's Cards on their own page; the app shows them
+    // inline as a Home tab (owner decision for the app).
+    if (tabId === "cards" && !isAppShell()) {
       router.push(COLLECTORS_CARDS_ROUTE);
       return;
     }
@@ -2379,6 +2387,17 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
   const openVault = useCallback(() => {
     switchTab("vault");
+  }, [switchTab]);
+
+  // In-place tab requests from outside this component (the app's router turns
+  // links to the Collector's Cards page into one). Nothing dispatches this on
+  // the website.
+  useEffect(() => {
+    const onOpenTab = (event) => {
+      if (event.detail?.tabId) switchTab(event.detail.tabId);
+    };
+    window.addEventListener("2mrrw:open-tab", onOpenTab);
+    return () => window.removeEventListener("2mrrw:open-tab", onOpenTab);
   }, [switchTab]);
 
   useEffect(() => {
@@ -2842,6 +2861,9 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   )}
                 </>
               )}
+
+              {/* ══ CARDS (app shell only; the website routes to its own page) ══ */}
+              {activeTab==="cards" && isAppShell() && <CollectorsCardsGrid embedded />}
 
               {/* ══ VAULT ══ */}
               {activeTab==="vault" && (
