@@ -38,11 +38,11 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
   const [hasEnteredView, setHasEnteredView] = useState(false);
   const audioPriority = useAudioMediaPriority();
   const { currentTrackId, currentTrackSlug } = usePlaybackIdentity();
-  // Only the release actually playing is exempt from suspension — every
-  // other release's cover art yields (see CoverArt.js's VideoArt for the
-  // identical model applied to the other home-page cover surfaces).
+  // Covers yield to audio only by waiting: while a track is starting, a card
+  // video that has not loaded yet holds off; a loaded card keeps animating and
+  // is never paused for audio (see CoverArt.js's VideoArt — identical model).
   const isThisReleasePlaying = Boolean(currentTrackId && currentTrackSlug === mediaItem?.slug);
-  const shouldSuspend = audioPriority.active && !isThisReleasePlaying;
+  const shouldDefer = audioPriority.startupActive && !isThisReleasePlaying;
   const coverLifecycle = useReleaseCoverLifecycle(presentationIdentity, assignedSrc || coverDisplay?.src);
 
   // One-shot gate on the *first* load only. storefront-persistent-media.js
@@ -83,8 +83,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
       }
       return;
     }
-    if (shouldSuspend) {
-      if (!el.paused) el.pause();
+    if (shouldDefer && el.readyState < 2) {
       el.preload = "none";
       return;
     }
@@ -94,7 +93,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
       el.load();
     }
     if (!document.hidden && el.paused) el.play().catch(() => {});
-  }, [cardMedia, assignedSrc, shouldSuspend, hasEnteredView]);
+  }, [cardMedia, assignedSrc, shouldDefer, hasEnteredView]);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;

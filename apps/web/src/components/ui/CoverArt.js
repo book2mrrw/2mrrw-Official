@@ -249,7 +249,6 @@ function CoverArt({
         onError={handleVideoError}
         onLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
         onLoadedData={coverLifecycle.onVideoLoadedData}
-        retainLoadedSource={Boolean(presentationIdentity?.key)}
         releaseId={presentationIdentity?.releaseId || null}
         priority={videoPriority}
       />
@@ -281,7 +280,6 @@ function VideoArt({
   onError,
   onLoadedMetadata,
   onLoadedData,
-  retainLoadedSource,
   releaseId,
   priority = VRM.PRIORITY_NEAR,
 }) {
@@ -290,38 +288,31 @@ function VideoArt({
   const inViewRef = useRef(false);
   const audioPriority = useAudioMediaPriority();
   const { currentTrackId, currentTrackSlug } = usePlaybackIdentity();
-  // Only the release actually playing is exempt from suspension — every other
-  // release's cover art yields. With no releaseId (non-home-page callers,
-  // presentationIdentity absent), this is always false, so shouldSuspend
-  // reduces to the prior blanket audioPriority.active behavior unchanged.
+  // Covers yield to audio only by waiting: while a track is starting (the
+  // brief startup lease), a cover that has not loaded yet holds off so the
+  // first audio bytes go first. A loaded cover keeps animating — no cover is
+  // ever paused or unloaded for audio: motion is core to the experience, and
+  // a loaded loop decodes in hardware from its own buffer. The release that
+  // is starting never waits for itself.
   const isThisReleasePlaying = Boolean(releaseId && currentTrackId && currentTrackSlug === releaseId);
-  const shouldSuspend = audioPriority.active && !isThisReleasePlaying;
-  const shouldSuspendRef = useRef(shouldSuspend);
+  const shouldDefer = audioPriority.startupActive && !isThisReleasePlaying;
+  const shouldDeferRef = useRef(shouldDefer);
 
   useLayoutEffect(() => {
-    shouldSuspendRef.current = shouldSuspend;
-  }, [shouldSuspend]);
+    shouldDeferRef.current = shouldDefer;
+  }, [shouldDefer]);
 
   // Imperative src update. For offscreen elements, defer el.load() to the
   // IntersectionObserver callback so the browser does not pre-fetch invisible media.
   useLayoutEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (shouldSuspend) {
-      VRM.requestPause(el);
-      if (!el.paused) el.pause();
-      el.preload = "none";
-      if (!retainLoadedSource && el.hasAttribute("src")) {
-        el.removeAttribute("src");
-        el.load();
-        prevSrcRef.current = null;
-      }
-      return;
-    }
-    // Not suspended — ensure src is current, then always (re)request play when
-    // in view. A resume from suspension with retainLoadedSource leaves `src`
-    // unchanged, so "src unchanged" must never short-circuit re-requesting
-    // play, or a cover that yielded would never come back on its own.
+    // Not loaded yet while a track starts: wait (this effect re-runs when the
+    // startup lease ends). Loaded covers fall through and keep animating.
+    if (shouldDefer && el.readyState < 2) return;
+    // Ensure src is current, then always (re)request play when in view — a
+    // cover that waited keeps its `src` unchanged, so "src unchanged" must
+    // never short-circuit re-requesting play.
     if (src !== prevSrcRef.current) {
       prevSrcRef.current = src;
       el.src = src;
@@ -336,7 +327,7 @@ function VideoArt({
       );
     }
     // Offscreen: IO will call load() when the element enters rootMargin.
-  }, [src, shouldSuspend, retainLoadedSource]);
+  }, [src, shouldDefer]);
 
   // Viewport-aware decoder management via VideoResourceManager (VRM).
   // Carousel videos use data-single-carousel and are managed by
@@ -361,7 +352,7 @@ function VideoArt({
       ([entry]) => {
         if (entry.isIntersecting) {
           inViewRef.current = true;
-          if (shouldSuspendRef.current) return;
+          if (shouldDeferRef.current && el.readyState < 2) return;
           el.preload = "auto";
           // Load if src was set while offscreen (readyState 0 = HAVE_NOTHING).
           if (el.readyState === 0 && el.src) el.load();

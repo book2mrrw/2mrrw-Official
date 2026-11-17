@@ -22,10 +22,13 @@ test("viewport and audio priority cannot discard a ready release cover source", 
   const latest = read("src/components/home/LatestSinglesStyleRow.js");
   const coverArt = read("src/components/ui/CoverArt.js");
 
-  const priorityBranch = latest.match(/if \(shouldSuspend\) \{([\s\S]*?)\n\s*\}/)?.[1] || "";
-  assert.ok(priorityBranch, "expected to find the audio-priority suspend branch in LatestSinglesStyleRow.js");
-  assert.doesNotMatch(priorityBranch, /removeAttribute\(["']src["']\)|\.load\(\)/);
-  assert.match(coverArt, /if \(!retainLoadedSource && el\.hasAttribute\("src"\)\)/);
+  const priorityBranch = latest.match(/if \(shouldDefer && el\.readyState < 2\) \{([\s\S]*?)\n\s*\}/)?.[1] || "";
+  assert.ok(priorityBranch, "expected to find the audio-priority defer branch in LatestSinglesStyleRow.js");
+  assert.doesNotMatch(priorityBranch, /removeAttribute\(["']src["']\)|\.load\(\)|\.pause\(\)/);
+  // Audio priority never unloads a cover: the only branch it takes is to wait,
+  // and only before the cover has loaded.
+  assert.match(coverArt, /if \(shouldDefer && el\.readyState < 2\) return;/);
+  assert.doesNotMatch(coverArt, /retainLoadedSource/);
   assert.match(coverArt, /presentationSnapshot\?\.coverReady/);
 });
 

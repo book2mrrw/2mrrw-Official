@@ -1436,12 +1436,12 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const ensureStorefrontCarouselMedia = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
-    if (getPagePlaybackActionsBridge()?.isPlaying) return;
+    // Card loops keep animating while music plays (see storefront-persistent-media.js).
     if (isStorefrontCarouselMediaHealthy(row)) {
       carouselMediaHealthyRef.current = true;
       return;
     }
-    const anyCarouselInView = ensureStorefrontCarouselVideosPlaying(row, getPagePlaybackActionsBridge()?.currentTrack?.slug || null);
+    const anyCarouselInView = ensureStorefrontCarouselVideosPlaying(row);
     carouselMediaHealthyRef.current = isStorefrontCarouselMediaHealthy(row);
     syncMobileHeroWithStorefrontCarousel(
       heroVideoRef.current,
@@ -1864,15 +1864,12 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   useEffect(() => {
     if (activeTab !== "home") return undefined;
     const pauseHeavyMedia = () => {
+      // Ambient sound yields to the music; card animation never does — the
+      // card loops only stop when the page itself is hidden.
       Object.values(ambientRefs.current).forEach((a) => {
         try { a.pause(); } catch { /* non-fatal */ }
       });
-      // The release actually playing keeps its own cover animated — every
-      // other one still yields. Without this, this listener re-pauses the
-      // playing release's own cover art on every playback-start event,
-      // fighting SinglesStyleCardMediaSurface's own per-release logic.
-      const nowPlayingSlug = getPagePlaybackActionsBridge()?.currentTrack?.slug || null;
-      pauseStorefrontCarouselVideos(singlesRowRef.current, nowPlayingSlug);
+      if (document.hidden) pauseStorefrontCarouselVideos(singlesRowRef.current);
     };
     // Pause once immediately if playback is already active on mount.
     if (document.hidden || getPagePlaybackActionsBridge()?.isPlaying) {

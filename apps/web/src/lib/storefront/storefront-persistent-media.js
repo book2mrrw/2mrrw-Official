@@ -27,18 +27,16 @@ export function isStorefrontCarouselCardInView(video) {
 }
 
 /**
- * Persistent contract: start or resume muted loops; never pause on scroll, never load().
+ * Persistent contract: start or resume muted loops; never pause on scroll or
+ * for audio, never load().
  * @param {HTMLElement | null} row - singles row container (singlesRowRef.current)
- * @param {string | null} [exceptSlug] - the release whose own video is currently
- *   playing full audio and must stay animated (see pauseStorefrontCarouselVideos).
  * @returns {boolean} anyCarouselInView - for mobile hero coordination
  */
-export function ensureStorefrontCarouselVideosPlaying(row, exceptSlug = null) {
+export function ensureStorefrontCarouselVideosPlaying(row) {
   if (!row || document.hidden) return false;
-  if (getAudioMediaPrioritySnapshot().active) {
-    pauseStorefrontCarouselVideos(row, exceptSlug);
-    return false;
-  }
+  // Card loops keep animating while music plays; a starting track only defers
+  // (re)starting them until its first audio is out (the brief startup lease).
+  if (getAudioMediaPrioritySnapshot().startupActive) return false;
   let anyCarouselInView = false;
   row.querySelectorAll(CAROUSEL_VIDEO_SELECTOR).forEach((video) => {
     if (isStorefrontCarouselCardInView(video)) anyCarouselInView = true;

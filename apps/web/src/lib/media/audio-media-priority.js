@@ -1,9 +1,13 @@
 /**
  * Canonical browser media-priority authority.
  *
- * Audio startup is latency-sensitive. Muted artwork loops are decorative and
- * must yield before the first manifest/segment request, then remain suspended
- * while audio owns the foreground media path. A generation-bound lease keeps
+ * Audio startup is latency-sensitive: during a track's startup lease
+ * (`startupActive`), artwork that has not loaded yet waits so the first
+ * manifest/segment requests go first. Artwork that is already animating keeps
+ * animating, during startup and for the whole of playback — motion is core to
+ * the experience, and a loaded muted loop decodes in hardware from its own
+ * buffer. `playbackActive` remains published for consumers that coordinate
+ * sound (not animation) with the music. A generation-bound lease keeps
  * superseded play requests from releasing a newer request's authority.
  */
 
