@@ -15,8 +15,36 @@ function routeName(file) {
   return `/api/${path.relative(root, path.dirname(file)).split(path.sep).join("/")}`.replace(/\/$/, "");
 }
 
+// Route-level helpers that wrap a canonical guard. A helper counts only while
+// its own module still calls that guard, so removing the guard from a helper
+// fails this script instead of quietly certifying every route that uses it.
+const GUARD_WRAPPERS = [
+  { name: "authorizeBroadcastAdmin", module: "src/lib/broadcast/admin-http.js", guard: /\brequireAdminActor\(/ },
+  { name: "authorizeBroadcastListener", module: "src/lib/broadcast/server-access.js", guard: /\bgetFanSessionUser\(/ },
+];
+for (const wrapper of GUARD_WRAPPERS) {
+  const source = fs.readFileSync(path.resolve(wrapper.module), "utf8");
+  if (!wrapper.guard.test(source)) throw new Error(`${wrapper.name} (${wrapper.module}) no longer calls its canonical guard`);
+}
+// The helper a route uses for this guard, called directly or handed to a
+// handler factory (createBroadcastMediaHandler); null when it uses none.
+const wrapperFor = (source, guardName) => GUARD_WRAPPERS.find((wrapper) =>
+  wrapper.guard.source.includes(guardName) && new RegExp(`\\b${wrapper.name}\\b`).test(source)) || null;
+const via = (wrapper) => `via ${wrapper.name} (${wrapper.module})`;
+
+// Machine endpoints that authenticate with their own signed token rather than
+// a service capability.
+const MACHINE_TOKEN_GUARDS = [
+  {
+    pattern: /\bverifyLiveRelayPublishToken\(/,
+    evidence: "custom relay publish-token verification (verifyLiveRelayPublishToken), not requireServiceCapability",
+  },
+];
+
 function classify(route, source) {
-  const hasHuman = /requireAdminActor|getAdminSessionUser/.test(source);
+  const directHuman = /requireAdminActor|getAdminSessionUser/.test(source);
+  const humanWrapper = directHuman ? null : wrapperFor(source, "requireAdminActor");
+  const hasHuman = directHuman || Boolean(humanWrapper);
   const hasCombined = /requireAdminOrCapability/.test(source) ||
     (hasHuman && /requireServiceCapability/.test(source));
   const hasService = /requireServiceCapability|verifyCronAuthorization|verifyWebhookSignature|stripe\.webhooks\.constructEvent/.test(source);
@@ -25,13 +53,19 @@ function classify(route, source) {
   if (route.startsWith("/api/admin/") || route === "/api/gifts/bulk") {
     if (hasService && !hasHuman) return ["SERVICE_ONLY", "exact scoped service capability"];
     if (!hasHuman) throw new Error(`Privileged route has no canonical authority boundary: ${route}`);
-    return ["HUMAN_ADMIN", "canonical requireAdminActor/getAdminSessionUser guard"];
+    return ["HUMAN_ADMIN", humanWrapper
+      ? `canonical requireAdminActor guard ${via(humanWrapper)}`
+      : "canonical requireAdminActor/getAdminSessionUser guard"];
   }
+  if (hasService && !hasHuman) return ["SERVICE_ONLY", "exact scoped service capability"];
+  const machineToken = MACHINE_TOKEN_GUARDS.find((guard) => guard.pattern.test(source));
+  if (machineToken) return ["SERVICE_ONLY", machineToken.evidence];
   if (route.startsWith("/api/cron/") || route === "/api/webhook" ||
       route.startsWith("/api/webhooks/") || route === "/api/stripe/webhook") {
     return ["SERVICE_ONLY", "cron or signed webhook machine boundary"];
   }
-  if (/getFanSessionUser|requireAuthenticatedUser|auth\.getUser\(|getSessionUser\(/.test(source) ||
+  if (/getFanSessionUser|requireAuthenticatedUser|requireConsumerPrincipal|auth\.getUser\(|getSessionUser\(/.test(source) ||
+      wrapperFor(source, "getFanSessionUser") ||
       route === "/api/auth/mfa-session") {
     return ["AUTHENTICATED_USER", "validated Supabase user session"];
   }
@@ -42,7 +76,7 @@ const routes = walk(root).sort().map((file) => {
   const route = routeName(file);
   const source = fs.readFileSync(file, "utf8");
   const [authority, evidence] = classify(route, source);
-  const methods = [...source.matchAll(/export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\b/g)]
+  const methods = [...source.matchAll(/export\s+(?:(?:async\s+)?function|const)\s+(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\b/g)]
     .map((match) => match[1]);
   return {
     route,

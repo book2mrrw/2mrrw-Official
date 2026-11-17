@@ -90,7 +90,14 @@ test("INV-MFA-4 every repository API route is classified exactly once", () => {
   assert.equal(matrix.total, files.length);
   assert.equal(new Set(matrix.routes.map((item) => item.route)).size, files.length);
   for (const item of matrix.routes.filter((item) => item.authority === "HUMAN_ADMIN")) {
-    assert.match(read(item.file), /requireAdminActor|getAdminSessionUser/);
+    const source = read(item.file);
+    if (/requireAdminActor|getAdminSessionUser/.test(source)) continue;
+    // Otherwise only through the route helper the matrix names, and only while
+    // that helper itself still calls the canonical guard.
+    const helper = item.evidence.match(/via (\w+) \((src\/[^)]+)\)/);
+    assert.ok(helper, `${item.route} has no canonical admin guard`);
+    assert.match(source, new RegExp(`\\b${helper[1]}\\b`), `${item.route} does not use ${helper[1]}`);
+    assert.match(read(helper[2]), /\brequireAdminActor\(/, `${helper[1]} no longer calls requireAdminActor`);
   }
 });
 
