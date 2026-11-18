@@ -1415,7 +1415,13 @@ export function createPlaybackHelpers(initialDeps) {
       if (next.metadata?.access?.canStream && isHlsJsActive()) {
         const slug = parseStreamSlugFromSrc(next.src) || next.slug;
         const trackSlug = parseStreamTrackSlugFromSrc(next.src) || next.metadata?.trackSlug || null;
-        if (slug) void prefetchHlsSegmentsForTrack(slug, trackSlug);
+        if (!slug) return;
+        void prefetchHlsSegmentsForTrack(slug, trackSlug);
+        // And its first-play chain (master, variant, key, opening segment), so
+        // the next song starts from memory instead of three serial round trips
+        // (~0.6 s of the measured ~0.9 s silence between songs). Deduplicated
+        // while warm; re-warmed near the end if it expired during a long song.
+        warmHlsStart(slug, trackSlug, { intent: true });
         return;
       }
       const preloadEl = self._deps.nextTrackPreloadRef.current;

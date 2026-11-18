@@ -71,7 +71,8 @@ import {
   playbackStateMachine,
   PLAYBACK_ORCHESTRATION_EVENTS,
 } from "@/media/PlaybackStateMachine";
-import { classifySourceUrl, isDirectlyBufferable } from "@/lib/playback/audio-source-resolver";
+import { classifySourceUrl, isDirectlyBufferable, SOURCE_KIND } from "@/lib/playback/audio-source-resolver";
+import { isHlsJsActive } from "@/lib/audio/HLSEngine";
 import { normalizePlaybackSrc } from "@/lib/audio/audio-element-utils";
 import { cancelHlsSegmentPrefetch } from "@/lib/audio/hls-segment-prefetcher";
 import { captureRecoveryOperation, confirmRecoveryPlayback } from "./recovery-operation";
@@ -129,6 +130,22 @@ export const PREVIEW_HARD_CAP_SEC = 15;
 export const SPURIOUS_ENDED_GUARD_MS = 1200;
 
 // ── Factory ────────────────────────────────────────────────────────────────────
+
+/**
+ * What to prime the previous-track element with, or null. A song that plays
+ * through hls.js never reads that element (priming it only downloaded the
+ * whole previous song while the next one was starting), and priming never
+ * records a play: ?preload=1, as the next-track preload.
+ */
+export function previousTrackPrimeSrc(track, { hlsJsActive }) {
+  const src = track?.src;
+  if (!src || (track.metadata?.access?.canStream && hlsJsActive)) return null;
+  const kind = classifySourceUrl(src);
+  if (!isDirectlyBufferable(kind)) return null;
+  const normalized = normalizePlaybackSrc(src);
+  if (!normalized || kind !== SOURCE_KIND.REDIRECT || normalized.includes("preload=1")) return normalized || null;
+  return `${normalized}&preload=1`;
+}
 
 /**
  * Create the set of audio element event handlers.
@@ -457,17 +474,10 @@ export function createPlaybackEventHandlers({
     // Prime the previous-track element for back-navigation (CDN preview only).
     const prevIdx = queueIndexRef.current - 1;
     if (prevIdx >= 0 && prevTrackPreloadRef.current) {
-      const prevTrack = queueRef.current[prevIdx];
-      const prevSrc = prevTrack?.src;
-      if (prevSrc) {
-        const prevKind = classifySourceUrl(prevSrc);
-        if (isDirectlyBufferable(prevKind)) {
-          const prevNorm = normalizePlaybackSrc(prevSrc);
-          if (prevNorm && prevTrackPreloadRef.current.src !== prevNorm) {
-            prevTrackPreloadRef.current.src = prevNorm;
-            prevTrackPreloadRef.current.load();
-          }
-        }
+      const prevNorm = previousTrackPrimeSrc(queueRef.current[prevIdx], { hlsJsActive: isHlsJsActive() });
+      if (prevNorm && prevTrackPreloadRef.current.src !== prevNorm) {
+        prevTrackPreloadRef.current.src = prevNorm;
+        prevTrackPreloadRef.current.load();
       }
     }
 
