@@ -6,6 +6,11 @@
  * Signal chain (Spotify-architecture):
  *   source → mainGain → userGain → transitionGain → analyser → stereoPanner → bassFilter → limiter → destination
  *
+ * limiter   — the output guard (output-guard.js): lookahead peak limiter plus
+ *             click-free edges for every pause, seek, skip and underrun. A
+ *             DynamicsCompressorNode stands in until its worklet has loaded,
+ *             or for good where AudioWorklet is unavailable.
+ *
  * mainGain  — per-track loudness normalization (gain.value = loudness-normalized linear gain)
  * userGain  — user volume preference (0–1, persisted to localStorage)
  *             This is the single volume authority. HTMLAudioElement.volume is locked at 1.0.
@@ -17,6 +22,7 @@
 
 import { AudioEngineBase, AUDIO_ENGINE_EVENTS } from "@/lib/audio/AudioEngineInterface";
 import { playAudioIfNotPaused } from "@/lib/audio/audio-element-utils";
+import { createOutputGuardNode, loadOutputGuard } from "@/lib/audio/output-guard";
 
 const MRRW_SOURCE_BOUND = Symbol.for("2mrrw.mediaElementSourceBound");
 const VOL_KEY = "2mrrw-vol";
@@ -44,8 +50,12 @@ export class WebAudioEngine extends AudioEngineBase {
     this.stereoPanner = null;
     /** @type {BiquadFilterNode|null} */
     this.bassFilter = null;
-    /** @type {DynamicsCompressorNode|null} */
+    /** @type {AudioWorkletNode|DynamicsCompressorNode|null} Output guard, or the compressor until it loads. */
     this.limiter = null;
+    /** @type {AudioContext|null} Context whose output-guard worklet has loaded. */
+    this._guardContext = null;
+    /** @type {((limiter: AudioNode) => void)|null} */
+    this._onLimiterChange = null;
     /** @type {HTMLAudioElement|null} */
     this._boundElement = null;
     this._userVolume = this._readStoredVolume();
@@ -214,13 +224,10 @@ export class WebAudioEngine extends AudioEngineBase {
     bassFilter.frequency.value = 200;
     bassFilter.gain.value = 0;
 
-    // Transparent limiter — activates only above −1 dBFS, preserves the artist's master.
-    const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -1;
-    limiter.knee.value = 0;
-    limiter.ratio.value = 20;
-    limiter.attack.value = 0.003;
-    limiter.release.value = 0.1;
+    // The output guard once its worklet is in this context; the compressor
+    // stands in until then (see _installGuardWhenSilent).
+    const guard = this._createOutputGuard(ctx);
+    const limiter = guard || createStandInLimiter(ctx);
 
     // Tear down stale nodes before connecting.
     try { this.mainGain?.disconnect(); } catch {}
@@ -276,9 +283,63 @@ export class WebAudioEngine extends AudioEngineBase {
     this.stereoPanner = stereoPanner;
     this.bassFilter = bassFilter;
     this.limiter = limiter;
+    if (!guard) this._installGuardWhenSilent(ctx, limiter);
 
     // Lock element volume at 1.0. All user volume control flows through userGain.
     if (this._boundElement) this._boundElement.volume = 1;
+  }
+
+  /** @param {((limiter: AudioNode) => void)|null} fn  Told when the guard replaces the stand-in. */
+  registerLimiterChangeCallback(fn) {
+    this._onLimiterChange = typeof fn === "function" ? fn : null;
+  }
+
+  _createOutputGuard(ctx) {
+    if (this._guardContext !== ctx) return null;
+    try {
+      return createOutputGuardNode(ctx);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Swap the stand-in compressor for the output guard once its worklet has
+   * loaded — only while the element is silent: the two stages delay the
+   * signal differently, so switching under music would itself click. In
+   * practice the worklet (built from memory, no fetch) is ready long before a
+   * stream's first sample.
+   */
+  _installGuardWhenSilent(ctx, standIn) {
+    loadOutputGuard(ctx).then((ok) => {
+      if (!ok) return;
+      this._guardContext = ctx;
+      const element = this._boundElement;
+      const silences = ["pause", "ended", "emptied", "loadstart", "waiting"];
+      const install = (silentNow) => {
+        const route = this._effectRouting;
+        if (this.ctx !== ctx || this.limiter !== standIn || ctx.state === "closed" || route?.limiter !== standIn) return true;
+        if (!silentNow && element && !element.paused && !element.ended) return false;
+        const guard = this._createOutputGuard(ctx);
+        if (!guard) return true;
+        for (const fader of [route.dry, route.wet]) {
+          try { fader.disconnect(standIn); } catch {}
+          fader.connect(guard);
+        }
+        try { standIn.disconnect(); } catch {}
+        guard.connect(ctx.destination);
+        route.limiter = guard;
+        this.limiter = guard;
+        this._onLimiterChange?.(guard);
+        return true;
+      };
+      if (install(false) || typeof element?.addEventListener !== "function") return;
+      const onSilence = () => {
+        if (!install(true)) return;
+        for (const event of silences) element.removeEventListener(event, onSilence);
+      };
+      for (const event of silences) element.addEventListener(event, onSilence);
+    });
   }
 
   // ── AudioContext lifecycle ──────────────────────────────────────────────────
@@ -938,6 +999,17 @@ export class WebAudioEngine extends AudioEngineBase {
 
     return oldActive;
   }
+}
+
+/** The pre-guard limiter: kept only as a stand-in (it adds ~0.6 dB of makeup gain). */
+function createStandInLimiter(ctx) {
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -1;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.003;
+  limiter.release.value = 0.1;
+  return limiter;
 }
 
 /** @type {WebAudioEngine|null} */

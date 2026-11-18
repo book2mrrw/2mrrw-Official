@@ -1200,6 +1200,8 @@ export function createPlaybackHelpers(initialDeps) {
       self._deps.stereoPannerRef.current = engine.stereoPanner;
       self._deps.bassFilterRef.current = engine.bassFilter;
       self._deps.limiterRef.current = engine.limiter;
+      // The output guard replaces the stand-in limiter once its worklet loads.
+      engine.registerLimiterChangeCallback((limiter) => { self._deps.limiterRef.current = limiter; });
       self._deps.webAudioInitializedRef.current = true;
       self._deps.webAudioAvailableRef.current = true;
       // audio.volume is locked at 1.0 by buildGraph() — do NOT restore user volume here.
