@@ -16,9 +16,12 @@ function fakeAdmin({ audioVisuals = [], products = [], variants = [] } = {}) {
         };
       }
       if (table === "products") {
+        // Honors .is("deleted_at", null) like PostgREST, so deleted releases drop out.
+        let rows = products;
         return {
           select() { return this; },
-          in() { return Promise.resolve({ data: products, error: null }); },
+          is(column, value) { rows = rows.filter((row) => (row[column] ?? null) === value); return this; },
+          in() { return Promise.resolve({ data: rows, error: null }); },
         };
       }
       if (table === "product_variants") {
@@ -150,4 +153,9 @@ test("a merch cart item with no variantId still resolves via the flat product, u
 test("Printful-linked merch cannot be purchased without a fulfillment variant", async () => {
   const admin = fakeAdmin({ products: [{ ...MERCH_PRODUCT, external_product_id: "432602191" }] });
   await assert.rejects(() => resolveCartLines([{ slug: "the-shirt" }], admin), /Choose an available size and color/);
+});
+
+test("a deleted product cannot be bought, even from a cart saved before it was deleted", async () => {
+  const admin = fakeAdmin({ products: [{ ...MERCH_PRODUCT, deleted_at: "2026-10-21T00:00:00Z" }] });
+  await assert.rejects(() => resolveCartLines([{ slug: "the-shirt" }], admin), /Unknown product: the-shirt/);
 });
