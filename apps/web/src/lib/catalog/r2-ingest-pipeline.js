@@ -158,11 +158,19 @@ async function discoverAlbumTracks(albumSlug, releaseTypeFolder) {
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
+// Titles are curated (W.2.D, ArTiFiCiAL, 2MRRW: (A.D)). A folder name only
+// names a release or track the first time it is discovered; re-ingesting
+// never overwrites a title that already exists — it used to, so every sync
+// turned W.2.D back into "W2d" and 2 Heavy into "Heavy".
+const withoutTitle = ({ title: _title, ...rest }) => rest;
+
 async function upsertProduct(admin, payload) {
+  const { data: existing } = await admin.from("products").select("id").eq("slug", payload.slug).maybeSingle();
+  const row = existing ? withoutTitle(payload) : payload;
   const { error } = await admin
     .from("products")
     .upsert(
-      { ...payload, updated_at: new Date().toISOString() },
+      { ...row, updated_at: new Date().toISOString() },
       { onConflict: "slug", ignoreDuplicates: false }
     );
   return error ? error.message : null;
@@ -170,6 +178,8 @@ async function upsertProduct(admin, payload) {
 
 async function upsertTracks(admin, productId, tracks) {
   if (!tracks?.length) return [];
+  const { data: existingRows } = await admin.from("catalog_tracks").select("slug").eq("product_id", productId);
+  const existing = new Set((existingRows || []).map((row) => row.slug));
   const rows = tracks.map((t) => ({
     product_id:   productId,
     slug:         t.slug,
@@ -181,10 +191,14 @@ async function upsertTracks(admin, productId, tracks) {
     metadata:     {},
     updated_at:   new Date().toISOString(),
   }));
-  const { error } = await admin
-    .from("catalog_tracks")
-    .upsert(rows, { onConflict: "product_id,slug" });
-  return error ? [{ error: error.message, trackCount: tracks.length }] : [];
+  // Two upserts, not one: a batch with mixed columns would write NULL titles.
+  const errors = [];
+  for (const batch of [rows.filter((row) => !existing.has(row.slug)), rows.filter((row) => existing.has(row.slug)).map(withoutTitle)]) {
+    if (!batch.length) continue;
+    const { error } = await admin.from("catalog_tracks").upsert(batch, { onConflict: "product_id,slug" });
+    if (error) errors.push({ error: error.message, trackCount: batch.length });
+  }
+  return errors;
 }
 
 async function getProductIdBySlug(admin, slug) {
@@ -193,6 +207,9 @@ async function getProductIdBySlug(admin, slug) {
 }
 
 // ── Main pipeline ─────────────────────────────────────────────────────────────
+
+// Exported for the title-preservation test.
+export { upsertProduct, upsertTracks };
 
 export async function runR2Ingest({ admin, dryRun = false }) {
   if (!R2_BUCKET) {
