@@ -207,6 +207,7 @@ function VerifyOtpForm() {
         onSubmit={verifyOtp}
         style={{
           width: "100%",
+          boxSizing: "border-box",
           maxWidth: 420,
           background: "#0d0d0d",
           border: "1px solid #222",

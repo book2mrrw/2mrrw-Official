@@ -211,7 +211,7 @@ function LoginForm() {
       {mode === "credentials" ? (
         <form
           onSubmit={submitCredentials}
-          style={{ width: "100%", maxWidth: 420, background: "#0d0d0d", border: "1px solid #222", borderRadius: 20, padding: 28, display: "flex", flexDirection: "column", gap: 12 }}
+          style={{ width: "100%", boxSizing: "border-box", maxWidth: 420, background: "#0d0d0d", border: "1px solid #222", borderRadius: 20, padding: 28, display: "flex", flexDirection: "column", gap: 12 }}
         >
           <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 6, color: "#00ffff" }}>2MRRW</div>
 
@@ -271,7 +271,7 @@ function LoginForm() {
       ) : (
         <form
           onSubmit={submitCode}
-          style={{ width: "100%", maxWidth: 420, background: "#0d0d0d", border: "1px solid #222", borderRadius: 20, padding: 28, display: "flex", flexDirection: "column", gap: 16 }}
+          style={{ width: "100%", boxSizing: "border-box", maxWidth: 420, background: "#0d0d0d", border: "1px solid #222", borderRadius: 20, padding: 28, display: "flex", flexDirection: "column", gap: 16 }}
         >
           <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 6, color: "#00ffff" }}>2MRRW</div>
           <h1 style={{ margin: 0, fontSize: 22 }}>Check your {hasPhone ? "email & phone" : "email"}</h1>

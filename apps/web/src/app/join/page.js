@@ -223,7 +223,7 @@ function JoinForm() {
     <main style={{ minHeight: "100vh", background: "#050505", color: "white", display: "grid", placeItems: "center", padding: 24, fontFamily: "sans-serif" }}>
       <form
         onSubmit={submit}
-        style={{ width: "100%", maxWidth: 440, background: "#0d0d0d", border: "1px solid #222", borderRadius: 20, padding: 28, display: "flex", flexDirection: "column", gap: 14 }}
+        style={{ width: "100%", boxSizing: "border-box", maxWidth: 440, background: "#0d0d0d", border: "1px solid #222", borderRadius: 20, padding: 28, display: "flex", flexDirection: "column", gap: 14 }}
       >
         <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 6, color: "#00ffff" }}>2MRRW</div>
 
