@@ -57,3 +57,21 @@ test('hovering a signed-URL song makes no request: no stream session, no recorde
   assert.deepEqual(requests, []);
   assert.equal(preload.loads, 0);
 });
+
+test('in the app a touched song warms through the native player; web view preloads are never loaded', async (t) => {
+  const { hlsStartWarmIdle, hlsMasterPath, resetHlsStartWarm } = await import('../../audio/hls-start-warm.js');
+  resetHlsStartWarm();
+  const warmed = [];
+  const saved = globalThis.window;
+  globalThis.window = { __2MRRW_NATIVE_AUDIO__: { createElement() {}, warm: async (masterPath) => { warmed.push(masterPath); } } };
+  t.after(() => { globalThis.window = saved; resetHlsStartWarm(); });
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('the page fetched'); });
+  const preload = { src: '', loads: 0, load() { this.loads += 1; } };
+  const helper = createPlaybackHelpers({ intentPrewarmRef: { current: preload }, nextTrackSignedUrlCacheRef: { current: {} } });
+  await helper.hintUpcomingPlay({ src: '/api/library/stream?slug=w2d&redirect=1', slug: 'w2d', metadata: { access: { canStream: true } } });
+  await helper.hintUpcomingPlay({ src: '/api/library/stream?slug=hour-glass&redirect=1', slug: 'hour-glass', metadata: { access: { canStream: false } } });
+  await helper.hintUpcomingPlay({ src: 'https://cdn.example/preview.m4a', metadata: { access: { canStream: false } } });
+  await hlsStartWarmIdle();
+  assert.deepEqual(warmed, [hlsMasterPath('w2d')]);
+  assert.equal(preload.loads, 0);
+});

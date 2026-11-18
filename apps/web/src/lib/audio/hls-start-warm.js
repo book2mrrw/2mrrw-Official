@@ -26,6 +26,11 @@
  *
  * No server side effects: these routes authorize and sign. Play sessions and
  * stream events are created only when a track actually plays.
+ *
+ * In the 2MRRW app the native player (AVPlayer / ExoPlayer) plays, so the
+ * native side fetches the chain into its own memory and serves it to the player
+ * once (nativeAudioPlatform().warm); the queue, intent order and budget here
+ * decide when, exactly as on the website.
  */
 
 import { hasSegment, setSegment } from "./hls-segment-cache";
@@ -45,6 +50,8 @@ let retryDelayMs = 15_000;
 const responses = new Map();
 /** master identity -> identities warmed with it (for LRU eviction) */
 const tracks = new Map();
+/** master identity -> expiry, for chains the app's native player holds */
+const nativeWarm = new Map();
 /** pending warms: { path, intent, attempts } */
 const queue = [];
 const recentStarts = [];
@@ -105,7 +112,7 @@ export function takeWarmKey(url) {
 
 function isWarm(masterId) {
   const entry = responses.get(masterId);
-  return Boolean(entry && entry.expires > Date.now());
+  return Boolean(entry && entry.expires > Date.now()) || (nativeWarm.get(masterId) ?? 0) > Date.now();
 }
 
 function constrained() {
@@ -118,8 +125,7 @@ function constrained() {
  * sheet open) puts it at the front; visibility warms wait their turn.
  */
 export function warmHlsStart(slug, trackSlug = null, { intent = false } = {}) {
-  // The app's native player fetches its own chain; these caches only feed hls.js.
-  if (!slug || typeof window === "undefined" || typeof fetch !== "function" || constrained() || nativeAudioPlatform()) return;
+  if (!slug || typeof window === "undefined" || constrained() || !warmer()) return;
   const masterPath = hlsMasterPath(slug, trackSlug);
   const masterId = identity(masterPath);
   if (!masterId || isWarm(masterId)) return;
@@ -158,9 +164,11 @@ async function drain() {
       if (!queue[0].intent) await pageSettled(); // an intent warm may jump ahead meanwhile
       const job = queue.shift();
       if (!job || isWarm(identity(job.path))) continue;
+      const warm = warmer();
+      if (!warm) continue;
       recentStarts.push(Date.now());
       try {
-        await warmTrack(job.path);
+        await warm(job.path);
       } catch {
         if (job.attempts === 0) {
           const timer = setTimeout(() => {
@@ -200,6 +208,22 @@ function keyUrlOf(rendition, base) {
   const line = rendition.split(/\r?\n/).find((l) => l.startsWith("#EXT-X-KEY:"));
   const uri = line?.match(/URI="([^"]+)"/)?.[1];
   return uri ? new URL(uri, base).href : null;
+}
+
+/** Who fetches a warm: the app's native player (an app build without warm: nobody), else this page for hls.js. */
+function warmer() {
+  const native = nativeAudioPlatform();
+  if (native) return typeof native.warm === "function" ? (masterPath) => warmNative(native, masterPath) : null;
+  return typeof fetch === "function" ? warmTrack : null;
+}
+
+/** The native player fetches master, starting variant and key (and the opening segment where it can) itself. */
+async function warmNative(native, masterPath) {
+  await native.warm(masterPath);
+  const masterId = identity(masterPath);
+  nativeWarm.delete(masterId);
+  nativeWarm.set(masterId, Date.now() + MASTER_TTL_MS);
+  while (nativeWarm.size > MAX_WARM_TRACKS) nativeWarm.delete(nativeWarm.keys().next().value);
 }
 
 async function warmTrack(masterPath) {
@@ -242,6 +266,7 @@ function forget(masterId) {
 export function resetHlsStartWarm({ retryDelay = 15_000 } = {}) {
   responses.clear();
   tracks.clear();
+  nativeWarm.clear();
   queue.length = 0;
   recentStarts.length = 0;
   draining = false;

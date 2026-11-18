@@ -223,3 +223,24 @@ test("the warmed routes authorize and sign only: no play session, stream event o
     assert.doesNotMatch(src, /createStreamSession|insertStreamEvent|clearStreamSession|endStreamEvent|after\(/, file);
   }
 });
+
+test("in the app the native player warms the chain under the same queue and budget; the page fetches nothing", async () => {
+  const warmed = [];
+  globalThis.window.__2MRRW_NATIVE_AUDIO__ = { createElement() {}, warm: async (masterPath) => { warmed.push(masterPath); } };
+  warmHlsStart("hour-glass");
+  warmHlsStart("w2d", "w2d-intro", { intent: true });
+  await hlsStartWarmIdle();
+  assert.deepEqual(warmed, [hlsMasterPath("w2d", "w2d-intro"), hlsMasterPath("hour-glass")], "intent first, then visibility");
+  assert.deepEqual(requests, []);
+  warmHlsStart("hour-glass");
+  await hlsStartWarmIdle();
+  assert.equal(warmed.length, 2, "a chain native holds is not warmed again");
+  assert.equal(takeWarmPlaylist(hlsMasterPath("hour-glass")), null, "nothing for hls.js to serve");
+});
+
+test("an app build whose native player cannot warm is left alone", async () => {
+  globalThis.window.__2MRRW_NATIVE_AUDIO__ = { createElement() {} };
+  warmHlsStart("hour-glass", null, { intent: true });
+  await hlsStartWarmIdle();
+  assert.deepEqual(requests, []);
+});

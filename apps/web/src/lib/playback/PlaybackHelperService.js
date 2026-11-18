@@ -66,7 +66,7 @@ import {
 import { recordAudioContextState } from "@/lib/dev/performanceMarks";
 import { prefetchHlsSegmentsForTrack } from "@/lib/audio/hls-segment-prefetcher";
 import { warmHlsStart } from "@/lib/audio/hls-start-warm";
-import { isNativeAudioElement, nativeUpcoming } from "@/lib/playback/native-audio";
+import { isNativeAudioElement, nativeAudioPlatform, nativeUpcoming } from "@/lib/playback/native-audio";
 import { evictOverflowingCaches } from "@/lib/playback/playback-cache-manager";
 import { nextQueueIndex } from "./queue-order";
 import { bufferedAhead, canPreloadAudio } from "@/lib/audio/playback-buffer";
@@ -1579,7 +1579,10 @@ export function createPlaybackHelpers(initialDeps) {
     // signals intent (hover, touchstart, sheet/modal open) so waitAudioSrcReady gets
     // an instant HTTP-cache hit when play is pressed 150 ms – 5 s later.
     async hintUpcomingPlay(track) {
-      if (!track?.src || isNativeAudioElement(self._deps.audioRef?.current)) return;
+      if (!track?.src) return;
+      // In the app the native player plays: only the HLS chain warm (which the
+      // native side fetches) helps it; web view preloads would be wasted bytes.
+      const native = Boolean(nativeAudioPlatform());
       if (typeof navigator !== "undefined") {
         const conn = navigator.connection;
         if (conn?.saveData) return;
@@ -1587,7 +1590,7 @@ export function createPlaybackHelpers(initialDeps) {
         if (et === "slow-2g" || et === "2g") return;
       }
       const preloadEl = self._deps.intentPrewarmRef.current;
-      if (!preloadEl) return;
+      if (!preloadEl && !native) return;
 
       const kind = classifySourceUrl(track.src);
       if (isDirectlyBufferable(kind)) {
@@ -1607,6 +1610,7 @@ export function createPlaybackHelpers(initialDeps) {
             if (slug) warmHlsStart(slug, trackSlug !== slug ? trackSlug : null, { intent: true });
             return;
           }
+          if (native) return;
           const preloadSrc = normalized.includes("preload=1")
             ? normalized
             : `${normalized}&preload=1`;
@@ -1616,6 +1620,7 @@ export function createPlaybackHelpers(initialDeps) {
           }
           return;
         }
+        if (native) return;
         if (preloadEl.src !== normalized) {
           preloadEl.src = normalized;
           preloadEl.load();
