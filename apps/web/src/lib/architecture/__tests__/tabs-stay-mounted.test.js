@@ -21,7 +21,7 @@ test("no Home tab is mounted on demand: once built, a tab is only ever hidden", 
   // Home and Music are always mounted panels; Live keeps its own persistent div.
   assert.match(home, /<TabPanel data-home-storefront active=\{activeTab === "home"\}>/);
   assert.match(home, /<TabPanel active=\{MUSIC_TAB_IDS\.has\(activeTab\)\}>/);
-  assert.match(home, /data-live-storefront\s+style=\{\{ display: activeTab === "live" \? undefined : "none" \}\}/);
+  assert.match(home, /data-live-storefront\s+style=\{\{ display: activeTab === "live" \? undefined : "none"\s*[,}]/);
 
   const music = read("src/components/storefront/MusicTabCatalogPanels.js");
   for (const tab of ["singles", "albums", "mixtapes", "mymusic"]) {

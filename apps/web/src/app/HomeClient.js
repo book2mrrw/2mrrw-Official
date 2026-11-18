@@ -1613,6 +1613,20 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     scroller.scrollTop = Math.max(0, Math.min(centred, scroller.scrollHeight - scroller.clientHeight));
   }, [activeTab]);
 
+  // The Live tab (from the nav or the countdown's Join 2MRRW Live button) opens
+  // at its top, so the broadcast is on screen instead of wherever the previous
+  // tab was scrolled to, clear of the status bar (its scroll-margin-top).
+  // Before paint, like the Vault.
+  useLayoutEffect(() => {
+    if (activeTab !== "live") return;
+    const scroller = mainScrollRef.current;
+    const section = scroller?.querySelector("[data-live-storefront]");
+    if (!scroller || !section) return;
+    const margin = parseFloat(getComputedStyle(section).scrollMarginTop) || 0;
+    const top = section.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - margin;
+    scroller.scrollTop = Math.max(0, Math.min(top, scroller.scrollHeight - scroller.clientHeight));
+  }, [activeTab]);
+
   useEffect(() => {
     setInventory(loadInventory());
   }, []);
@@ -2382,9 +2396,9 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     switchTab("vault");
   }, [switchTab]);
 
-  // In-place tab requests from outside this component (the app's router turns
-  // links to the Collector's Cards page into one). Nothing dispatches this on
-  // the website.
+  // In-place tab requests from outside this component: the app's router turns
+  // links to the Collector's Cards page into one, and the 2MRRW Live
+  // countdown's Join button opens the Live tab with one (app and website).
   useEffect(() => {
     const onOpenTab = (event) => {
       if (event.detail?.tabId) switchTab(event.detail.tabId);
@@ -2944,7 +2958,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 {(auth) => (
                   <section
                     data-live-storefront
-                    style={{ display: activeTab === "live" ? undefined : "none" }}
+                    style={{ display: activeTab === "live" ? undefined : "none", scrollMarginTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
                     aria-hidden={activeTab !== "live"}
                     inert={activeTab === "live" ? undefined : ""}
                   >

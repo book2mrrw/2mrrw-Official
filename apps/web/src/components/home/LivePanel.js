@@ -1,8 +1,9 @@
 "use client";
 
 import { memo } from "react";
+import { JoinLiveButton, LiveTba } from "@/components/home/LiveCallToAction";
 
-function LivePanel({ liveIsLive, liveStreamDate, liveStreamTime, liveCountdown }) {
+function LivePanel({ liveIsLive, liveScheduled, liveStreamDate, liveStreamTime, liveCountdown }) {
   return (
     <div
       style={{
@@ -48,6 +49,8 @@ function LivePanel({ liveIsLive, liveStreamDate, liveStreamTime, liveCountdown }
           />
           <div style={{ fontSize: 20, fontWeight: 900, color: "#00ffff", letterSpacing: 3 }}>LIVE NOW</div>
         </div>
+      ) : !liveScheduled ? (
+        <LiveTba fontSize={28} />
       ) : (
         <>
           <div style={{ fontSize: 14, color: "#888", marginBottom: 4 }}>{liveStreamDate}</div>
@@ -86,6 +89,7 @@ function LivePanel({ liveIsLive, liveStreamDate, liveStreamTime, liveCountdown }
           </div>
         </>
       )}
+      {(liveIsLive || liveScheduled) && <JoinLiveButton />}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { Elements } from "@stripe/react-stripe-js";
 import { getStripeClient } from "@/lib/commerce/stripe-client";
 import CheckoutForm from "@/components/payments/CheckoutForm";
 import LivePanel from "@/components/home/LivePanel";
+import { JoinLiveButton, LiveTba } from "@/components/home/LiveCallToAction";
 import { useLiveBroadcast, useLiveCountdown, useTwitchEmbedConfig } from "@/components/home/LiveCountdownContext";
 import { LIVE_PPV_PRESET_CENTS, formatLivePpvAmount } from "@/lib/live/ppv-pricing";
 import { useLiveWitnessCount } from "@/hooks/useLiveWitnessCount";
@@ -141,10 +142,11 @@ function LiveAccessGate({ access, broadcastTitle }) {
 }
 
 export const LiveCountdownDesktopPanel = memo(function LiveCountdownDesktopPanel() {
-  const { liveIsLive, liveCountdown, liveStreamDate, liveStreamTime } = useLiveCountdown();
+  const { liveIsLive, liveScheduled, liveCountdown, liveStreamDate, liveStreamTime } = useLiveCountdown();
   return (
     <LivePanel
       liveIsLive={liveIsLive}
+      liveScheduled={liveScheduled}
       liveStreamDate={liveStreamDate}
       liveStreamTime={liveStreamTime}
       liveCountdown={liveCountdown}
@@ -153,7 +155,7 @@ export const LiveCountdownDesktopPanel = memo(function LiveCountdownDesktopPanel
 });
 
 export const LiveCountdownMobileHomeStrip = memo(function LiveCountdownMobileHomeStrip() {
-  const { liveIsLive, liveCountdown } = useLiveCountdown();
+  const { liveIsLive, liveScheduled, liveCountdown } = useLiveCountdown();
   return (
     <div
       style={{
@@ -190,6 +192,8 @@ export const LiveCountdownMobileHomeStrip = memo(function LiveCountdownMobileHom
           />
           <div style={{ fontSize: 20, fontWeight: 900, color: "#00ffff", letterSpacing: 3 }}>LIVE NOW</div>
         </div>
+      ) : !liveScheduled ? (
+        <LiveTba fontSize={22} />
       ) : (
         <div style={{ display: "flex", gap: 8 }}>
           {[
@@ -225,12 +229,13 @@ export const LiveCountdownMobileHomeStrip = memo(function LiveCountdownMobileHom
           ))}
         </div>
       )}
+      {(liveIsLive || liveScheduled) && <JoinLiveButton />}
     </div>
   );
 });
 
 export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection() {
-  const { liveIsLive, liveCountdown, liveTitle, liveLocation, liveStreamDate, liveStreamTime } = useLiveCountdown();
+  const { liveIsLive, liveScheduled, liveCountdown, liveTitle, liveLocation, liveStreamDate, liveStreamTime } = useLiveCountdown();
   return (
     <div id="home-live">
       <h2 className="section-heading" style={{ marginBottom: 16 }}>
@@ -249,9 +254,11 @@ export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection()
         <div style={{ fontSize: "clamp(16px, 2.6cqi, 20px)", fontWeight: 800, marginBottom: 4 }}>
           {liveTitle}{liveLocation ? ` – ${liveLocation}` : ""}
         </div>
-        <div style={{ fontSize: 13, color: "#aaa", marginBottom: 24 }}>
-          {liveStreamDate}{liveStreamTime ? ` · ${liveStreamTime}` : ""}
-        </div>
+        {liveScheduled && (
+          <div style={{ fontSize: 13, color: "#aaa", marginBottom: 24 }}>
+            {liveStreamDate}{liveStreamTime ? ` · ${liveStreamTime}` : ""}
+          </div>
+        )}
         {liveIsLive ? (
           <div
             style={{
@@ -275,6 +282,8 @@ export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection()
             />
             LIVE NOW
           </div>
+        ) : !liveScheduled ? (
+          <LiveTba fontSize="clamp(24px, 4cqi, 32px)" style={{ marginTop: 16 }} />
         ) : (
           <div
             style={{
@@ -327,13 +336,14 @@ export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection()
             ))}
           </div>
         )}
+        {(liveIsLive || liveScheduled) && <JoinLiveButton />}
       </div>
     </div>
   );
 });
 
 const LiveCountdownHeader = memo(function LiveCountdownHeader() {
-  const { liveIsLive, liveCountdown, liveTitle, liveStreamDate: displayDate, liveStreamTime: displayTime } = useLiveCountdown();
+  const { liveIsLive, liveScheduled, liveCountdown, liveTitle, liveStreamDate: displayDate, liveStreamTime: displayTime } = useLiveCountdown();
 
   return (
     <div
@@ -353,7 +363,7 @@ const LiveCountdownHeader = memo(function LiveCountdownHeader() {
       <div style={{ fontSize: "clamp(17px, 3cqi, 22px)", fontWeight: 800, marginBottom: 4 }}>
         {liveTitle || "2MRRW LIVE"}
       </div>
-      {!liveIsLive && (
+      {!liveIsLive && liveScheduled && (
         <div style={{ fontSize: 13, color: "#aaa", marginBottom: 28 }}>
           {displayDate}{displayTime ? ` · ${displayTime}` : ""}
         </div>
@@ -363,6 +373,8 @@ const LiveCountdownHeader = memo(function LiveCountdownHeader() {
           <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#00ffff", boxShadow: "0 0 14px rgba(0,255,255,0.9)", animation: "pulse 1.2s infinite" }} />
           <div style={{ fontSize: 28, fontWeight: 900, color: "#00ffff", letterSpacing: 4 }}>LIVE NOW</div>
         </div>
+      ) : !liveScheduled ? (
+        <LiveTba fontSize="clamp(26px, 5cqi, 36px)" style={{ marginTop: 20 }} />
       ) : (
         <div style={{ display: "flex", justifyContent: "center", gap: "clamp(8px, 2cqi, 16px)", flexWrap: "wrap" }}>
           {[

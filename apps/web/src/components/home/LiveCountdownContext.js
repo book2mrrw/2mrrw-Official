@@ -23,7 +23,7 @@ const POLL_MS = 15_000;
 function scheduleLabels(goesLiveAt) {
   const at = goesLiveAt ? new Date(goesLiveAt) : null;
   if (!at || Number.isNaN(at.getTime())) {
-    return { liveScheduled: false, liveStreamDate: "Next date to be announced", liveStreamTime: "" };
+    return { liveScheduled: false, liveStreamDate: "", liveStreamTime: "" };
   }
   return {
     liveScheduled: true,
