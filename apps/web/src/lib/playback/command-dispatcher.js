@@ -29,6 +29,7 @@ import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { correlateBlackscreenPlayback } from "@/lib/diagnostics/playback-trace";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
+import { nativeAudioPlatform } from "@/lib/playback/native-audio";
 
 // PLAY_QUEUE supersede counter. Increments with every PLAY_QUEUE dispatch.
 // The queued run() for each command checks this at execution time — if a
@@ -101,7 +102,9 @@ export function dispatchPlaybackCommand(type, payload = {}, {
     // dedicated silent element here (synchronously, before any await) grants page-wide
     // media autoplay permission that persists for all subsequent programmatic play()
     // calls on any audio element, regardless of async depth.
-    getSilentUnlockEl()?.play().catch(() => {});
+    // The app's native player needs no web autoplay permission, and a web audio
+    // element playing would compete with it for the lock screen (native-audio.js).
+    if (!nativeAudioPlatform()) getSilentUnlockEl()?.play().catch(() => {});
   }
 
   const run = async () => {

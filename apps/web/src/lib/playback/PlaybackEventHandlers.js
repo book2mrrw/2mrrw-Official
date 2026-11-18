@@ -73,6 +73,7 @@ import {
 } from "@/media/PlaybackStateMachine";
 import { classifySourceUrl, isDirectlyBufferable, SOURCE_KIND } from "@/lib/playback/audio-source-resolver";
 import { isHlsJsActive } from "@/lib/audio/HLSEngine";
+import { isNativeAudioElement } from "@/lib/playback/native-audio";
 import { normalizePlaybackSrc } from "@/lib/audio/audio-element-utils";
 import { cancelHlsSegmentPrefetch } from "@/lib/audio/hls-segment-prefetcher";
 import { captureRecoveryOperation, confirmRecoveryPlayback } from "./recovery-operation";
@@ -473,7 +474,7 @@ export function createPlaybackEventHandlers({
 
     // Prime the previous-track element for back-navigation (CDN preview only).
     const prevIdx = queueIndexRef.current - 1;
-    if (prevIdx >= 0 && prevTrackPreloadRef.current) {
+    if (prevIdx >= 0 && prevTrackPreloadRef.current && !isNativeAudioElement(audio)) {
       const prevNorm = previousTrackPrimeSrc(queueRef.current[prevIdx], { hlsJsActive: isHlsJsActive() });
       if (prevNorm && prevTrackPreloadRef.current.src !== prevNorm) {
         prevTrackPreloadRef.current.src = prevNorm;

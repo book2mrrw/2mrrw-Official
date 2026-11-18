@@ -31,6 +31,7 @@
 import { hasSegment, setSegment } from "./hls-segment-cache";
 import { parseEncryptedRendition, parseVariants } from "./hls-download-manager";
 import { getQualityLevel, getStartupQualityLevel } from "./network-quality";
+import { nativeAudioPlatform } from "@/lib/playback/native-audio";
 
 export const MASTER_TTL_MS = 4 * 60 * 1000;
 export const WARM_STARTS_PER_MINUTE = 12;
@@ -117,7 +118,8 @@ function constrained() {
  * sheet open) puts it at the front; visibility warms wait their turn.
  */
 export function warmHlsStart(slug, trackSlug = null, { intent = false } = {}) {
-  if (!slug || typeof window === "undefined" || typeof fetch !== "function" || constrained()) return;
+  // The app's native player fetches its own chain; these caches only feed hls.js.
+  if (!slug || typeof window === "undefined" || typeof fetch !== "function" || constrained() || nativeAudioPlatform()) return;
   const masterPath = hlsMasterPath(slug, trackSlug);
   const masterId = identity(masterPath);
   if (!masterId || isWarm(masterId)) return;

@@ -35,6 +35,7 @@ import { encryptedSegmentStore } from "./encrypted-segment-store";
 import { hlsDownloadManager, parseVariants } from "./hls-download-manager";
 import { createWarmLoaderClasses, takeWarmPlaylist } from "./hls-start-warm";
 import { attachBufferingGuard } from "./hls-buffering-guard";
+import { isNativeAudioElement } from "@/lib/playback/native-audio";
 
 async function importHls() {
   if (typeof window === "undefined") return null;
@@ -140,6 +141,16 @@ export class HLSEngine {
     if (_version >= 0 && this._manifestVersion !== _version) return false;
 
     const version = _version >= 0 ? _version : this._manifestVersion;
+    // The app's native player takes the adaptive master: AVPlayer / ExoPlayer
+    // own rendition choice, buffering and keys (see native-audio.js).
+    if (isNativeAudioElement(audioEl)) {
+      this._destroyHls();
+      this._native = true;
+      this._audioEl = audioEl;
+      this._manifestUrl = manifestUrl;
+      audioEl.src = new URL(manifestUrl, globalThis.location?.href || 'https://www.2mrrw.com/').href;
+      return true;
+    }
     void encryptedSegmentStore.prepare();
     const Hls = await importHls();
     if (this._destroyed || version !== this._manifestVersion) return false;

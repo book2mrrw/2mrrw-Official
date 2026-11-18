@@ -8,6 +8,7 @@ import {
   isPlaybackTraceEnabled,
   logPlaybackEngineLifecycle,
 } from "@/lib/diagnostics/playback-trace";
+import { isNativeAudioElement, nativeAudioPlatform } from "@/lib/playback/native-audio";
 
 const GLOBAL_KEY = "__2MRRW_AUDIO_ENGINE_RUNTIME__";
 
@@ -109,20 +110,23 @@ export function ensureDetachedAudioElement() {
 
   let audio = runtime.audioElement;
   if (!audio) {
-    audio = document.createElement("audio");
-    audio.preload = "auto";
-    audio.setAttribute("playsinline", "");
-    audio.setAttribute("webkit-playsinline", "");
-    audio.setAttribute("x-webkit-airplay", "allow");
-    audio.crossOrigin = "anonymous";
-    audio.style.display = "none";
+    // The app's native player when present (native-audio.js), else an <audio>.
+    audio = nativeAudioPlatform()?.createElement() ?? document.createElement("audio");
+    if (!isNativeAudioElement(audio)) {
+      audio.preload = "auto";
+      audio.setAttribute("playsinline", "");
+      audio.setAttribute("webkit-playsinline", "");
+      audio.setAttribute("x-webkit-airplay", "allow");
+      audio.crossOrigin = "anonymous";
+      audio.style.display = "none";
+    }
     runtime.audioElement = audio;
     if (isPlaybackTraceEnabled()) {
       logPlaybackEngineLifecycle({ phase: "element-created" });
     }
   }
 
-  if (!audio.isConnected) {
+  if (!isNativeAudioElement(audio) && !audio.isConnected) {
     document.body.appendChild(audio);
     if (isPlaybackTraceEnabled()) {
       logPlaybackEngineLifecycle({ phase: "element-mounted", parent: "document.body" });

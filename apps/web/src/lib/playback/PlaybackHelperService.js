@@ -66,6 +66,7 @@ import {
 import { recordAudioContextState } from "@/lib/dev/performanceMarks";
 import { prefetchHlsSegmentsForTrack } from "@/lib/audio/hls-segment-prefetcher";
 import { warmHlsStart } from "@/lib/audio/hls-start-warm";
+import { isNativeAudioElement, nativeUpcoming } from "@/lib/playback/native-audio";
 import { evictOverflowingCaches } from "@/lib/playback/playback-cache-manager";
 import { nextQueueIndex } from "./queue-order";
 import { bufferedAhead, canPreloadAudio } from "@/lib/audio/playback-buffer";
@@ -1216,6 +1217,11 @@ export function createPlaybackHelpers(initialDeps) {
         return;
       const audio = self._deps.audioRef.current;
       if (!audio) return;
+      // The app's native player has no Web Audio graph (native-audio.js).
+      if (isNativeAudioElement(audio)) {
+        self._deps.webAudioAvailableRef.current = false;
+        return;
+      }
 
       const engine = getWebAudioEngine();
       try {
@@ -1397,6 +1403,24 @@ export function createPlaybackHelpers(initialDeps) {
     // CDN tracks: load bytes directly into a hidden Audio element.
     // Library streams: pre-fetch the signed URL so the swap is instant.
     async scheduleNextTrackPreload() {
+      const nativeAudio = self._deps.audioRef.current;
+      if (isNativeAudioElement(nativeAudio)) {
+        // Native plays on through what comes next by itself, also while the web
+        // view is suspended (a locked iPhone), in the order the engine advances.
+        const { queueRef, queueIndexRef, repeatModeRef, shuffleRef, shuffledOrderRef, shufflePositionRef } = self._deps;
+        nextQueueIndex(queueRef.current, queueIndexRef.current, self._deps); // settles shuffle's order without consuming it
+        nativeAudio.setUpcoming(nativeUpcoming({
+          queue: queueRef.current,
+          queueIndex: queueIndexRef.current,
+          repeatMode: repeatModeRef.current,
+          shuffle: shuffleRef.current,
+          shuffledOrder: shuffledOrderRef.current,
+          shufflePosition: shufflePositionRef.current,
+          stopAfterEachTrack: self._deps.stopAfterEachTrackRef?.current,
+          sleepAfterCurrentTrack: Boolean(self._deps.sleepTimerRef?.current?.afterCurrentTrack),
+        }));
+        return;
+      }
       if (!canPreloadAudio(self._deps.audioRef.current, {
         buffering: self._deps.stateRef.current.isBuffering,
         recentStallAt: self._deps.recentStallTimeRef.current,
@@ -1552,7 +1576,7 @@ export function createPlaybackHelpers(initialDeps) {
     // signals intent (hover, touchstart, sheet/modal open) so waitAudioSrcReady gets
     // an instant HTTP-cache hit when play is pressed 150 ms – 5 s later.
     async hintUpcomingPlay(track) {
-      if (!track?.src) return;
+      if (!track?.src || isNativeAudioElement(self._deps.audioRef?.current)) return;
       if (typeof navigator !== "undefined") {
         const conn = navigator.connection;
         if (conn?.saveData) return;
