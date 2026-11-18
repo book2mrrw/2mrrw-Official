@@ -41,3 +41,19 @@ test("arriving at the Vault centres the vault before paint", () => {
   assert.match(effect, /scroller\?\.querySelector\("\[data-vault-stage\] \.vault-door-gate"\)/);
   assert.match(effect, /\(scroller\.clientHeight - gate\.offsetHeight\) \/ 2/);
 });
+
+test("the loading ring cannot stay on over audible music: advancing time clears buffering", () => {
+  const handlers = read("src/lib/playback/PlaybackEventHandlers.js");
+  const onTime = handlers.slice(handlers.indexOf("const onTime = () => {"), handlers.indexOf("persistPlayback(\"progress\");", handlers.indexOf("const onTime = () => {")));
+  assert.match(onTime, /audibilitySampleRef\.current\.frozenSince === null &&\s*!audio\.seeking &&\s*audio\.readyState >= 3 &&\s*playbackStateMachine\.getContext\(\)\.isBuffering/);
+  assert.match(onTime, /patchState\(\{ isBuffering: false, playbackNetworkState: "playing" \}\);\s*playbackStateMachine\.transition\(PLAYBACK_ORCHESTRATION_EVENTS\.BUFFER_END\);/);
+  // The watchdog reads the same authority the ring does.
+  assert.match(handlers, /if \(playbackStateMachine\.getContext\(\)\.isBuffering \|\| stateRef\.current\?\.isBuffering\) \{/);
+});
+
+test("a patch that only clears buffering is never skipped as 'no change'", async () => {
+  const { playbackUiStateEqual } = await import("@/lib/playback/playback-track-utils");
+  const playing = { currentTrackId: "w2d", isPlaying: true, isBuffering: true, queue: [], queueIndex: 0 };
+  assert.equal(playbackUiStateEqual(playing, { ...playing, isBuffering: false }), false);
+  assert.equal(playbackUiStateEqual(playing, { ...playing }), true);
+});

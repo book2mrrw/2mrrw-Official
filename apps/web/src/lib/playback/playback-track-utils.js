@@ -40,6 +40,11 @@ function playbackUiStateEqual(prev, next) {
     "currentTrack",
     "source",
     "isPlaying",
+    // Without it a patch that only clears buffering (onPlaying once a song is
+    // already playing) was skipped, and the loading ring stayed on over every
+    // song after the first. It is a transport key in the state machine, so the
+    // write only notifies the transport listeners.
+    "isBuffering",
     "error",
     "hasStarted",
     "accessDenied",

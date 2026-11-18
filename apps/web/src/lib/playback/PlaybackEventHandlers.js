@@ -114,7 +114,9 @@ function _startAudibilityWatchdog(audioRef, stateRef, patchState) {
     // Confirm audibility: time is advancing AND buffer is ready.
     if (t !== _audWatchdogLastTime && el.readyState >= 3) {
       _clearAudibilityWatchdog();
-      if (stateRef.current?.isBuffering) {
+      // The state machine is the authority (stream commands set the flag
+      // there directly); stateRef can miss it.
+      if (playbackStateMachine.getContext().isBuffering || stateRef.current?.isBuffering) {
         patchState({ isBuffering: false, playbackNetworkState: "playing" });
         playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_END);
       }
@@ -732,6 +734,20 @@ export function createPlaybackEventHandlers({
   const onTime = () => {
     if (!audio.paused && !audio.ended) {
       updateAudibilitySample(audio, audibilitySampleRef);
+      // Time is moving with data in hand, so the song is not buffering —
+      // however the flag got set. A new-track load and a mid-play stream switch
+      // set it directly, and a 'playing' event is not guaranteed after either,
+      // which left the loading ring spinning over audible music on every song
+      // after the first. The ring reads this flag from the state machine.
+      if (
+        audibilitySampleRef.current.frozenSince === null &&
+        !audio.seeking &&
+        audio.readyState >= 3 &&
+        playbackStateMachine.getContext().isBuffering
+      ) {
+        patchState({ isBuffering: false, playbackNetworkState: "playing" });
+        playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_END);
+      }
     }
     persistPlayback("progress");
     syncPositionState(false);
