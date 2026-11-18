@@ -13,6 +13,9 @@
  * detach function.
  */
 export function attachBufferingGuard(hls, media) {
+  // HLSEngine takes any media-like object and optional-calls the element
+  // throughout; one without events has no seek or stall to guard.
+  if (typeof media?.addEventListener !== "function") return () => {};
   const resumeIfUnbuffered = () => {
     if (hls.bufferingEnabled !== false) return;
     const time = media.currentTime;

@@ -52,3 +52,10 @@ test("nothing happens while buffering is already on, and detaching removes the g
   other.dispatchEvent(new Event("seeking"));
   assert.equal(off.resumed, 0);
 });
+
+test("an element without events (HLSEngine's minimal media contract) is accepted and left alone", () => {
+  const hls = fakeHls(false);
+  const detach = attachBufferingGuard(hls, {});
+  detach();
+  assert.equal(hls.resumed, 0);
+});
