@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 export async function createCreditDatabaseFixture() {
-const modulePath=process.env.CREDITS_PGLITE_MODULE || '/private/tmp/credits-postgres-fixture/node_modules/@electric-sql/pglite/dist/index.js';
-const {PGlite}=await import(pathToFileURL(modulePath));
+// PGlite is a pinned devDependency; CREDITS_PGLITE_MODULE can point at another build.
+const {PGlite}=await import(process.env.CREDITS_PGLITE_MODULE ? pathToFileURL(process.env.CREDITS_PGLITE_MODULE).href : '@electric-sql/pglite');
 const db=new PGlite();
 const schema=JSON.parse(await fs.readFile('docs/credits/frontend-schema-2026-10-21.json','utf8'));
 await db.exec('CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS; CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);');

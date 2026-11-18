@@ -72,6 +72,7 @@
     "zustand": "5.0.13"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.15",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "4.2.2",
     "eslint": "9.39.4",
