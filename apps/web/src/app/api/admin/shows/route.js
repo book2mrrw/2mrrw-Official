@@ -3,6 +3,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { ticketPriceError } from "@/lib/commerce/tickets";
 
 export const dynamic = "force-dynamic";
 
@@ -59,9 +60,12 @@ export async function POST(req) {
   const body = await req.json();
   const { name, location, event_date, event_time, venue_timezone, price_cents, tickets_available, active = true } = body;
 
-  if (!name || !location || !event_date || !price_cents) {
-    return NextResponse.json({ error: "name, location, event_date, and price_cents are required" }, { status: 400 });
+  if (!name || !location || !event_date) {
+    return NextResponse.json({ error: "name, location, and event_date are required" }, { status: 400 });
   }
+  // 0 is a free show, not a missing price.
+  const priceError = ticketPriceError(price_cents);
+  if (priceError) return NextResponse.json({ error: priceError }, { status: 400 });
 
   const admin = getAdminClient();
   const { data, error } = await admin
@@ -93,7 +97,11 @@ export async function PATCH(req) {
 
   const allowed = ["name", "location", "event_date", "event_time", "venue_timezone", "price_cents", "tickets_available", "ticket_url", "active"];
   const update = Object.fromEntries(Object.entries(fields).filter(([k]) => allowed.includes(k)));
-  if (update.price_cents !== undefined) update.price_cents = Number(update.price_cents);
+  if (update.price_cents !== undefined) {
+    const priceError = ticketPriceError(update.price_cents);
+    if (priceError) return NextResponse.json({ error: priceError }, { status: 400 });
+    update.price_cents = Number(update.price_cents);
+  }
   if (update.tickets_available !== undefined) update.tickets_available = update.tickets_available === "" ? null : Number(update.tickets_available);
 
   const admin = getAdminClient();

@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Elements } from "@stripe/react-stripe-js";
 import { getStripeClient } from "@/lib/commerce/stripe-client";
+import { formatTicketPrice, ticketPriceError } from "@/lib/commerce/ticket-price";
 const CheckoutForm = dynamic(() => import("@/components/payments/CheckoutForm"), { ssr: false });
 const DonateModal = dynamic(() => import("@/components/payments/DonateModal"), { ssr: false });
 import { stripePaymentOverlayStyle, stripePaymentPanelStyle } from "@/components/payments/stripePaymentShell";
@@ -211,6 +212,9 @@ function TicketCheckoutButton({ event, onClose }) {
   const [err, setErr] = useState(null);
   const [clientSecret, setClientSecret] = useState(null);
   const [purchased, setPurchased] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const free = !(event.price > 0);
+  const priceLabel = formatTicketPrice(event.price * 100);
 
   const handleBuy = async () => {
     setLoading(true);
@@ -223,15 +227,39 @@ function TicketCheckoutButton({ event, onClose }) {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || "Checkout failed"); return; }
+      if (data.free) { setPurchased(true); return; }
       if (data.clientSecret) setClientSecret(data.clientSecret);
     } catch (e) { setErr("Network error — try again"); }
     finally { setLoading(false); }
   };
 
+  // Recorded the moment Stripe confirms the payment, verified server-side —
+  // never left to webhook delivery alone (the webhook stays the backstop).
+  const confirmTicket = async (paymentIntentId) => {
+    setConfirming(true);
+    let recorded = false;
+    try {
+      const res = await fetch("/api/tickets/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentIntentId }),
+      });
+      recorded = res.ok;
+    } catch {}
+    setConfirming(false);
+    setPurchased(recorded ? "confirmed" : "pending");
+  };
+
+  if (confirming) {
+    return <div style={{textAlign:"center",padding:"14px 0",color:"#aaa",fontSize:13}}>Confirming your ticket…</div>;
+  }
+
   if (purchased) {
     return (
       <div style={{textAlign:"center",padding:"14px 0",color:"#00ffff",fontWeight:700,fontSize:14}}>
-        ✓ Ticket confirmed — see you there!
+        {purchased === "pending"
+          ? "Payment received — your ticket will appear in My Tickets shortly."
+          : "✓ Ticket confirmed — see you there!"}
       </div>
     );
   }
@@ -249,7 +277,7 @@ function TicketCheckoutButton({ event, onClose }) {
           },
         }}
       >
-        <CheckoutForm onSuccess={() => setPurchased(true)} requiresShipping={false} submitLabel={`Pay $${event.price.toFixed(2)}`} />
+        <CheckoutForm onSuccess={confirmTicket} requiresShipping={false} submitLabel={`Pay ${priceLabel}`} />
       </Elements>
     );
   }
@@ -260,13 +288,13 @@ function TicketCheckoutButton({ event, onClose }) {
         onClick={handleBuy}
         disabled={loading}
         style={{width:"100%",padding:"12px 0",background:loading?"#1a1a1a":"#00ffff",color:loading?"#555":"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:loading?"wait":"pointer",fontSize:14,transition:"0.2s"}}
-      >{loading ? "Loading…" : `Buy Ticket — $${event.price.toFixed(2)}`}</button>
+      >{loading ? "Loading…" : free ? "Get Free Ticket" : `Buy Ticket — ${priceLabel}`}</button>
       {err && <div style={{fontSize:12,color:"#ef4444",textAlign:"center"}}>{err}</div>}
     </>
   );
 }
 
-const PRESET_PRICES = [25,30,35,40,45,50,60,75,100,125,150,175,200,250,300,350,400,500,750,1000,1500,2000,2500,3000,3500];
+const PRESET_PRICES = [0,25,30,35,40,45,50,60,75,100,125,150,175,200,250,300,350,400,500,750,1000,1500,2000,2500,3000,3500];
 
 const TIMEZONES = [
   // Americas
@@ -400,11 +428,14 @@ function InlineShowsAdmin({ onRefreshFanView }) {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    // An unpicked price is an error, never a free show by default.
+    const priceError = ticketPriceError(form.price_cents);
+    if (priceError) { showFlash(priceError, true); return; }
     setSaving(true);
     try {
       const payload = {
         ...form,
-        price_cents: Number(form.price_cents) || 0,
+        price_cents: Number(form.price_cents),
         tickets_available: form.tickets_available === "" ? null : Number(form.tickets_available),
       };
       const res = await fetch("/api/admin/shows", {
@@ -494,7 +525,7 @@ function InlineShowsAdmin({ onRefreshFanView }) {
                 <button type="button" key={p}
                   onClick={()=>{setCustomPrice(false);setForm(f=>({...f,price_cents:String(p*100)}));}}
                   style={{padding:"7px 11px",borderRadius:8,border:Number(form.price_cents)===p*100?"1px solid #9b5de5":"1px solid rgba(255,255,255,.1)",background:Number(form.price_cents)===p*100?"rgba(155,93,229,0.18)":"transparent",color:Number(form.price_cents)===p*100?"#c084fc":"rgba(255,255,255,.45)",fontSize:12,fontWeight:Number(form.price_cents)===p*100?700:400,cursor:"pointer",transition:"0.12s",lineHeight:1}}
-                >${p}</button>
+                >{p === 0 ? "Free" : `$${p}`}</button>
               ))}
               <button type="button"
                 onClick={()=>setCustomPrice(true)}
@@ -537,7 +568,7 @@ function InlineShowsAdmin({ onRefreshFanView }) {
               <div key={show.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,opacity:(!show.active||isPast(show.event_date))?0.5:1}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:12,fontWeight:700,color:"white",marginBottom:2}}>{show.name}</div>
-                  <div style={{fontSize:10,color:"rgba(255,255,255,.4)"}}>{show.location} · {fmtDate(show.event_date)}{show.event_time?` · ${show.event_time}`:""} · ${(show.price_cents/100).toFixed(2)}{show.tickets_available!=null?` · ${show.tickets_available} left`:" · unlimited"}
+                  <div style={{fontSize:10,color:"rgba(255,255,255,.4)"}}>{show.location} · {fmtDate(show.event_date)}{show.event_time?` · ${show.event_time}`:""} · {formatTicketPrice(show.price_cents)}{show.tickets_available!=null?` · ${show.tickets_available} left`:" · unlimited"}
                     {isPast(show.event_date) && <span style={{color:"#f59e0b",marginLeft:6}}>PAST</span>}
                     {!show.active && <span style={{color:"#ef4444",marginLeft:6}}>HIDDEN</span>}
                     {show.active && !isPast(show.event_date) && show.tickets_available===0 && <span style={{color:"#ef4444",marginLeft:6}}>SOLD OUT</span>}
@@ -906,7 +937,7 @@ function MyTicketsPanel({ userId }) {
             </div>
             <div style={{textAlign:"right"}}>
               <div style={{fontSize:11,fontWeight:700,color:"#00ffff",letterSpacing:1}}>✓ CONFIRMED</div>
-              <div style={{fontSize:11,color:"#555",marginTop:2}}>{t.quantity} ticket{t.quantity!==1?"s":""} · ${(t.priceCents/100).toFixed(2)}</div>
+              <div style={{fontSize:11,color:"#555",marginTop:2}}>{t.quantity} ticket{t.quantity!==1?"s":""} · {formatTicketPrice(t.priceCents)}</div>
             </div>
           </div>
         ))}
@@ -2578,7 +2609,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
             <div style={{fontSize:20,fontWeight:800,letterSpacing:2}}>{selectedEvent.name}</div>
             <div style={{fontSize:13,color:"#aaa"}}>{selectedEvent.location}</div>
             <div style={{fontSize:13,color:"#aaa"}}>{new Date(selectedEvent.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}{selectedEvent.time ? ` · ${_fmtEventTime(selectedEvent.date, selectedEvent.time, selectedEvent.venueTz)}` : ""}</div>
-            <div style={{fontSize:22,fontWeight:900,color:"#00ffff"}}>${selectedEvent.price.toFixed(2)}</div>
+            <div style={{fontSize:22,fontWeight:900,color:"#00ffff"}}>{formatTicketPrice(selectedEvent.price * 100)}</div>
             {selectedEvent.tickets === 0 ? (
               <div style={{fontSize:12,color:"#ef4444",fontWeight:700,letterSpacing:2}}>SOLD OUT</div>
             ) : selectedEvent.tickets != null ? (
@@ -2930,7 +2961,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                               <div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})}{evt.time ? ` · ${_fmtEventTime(evt.date, evt.time, evt.venueTz)}` : ""}</div>
                             </div>
                             <div style={{display:"flex",alignItems:"center",gap:"clamp(10px,2cqi,14px)"}}>
-                              <div style={{fontSize:"clamp(15px,2.2cqi,18px)",fontWeight:900,color:soldOut?"#555":"#00ffff"}}>${evt.price.toFixed(2)}</div>
+                              <div style={{fontSize:"clamp(15px,2.2cqi,18px)",fontWeight:900,color:soldOut?"#555":"#00ffff"}}>{formatTicketPrice(evt.price * 100)}</div>
                               <button
                                 onClick={()=>!soldOut&&setSelectedEvent(evt)}
                                 disabled={soldOut}

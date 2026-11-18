@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import styles from "./HomeStorefront.module.css";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
+import { formatTicketPrice } from "@/lib/commerce/ticket-price";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
 import HomeStorefrontCatalogMedia from "@/components/storefront/HomeStorefrontCatalogMedia";
 import RadioCarousel from "@/components/home/RadioCarousel";
@@ -283,7 +284,7 @@ const HomeStorefront = memo(function HomeStorefront({
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ fontSize: 15, fontWeight: 900, color: "#00ffff" }}>${evt.price.toFixed(2)}</div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: "#00ffff" }}>{formatTicketPrice(evt.price * 100)}</div>
                 <button
                   onClick={() => onSelectEvent(evt)}
                   style={{ padding: "8px 14px", background: "#111", color: "white", border: "1px solid #333", borderRadius: 8, cursor: "pointer", fontWeight: "bold", fontSize: 12, transition: "0.2s" }}

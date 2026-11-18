@@ -10,6 +10,7 @@ import {
   upsertMembershipFromSubscription,
 } from "@/lib/commerce/stripe-entitlements";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { decrementShowStock, sendTicketConfirmation } from "@/lib/commerce/tickets";
 import { invalidateUserEntitlementCache } from "@/lib/server/entitlement-cache";
 import {
   sendTransactionalEmail,
@@ -363,7 +364,9 @@ export async function handleStripeWebhook(req) {
 // object (`pi`), not a Checkout Session, so there is no `pi.customer_details`/
 // `pi.payment_status`/`pi.amount_total` equivalent; everything needed was
 // already captured into `pi.metadata` at /api/tickets/checkout creation time.
-async function fulfillTicketPurchase(admin, pi) {
+// Also called by /api/tickets/confirm right after the buyer's in-page payment
+// succeeds, so a ticket never waits on (or depends on) webhook delivery.
+export async function fulfillTicketPurchase(admin, pi) {
   const meta = pi.metadata || {};
   const userId  = meta.guest_user_id || meta.user_id;
   const showId  = meta.show_id;
@@ -397,44 +400,16 @@ async function fulfillTicketPurchase(admin, pi) {
     throw insertErr;
   }
 
-  // Decrement available ticket count (non-fatal if it fails — purchase is already recorded)
-  try {
-    const { data: showRow } = await admin
-      .from("shows_events")
-      .select("tickets_available")
-      .eq("id", showId)
-      .single();
-    if (showRow && showRow.tickets_available !== null) {
-      await admin
-        .from("shows_events")
-        .update({ tickets_available: Math.max(0, showRow.tickets_available - qty) })
-        .eq("id", showId);
-    }
-  } catch (decrErr) {
-    console.warn(`${LOG_PREFIX} ticket count decrement failed`, showId, decrErr?.message);
-  }
-
-  // Confirmation email — non-fatal
-  try {
-    const to = pi.receipt_email || meta.email;
-    if (to) {
-      const showDate = meta.show_date
-        ? new Date(meta.show_date + "T12:00:00").toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric", year:"numeric" })
-        : "";
-      const { subject, html, text } = buildTicketConfirmationEmail({
-        name: "",
-        showName: meta.show_name || "2MRRW Live",
-        location: meta.show_location || "",
-        date: showDate,
-        time: meta.show_time || "",
-        quantity: qty,
-        amountCents: pi.amount_received ?? pi.amount,
-      });
-      await sendTransactionalEmail({ to, subject, html, text });
-    }
-  } catch (emailErr) {
-    console.warn(`${LOG_PREFIX} ticket confirmation email failed`, pi.id, emailErr?.message);
-  }
+  await decrementShowStock(admin, showId, qty);
+  await sendTicketConfirmation({
+    to: pi.receipt_email || meta.email,
+    showName: meta.show_name,
+    location: meta.show_location,
+    showDate: meta.show_date,
+    showTime: meta.show_time,
+    quantity: qty,
+    amountCents: pi.amount_received ?? pi.amount,
+  });
 
   console.log(`${LOG_PREFIX} ticket fulfilled`, { paymentIntentId: pi.id, userId, showId, qty });
 }
@@ -474,14 +449,6 @@ async function fulfillLivePpvPurchase(admin, pi) {
   }
 
   console.log(`${LOG_PREFIX} live_ppv fulfilled`, { paymentIntentId: pi.id, userId, broadcastId, amountCents });
-}
-
-function buildTicketConfirmationEmail({ name, showName, location, date, time, quantity, amountCents }) {
-  const total = amountCents ? `$${(amountCents / 100).toFixed(2)}` : "";
-  const greeting = name ? `Hey ${name},` : "Hey,";
-  const text = `${greeting}\n\nYour ticket${quantity > 1 ? "s are" : " is"} confirmed!\n\n${showName}\n${location}\n${date}${time ? ` · ${time}` : ""}\n\nQuantity: ${quantity}\nTotal: ${total}\n\nSee you there.\n\n— 2MRRW`;
-  const html = `<p>${greeting}</p><p>Your ticket${quantity > 1 ? "s are" : " is"} confirmed.</p><h2>${showName}</h2><p>${location}<br/>${date}${time ? ` · ${time}` : ""}</p><p>Qty: ${quantity} · Total: ${total}</p><p>See you there.<br/>— 2MRRW</p>`;
-  return { subject: `Your ticket — ${showName}`, html, text };
 }
 
 async function sendToPrintful(session, merchItems) {

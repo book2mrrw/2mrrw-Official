@@ -40,11 +40,13 @@ test("the ticket buy button renders Stripe Elements in-page instead of redirecti
   const src = read("src/app/HomeClient.js");
   const fnAt = src.indexOf("function TicketCheckoutButton({ event, onClose }) {");
   assert.ok(fnAt > -1);
-  const body = src.slice(fnAt, fnAt + 2200);
+  const body = src.slice(fnAt, src.indexOf("const PRESET_PRICES", fnAt));
   assert.doesNotMatch(body, /window\.location\.href/);
   assert.match(body, /data\.clientSecret/);
   assert.match(body, /<Elements[\s\S]{0,200}clientSecret/);
-  assert.match(body, /<CheckoutForm onSuccess=\{\(\) => setPurchased\(true\)\}/);
+  // Success records the ticket at once, verified server-side — not a UI-only "confirmed".
+  assert.match(body, /<CheckoutForm onSuccess=\{confirmTicket\}/);
+  assert.match(body, /fetch\("\/api\/tickets\/confirm"/);
 });
 
 test("live PPV checkout creates an in-page PaymentIntent and forbids redirect-only payment methods", () => {

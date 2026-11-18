@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAdminGate } from "@/hooks/useAdminGate";
+import { formatTicketPrice, ticketPriceError } from "@/lib/commerce/ticket-price";
 
 export default function AdminShowsPage() {
   const gate = useAdminGate();
@@ -56,12 +57,15 @@ function ShowsManager() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    // An unpicked price is an error, never a free show by default.
+    const priceError = ticketPriceError(form.price_cents);
+    if (priceError) { flash(priceError, true); return; }
     setSaving(true);
     setError(null);
     try {
       const payload = {
         ...form,
-        price_cents: Number(form.price_cents) || 0,
+        price_cents: Number(form.price_cents),
         tickets_available: form.tickets_available === "" ? null : Number(form.tickets_available),
       };
       let res;
@@ -100,7 +104,7 @@ function ShowsManager() {
   };
 
   const fmtDate = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"}) : "—";
-  const fmtPrice = (cents) => cents ? `$${(cents/100).toFixed(2)}` : "—";
+  const fmtPrice = (cents) => cents == null ? "—" : formatTicketPrice(cents);
   const isPast = (d) => d && new Date(d) < new Date(new Date().toISOString().slice(0,10));
 
   return (
@@ -144,8 +148,8 @@ function ShowsManager() {
             </div>
             <div style={s.fieldRow}>
               <label style={s.label}>
-                Ticket Price (USD) <span style={s.req}>*</span>
-                <input style={s.input} type="number" min="0.50" step="0.01" value={form.price_cents ? (Number(form.price_cents)/100).toFixed(2) : ""} onChange={e=>setForm(f=>({...f,price_cents:String(Math.round(parseFloat(e.target.value||0)*100))}))} placeholder="25.00" required />
+                Ticket Price (USD) <span style={s.req}>*</span> <span style={s.opt}>(0 for a free show)</span>
+                <input style={s.input} type="number" min="0" step="0.01" value={form.price_cents === "" ? "" : (Number(form.price_cents)/100).toFixed(2)} onChange={e=>setForm(f=>({...f,price_cents:e.target.value === "" ? "" : String(Math.round(parseFloat(e.target.value)*100))}))} placeholder="25.00" required />
               </label>
               <label style={s.label}>
                 Tickets Available <span style={s.opt}>(leave blank for unlimited)</span>

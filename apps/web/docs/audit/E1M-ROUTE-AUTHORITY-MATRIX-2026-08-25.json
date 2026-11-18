@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-17T22:10:09.321Z",
+  "generatedAt": "2026-11-18T12:42:59.894Z",
   "sourceRoot": "src/app/api",
-  "total": 187,
+  "total": 188,
   "counts": {
     "HUMAN_ADMIN": 66,
     "SERVICE_ONLY": 20,
     "ADMIN_OR_SERVICE_CAPABILITY": 5,
     "AUTHENTICATED_USER": 32,
-    "PUBLIC": 64,
+    "PUBLIC": 65,
     "DEAD": 0
   },
   "routes": [
@@ -1597,6 +1597,15 @@
     {
       "route": "/api/tickets/checkout",
       "file": "src/app/api/tickets/checkout/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/tickets/confirm",
+      "file": "src/app/api/tickets/confirm/route.js",
       "methods": [
         "POST"
       ],

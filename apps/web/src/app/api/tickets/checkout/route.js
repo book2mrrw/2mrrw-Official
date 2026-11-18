@@ -3,6 +3,7 @@ import { getStripe } from "@/lib/commerce/stripe";
 import { getRequestUser } from "@/lib/guest-session";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { recordFreeTicket, ticketPriceError } from "@/lib/commerce/tickets";
 
 export async function POST(req) {
   try {
@@ -51,6 +52,19 @@ export async function POST(req) {
     }
 
     const qty = Math.max(1, Math.min(4, Number(quantity) || 1));
+    if (show.tickets_available !== null && show.tickets_available < qty) {
+      return NextResponse.json({ error: "Not enough tickets left" }, { status: 400 });
+    }
+
+    // A free show never touches Stripe (it cannot charge $0): the ticket is confirmed now.
+    if (show.price_cents === 0) {
+      await recordFreeTicket(admin, { userId: user.id, show, quantity: qty, email: user.email || null, phone: user.phone || null });
+      return NextResponse.json({ free: true });
+    }
+    if (ticketPriceError(show.price_cents)) {
+      return NextResponse.json({ error: "This show's ticket price can't be charged. Contact support." }, { status: 400 });
+    }
+
     const unitAmount = show.price_cents;
     const showDate = new Date(show.event_date).toLocaleDateString("en-US", {
       weekday: "short", month: "short", day: "numeric", year: "numeric",
