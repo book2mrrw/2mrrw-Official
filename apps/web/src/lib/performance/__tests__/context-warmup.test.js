@@ -18,8 +18,10 @@ test("warm caches are deduplicated, bounded, expiring, and invalidatable", () =>
 
 test("music siblings stay mounted before visibility and the radio-only snapshot is isolated", () => {
   const panels = fs.readFileSync("src/components/storefront/MusicTabCatalogPanels.js", "utf8");
+  // TabPanel (KeepAliveTab) keeps every panel mounted and only hides the inactive ones.
+  assert.match(panels, /import \{ TabPanel \} from "@\/components\/storefront\/KeepAliveTab"/);
   for (const tab of ["singles", "albums", "mixtapes", "mymusic"]) {
-    assert.match(panels, new RegExp(`hidden=\\{activeTab !== "${tab}"\\}`));
+    assert.match(panels, new RegExp(`<TabPanel as="section" active=\\{activeTab === "${tab}"\\}>`));
   }
   const home = fs.readFileSync("src/app/HomeClient.js", "utf8");
   assert.doesNotMatch(home, /musicPrepared|setMusicPrepared/);

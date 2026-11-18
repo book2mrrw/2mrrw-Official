@@ -40,9 +40,10 @@ test("slug uniqueness is enforced with a numeric-suffix dedup loop mirroring rel
 
 test("the new row starts life in publication_state 'draft' with a placeholder price, never a real price assumed", () => {
   const insertAt = draft.indexOf('.from("audio_visuals")\n    .insert(');
-  const body = draft.slice(insertAt, insertAt + 400);
+  const body = draft.slice(insertAt, draft.indexOf("})", insertAt));
   assert.match(body, /publication_state: "draft"/);
-  assert.match(body, /price_cents: 0/);
+  // The admin's own price from the upload form, else 0 — the server never assumes one.
+  assert.match(body, /price_cents: priceCents !== undefined \? priceCents : 0/);
 });
 
 test("never touches or writes to tracks/releases — the only cross-reference is a single read-only select", () => {
