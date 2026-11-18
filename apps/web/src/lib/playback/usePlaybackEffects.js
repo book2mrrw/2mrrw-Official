@@ -80,6 +80,7 @@ import {
 } from "@/lib/playback/audio-engine-runtime";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import { registerPlaybackKeyboardShortcuts } from "@/lib/playback/keyboard-shortcuts";
+import { isNativeAudioElement } from "@/lib/playback/native-audio";
 
 const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
 const AUDIBILITY_WATCHDOG_MS = 1250;
@@ -715,6 +716,8 @@ export function usePlaybackEffects({
       const { audio } = audibilityParams;
       if (!audio) return;
       if (audio.ended) return;
+      // The app's native player owns transport health (native-audio.js).
+      if (isNativeAudioElement(audio)) return;
 
       updateAudibilitySample(audio, audibilitySampleRef);
 

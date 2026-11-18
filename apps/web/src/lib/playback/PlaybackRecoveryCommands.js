@@ -39,6 +39,7 @@ import {
 } from "@/lib/playback/playback-transport-utils";
 
 import { captureRecoveryOperation } from "./recovery-operation";
+import { isNativeAudioElement } from "@/lib/playback/native-audio";
 
 const RECOVERY_COOLDOWN_MS = 6000;
 const LIFECYCLE_RECOVERY_LOCK_MS = 4000;
@@ -57,6 +58,12 @@ export function attachRecoveryCommands(self) {
     const operation = captureRecoveryOperation(d);
     const { audio, track, isCurrent } = operation;
     if (!audio || !track?.src || !isCurrent() || audio.ended) return false;
+    // The app's native player keeps playing through suspensions; it only needs
+    // reloading after a real error (native-audio.js).
+    if (isNativeAudioElement(audio) && !audio.error) {
+      audio.reconcile();
+      return true;
+    }
     if (d.blockRecoveryForLifecycleOsSuspended("recoverAudioHard", reason)) return false;
 
     isRecoveringRef.current = true;

@@ -725,6 +725,8 @@ export function createPlaybackHelpers(initialDeps) {
     },
 
     startStallRecovery() {
+      // The app's native player buffers and retries by itself (native-audio.js).
+      if (isNativeAudioElement(self._deps.audioRef.current)) return;
       // All recovery logic lives in the Recovery Coordinator.
       // It handles: buffer health check, grace period, lock, HLS vs progressive
       // strategy, cooldown, and escalation to hard reload. Nothing here.
@@ -916,7 +918,8 @@ export function createPlaybackHelpers(initialDeps) {
         !next.isBuffering &&
         next.playbackNetworkState !== "buffering" &&
         !self._deps.isRecoveringRef.current &&
-        !recoveryCoordinator.isActive()
+        !recoveryCoordinator.isActive() &&
+        !isNativeAudioElement(self._deps.audioRef.current)
       ) {
         const audio = self._deps.audioRef.current;
         const ctx = self._deps.audioCtxRef.current;

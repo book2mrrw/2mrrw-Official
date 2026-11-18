@@ -57,3 +57,23 @@ test('HLSEngine hands a native element the adaptive master and fetches nothing i
   engine.detach();
   assert.equal(engine.isLoaded, false);
 });
+
+test("hard recovery catches a healthy native player up instead of reloading it; a failed one still recovers", async () => {
+  const { attachRecoveryCommands } = await import('../PlaybackRecoveryCommands.js');
+  const track = { slug: 'w2d', src: '/api/library/stream?slug=w2d&redirect=1', metadata: { access: { canStream: true } } };
+  const native = { isNativeAudio: true, ended: false, error: null, src: 'https://www.2mrrw.com/api/library/hls?slug=w2d', reconciled: 0, reconcile() { this.reconciled += 1; } };
+  const patches = [];
+  const ref = (current) => ({ current });
+  const self = { _deps: {
+    audioRef: ref(native), stateRef: ref({ currentTrack: track }), isRecoveringRef: ref(false), recoveryCooldownUntilRef: ref(0),
+    recoveryVerificationRef: ref(null), playRequestIdRef: ref(1), commandRequestIdRef: ref(1), userPausedRef: ref(false), userIntentPausedRef: ref(false),
+    patchState: (patch) => patches.push(patch), blockRecoveryForLifecycleOsSuspended: () => true,
+  } };
+  attachRecoveryCommands(self);
+  assert.equal(await self.recoverAudioHard('silent_desync_detected', { resumeAfter: true }), true);
+  assert.equal(native.reconciled, 1);
+  assert.deepEqual(patches, [], 'no "recovering" state for a player that is fine');
+  native.error = { code: 2 };
+  assert.equal(await self.recoverAudioHard('network', { resumeAfter: true }), false, 'a failed native player takes the normal recovery path');
+  assert.equal(native.reconciled, 1);
+});
