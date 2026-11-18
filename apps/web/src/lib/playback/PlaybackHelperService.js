@@ -1593,57 +1593,11 @@ export function createPlaybackHelpers(initialDeps) {
           preloadEl.src = normalized;
           preloadEl.load();
         }
-      } else if (requiresSignedUrlFetch(kind)) {
-        const slug = parseStreamSlugFromSrc(track.src) || track.slug;
-        if (!slug) return;
-        const trackSlug =
-          parseStreamTrackSlugFromSrc(track.src) || track.metadata?.trackSlug || null;
-        const cacheKey = trackSlug ? `${slug}:${trackSlug}` : slug;
-        const cached = self._deps.nextTrackSignedUrlCacheRef.current[cacheKey];
-        if (
-          cached &&
-          !streamUrlNeedsRefresh(cached) &&
-          Date.now() - cached.fetchedAt < SIGNED_URL_CLIENT_TTL_MS
-        )
-          return;
-        try {
-          const data = await fetchLibraryStream(slug, { force: false, trackSlug });
-          if (data?.url) {
-            if (self._deps.queueRef.current !== queue || self._deps.queueIndexRef.current !== idx) return;
-            if (!canPreloadAudio(self._deps.audioRef.current, { buffering: self._deps.stateRef.current.isBuffering, recentStallAt: self._deps.recentStallTimeRef.current })) return;
-            self._deps.nextTrackSignedUrlCacheRef.current[cacheKey] = {
-              url: data.url,
-              fetchedAt: Date.now(),
-              expiresIn: data.expiresIn ?? 3600,
-            };
-            // Evict oldest when cache exceeds 20 entries — mirrors scheduleNextTrackPreload.
-            // hintUpcomingPlay is called on hover/touchstart for every visible card, so
-            // without this guard the cache grows to the full catalog size.
-            const hintEntries = Object.entries(self._deps.nextTrackSignedUrlCacheRef.current);
-            if (hintEntries.length > 20) {
-              let oldestKey = hintEntries[0][0];
-              let oldestAt = hintEntries[0][1].fetchedAt;
-              for (let i = 1; i < hintEntries.length; i++) {
-                if (hintEntries[i][1].fetchedAt < oldestAt) {
-                  oldestAt = hintEntries[i][1].fetchedAt;
-                  oldestKey = hintEntries[i][0];
-                }
-              }
-              delete self._deps.nextTrackSignedUrlCacheRef.current[oldestKey];
-            }
-            const isHlsEligible = Boolean(track.metadata?.access?.canStream);
-            if (!isHlsEligible) {
-              const normalized = normalizePlaybackSrc(data.url);
-              if (normalized && preloadEl.src !== normalized) {
-                preloadEl.src = normalized;
-                preloadEl.load();
-              }
-            }
-          }
-        } catch {
-          // Non-fatal — play fetches fresh on demand
-        }
       }
+      // Signed-URL sources are not warmed: minting the URL opens a stream
+      // session and records a stream event, which must happen only when the
+      // song is actually played (the play path resolves it then). A hover or
+      // touch is not a play.
     },
 
     setUserVolume(level) {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import { previousTrackPrimeSrc } from '../PlaybackEventHandlers.js';
+import { createPlaybackHelpers } from '../PlaybackHelperService.js';
 
 const song = (src, canStream) => ({ src, metadata: { access: { canStream } } });
 // normalizePlaybackSrc resolves against the page origin; compare path and query.
@@ -40,4 +41,19 @@ test('the next hls.js song warms its whole first-play chain, not only segments',
   const branch = src.slice(start, src.indexOf('const preloadEl = self._deps.nextTrackPreloadRef.current;', start));
   assert.match(branch, /prefetchHlsSegmentsForTrack\(slug, trackSlug\)/);
   assert.match(branch, /warmHlsStart\(slug, trackSlug, \{ intent: true \}\)/);
+});
+
+test('hovering a signed-URL song makes no request: no stream session, no recorded play', async (t) => {
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    requests.push(String(url));
+    return { ok: true, status: 200, json: async () => ({ url: 'https://cdn.example/w2d.m4a', expiresIn: 3600 }) };
+  });
+  const preload = { src: '', loads: 0, load() { this.loads += 1; } };
+  const helper = createPlaybackHelpers({ intentPrewarmRef: { current: preload }, nextTrackSignedUrlCacheRef: { current: {} } });
+  for (let i = 0; i < 3; i += 1) {
+    await helper.hintUpcomingPlay({ src: '/api/library/stream?slug=w2d', slug: 'w2d', metadata: { access: { canStream: false } } });
+  }
+  assert.deepEqual(requests, []);
+  assert.equal(preload.loads, 0);
 });
