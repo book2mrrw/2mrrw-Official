@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Elements } from "@stripe/react-stripe-js";
 import { getStripeClient } from "@/lib/commerce/stripe-client";
 import { formatTicketPrice, ticketPriceError } from "@/lib/commerce/ticket-price";
+import { formatShowTime } from "@/lib/shows/show-time";
 const CheckoutForm = dynamic(() => import("@/components/payments/CheckoutForm"), { ssr: false });
 const DonateModal = dynamic(() => import("@/components/payments/DonateModal"), { ssr: false });
 import { stripePaymentOverlayStyle, stripePaymentPanelStyle } from "@/components/payments/stripePaymentShell";
@@ -205,7 +206,6 @@ const innerCirclePosts = [
 ];
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
-const nextLiveDateTime = new Date("2026-05-10T20:00:00");
 
 function TicketCheckoutButton({ event, onClose }) {
   const [loading, setLoading] = useState(false);
@@ -294,6 +294,9 @@ function TicketCheckoutButton({ event, onClose }) {
   );
 }
 
+// "2MRRW Live" events drive the homepage 2MRRW Live countdown (lib/shows/upcoming-shows.js).
+const EVENT_TYPES = [{ value: "show", label: "Show" }, { value: "live", label: "2MRRW Live" }];
+
 const PRESET_PRICES = [0,25,30,35,40,45,50,60,75,100,125,150,175,200,250,300,350,400,500,750,1000,1500,2000,2500,3000,3500];
 
 const TIMEZONES = [
@@ -328,59 +331,6 @@ const TIMEZONES = [
   { label: "Auckland (NZST/NZDT)",      value: "Pacific/Auckland" },
 ];
 
-// Parse "8:00 PM", "20:00", etc. → total minutes from midnight
-function _parseTimeMin(timeStr) {
-  if (!timeStr) return null;
-  let m = timeStr.match(/^(\d{1,2}):(\d{2})$/);
-  if (m) return parseInt(m[1]) * 60 + parseInt(m[2]);
-  m = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!m) return null;
-  let h = parseInt(m[1]), min = parseInt(m[2]);
-  const ap = m[3].toUpperCase();
-  if (ap === "PM" && h !== 12) h += 12;
-  if (ap === "AM" && h === 12) h = 0;
-  return h * 60 + min;
-}
-
-// Convert venue local datetime → UTC Date object
-function _venueToUTC(dateStr, timeStr, venueTz) {
-  const totalMin = _parseTimeMin(timeStr);
-  if (totalMin === null || !dateStr || !venueTz) return null;
-  const [yr, mo, dy] = dateStr.split("-").map(Number);
-  const noonUTC = new Date(Date.UTC(yr, mo - 1, dy, 12, 0));
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: venueTz, hour: "2-digit", minute: "2-digit", hour12: false,
-    }).formatToParts(noonUTC);
-    const tzH = parseInt(parts.find(p => p.type === "hour").value) % 24;
-    const tzM = parseInt(parts.find(p => p.type === "minute").value);
-    // offset of venue tz vs UTC at this date (in minutes)
-    const offsetMin = tzH * 60 + tzM - 12 * 60;
-    const venueMidnightUTC = noonUTC.getTime() - (12 * 60 + offsetMin) * 60000;
-    return new Date(venueMidnightUTC + totalMin * 60000);
-  } catch { return null; }
-}
-
-// Format event time: "8:00 PM CDT · 9:00 PM EDT your time" (or just venue time if same tz)
-function _fmtEventTime(dateStr, timeStr, venueTz) {
-  if (!timeStr) return "";
-  const utc = _venueToUTC(dateStr, timeStr, venueTz);
-  if (!utc || !venueTz) return timeStr;
-  try {
-    const venueFmt = new Intl.DateTimeFormat("en-US", {
-      timeZone: venueTz, hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short",
-    });
-    const venueStr = venueFmt.format(utc);
-    const viewerTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (viewerTz === venueTz) return venueStr;
-    const viewerFmt = new Intl.DateTimeFormat("en-US", {
-      hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short",
-    });
-    const viewerStr = viewerFmt.format(utc);
-    return `${venueStr} · ${viewerStr} your time`;
-  } catch { return timeStr; }
-}
-
 // ── Inline admin shows management (admin-only, renders inside the SHOWS tab) ──
 function InlineShowsAdmin({ onRefreshFanView }) {
   const [shows, setShows] = useState([]);
@@ -390,7 +340,7 @@ function InlineShowsAdmin({ onRefreshFanView }) {
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState(null);
   const [customPrice, setCustomPrice] = useState(false);
-  const blank = { name:"", location:"", event_date:"", event_time:"", venue_timezone:"America/Chicago", price_cents:"", tickets_available:"", active:true };
+  const blank = { event_type:"show", name:"", location:"", event_date:"", event_time:"", venue_timezone:"America/Chicago", price_cents:"", tickets_available:"", active:true };
   const [form, setForm] = useState(blank);
 
   const showFlash = (msg, isErr=false) => {
@@ -414,6 +364,7 @@ function InlineShowsAdmin({ onRefreshFanView }) {
   const openEdit = (show) => {
     const isPreset = PRESET_PRICES.includes(show.price_cents / 100);
     setForm({
+      event_type: show.event_type === "live" ? "live" : "show",
       name: show.name, location: show.location, event_date: show.event_date,
       event_time: show.event_time || "",
       venue_timezone: show.venue_timezone || "America/Chicago",
@@ -485,6 +436,18 @@ function InlineShowsAdmin({ onRefreshFanView }) {
       {showForm && (
         <form onSubmit={handleSave} style={{display:"flex",flexDirection:"column",gap:12,padding:"14px 0",borderTop:"1px solid rgba(155,93,229,0.15)"}}>
           <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,letterSpacing:".2em",color:"rgba(255,255,255,.4)"}}>{editingId ? "EDIT SHOW" : "NEW SHOW"}</div>
+          <div>
+            <div style={{fontSize:9,fontFamily:"'DM Mono',monospace",letterSpacing:".15em",color:"rgba(255,255,255,.45)",marginBottom:8}}>EVENT TYPE</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {EVENT_TYPES.map(t=>(
+                <button type="button" key={t.value}
+                  onClick={()=>setForm(f=>({...f,event_type:t.value,name:t.value==="live"&&!f.name.trim()?"2MRRW Live":f.name}))}
+                  style={{padding:"7px 11px",borderRadius:8,border:form.event_type===t.value?"1px solid #9b5de5":"1px solid rgba(255,255,255,.1)",background:form.event_type===t.value?"rgba(155,93,229,0.18)":"transparent",color:form.event_type===t.value?"#c084fc":"rgba(255,255,255,.45)",fontSize:12,fontWeight:form.event_type===t.value?700:400,cursor:"pointer",transition:"0.12s",lineHeight:1}}
+                >{t.label}</button>
+              ))}
+            </div>
+            {form.event_type==="live" && <div style={{fontSize:10,color:"rgba(255,255,255,.4)",marginTop:6}}>The homepage 2MRRW Live countdown follows the next 2MRRW Live event.</div>}
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:9,fontFamily:"'DM Mono',monospace",letterSpacing:".15em",color:"rgba(255,255,255,.45)"}}>
               SHOW NAME *
@@ -567,7 +530,7 @@ function InlineShowsAdmin({ onRefreshFanView }) {
             {shows.map(show => (
               <div key={show.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,opacity:(!show.active||isPast(show.event_date))?0.5:1}}>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:12,fontWeight:700,color:"white",marginBottom:2}}>{show.name}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:"white",marginBottom:2}}>{show.name}{show.event_type==="live" && <span style={{marginLeft:8,fontSize:9,fontWeight:800,letterSpacing:1.5,color:"#00ffff"}}>2MRRW LIVE</span>}</div>
                   <div style={{fontSize:10,color:"rgba(255,255,255,.4)"}}>{show.location} · {fmtDate(show.event_date)}{show.event_time?` · ${show.event_time}`:""} · {formatTicketPrice(show.price_cents)}{show.tickets_available!=null?` · ${show.tickets_available} left`:" · unlimited"}
                     {isPast(show.event_date) && <span style={{color:"#f59e0b",marginLeft:6}}>PAST</span>}
                     {!show.active && <span style={{color:"#ef4444",marginLeft:6}}>HIDDEN</span>}
@@ -1061,8 +1024,6 @@ function decrementInventory(inv, slug) {
 
 // Static data that never changes at runtime — declared at module level so they
 // are never recreated during renders.
-const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
-const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
 
 const sidebarNav = [
   { groupId:"g-home",      label:"HOME",           directTab:"home",    subTabs:[] },
@@ -1295,7 +1256,7 @@ export default function HomeClient({ initialEvents, initialCatalog, twitchEmbedP
       inlineAlbums={effectiveAlbums}
       inlineMixtapesAndEps={effectiveMixtapes}
     >
-      <LiveCountdownProvider targetDate={nextLiveDateTime} embedParent={twitchEmbedParent} broadcasterLogin={twitchBroadcasterLogin}>
+      <LiveCountdownProvider embedParent={twitchEmbedParent} broadcasterLogin={twitchBroadcasterLogin}>
         <PageStorefront
           initialEvents={initialEvents}
           effectiveAlbums={effectiveAlbums}
@@ -2608,7 +2569,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
           <div className="storefront-responsive-panel" onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:30,width:360,display:"flex",flexDirection:"column",gap:14}}>
             <div style={{fontSize:20,fontWeight:800,letterSpacing:2}}>{selectedEvent.name}</div>
             <div style={{fontSize:13,color:"#aaa"}}>{selectedEvent.location}</div>
-            <div style={{fontSize:13,color:"#aaa"}}>{new Date(selectedEvent.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}{selectedEvent.time ? ` · ${_fmtEventTime(selectedEvent.date, selectedEvent.time, selectedEvent.venueTz)}` : ""}</div>
+            <div style={{fontSize:13,color:"#aaa"}}>{new Date(selectedEvent.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}{selectedEvent.time ? ` · ${formatShowTime(selectedEvent.date, selectedEvent.time, selectedEvent.venueTz)}` : ""}</div>
             <div style={{fontSize:22,fontWeight:900,color:"#00ffff"}}>{formatTicketPrice(selectedEvent.price * 100)}</div>
             {selectedEvent.tickets === 0 ? (
               <div style={{fontSize:12,color:"#ef4444",fontWeight:700,letterSpacing:2}}>SOLD OUT</div>
@@ -2735,8 +2696,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   onCardClick={openSingleModal}
                   addToCart={addToCart}
                   onCheckoutNow={handleMerchCheckoutNow}
-                  liveStreamDate={liveStreamDate}
-                  liveStreamTime={liveStreamTime}
                   onOpenFeature={openFeatureModal}
                   albums={albums}
                   hoverIn={hoverIn}
@@ -2958,7 +2917,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                                 {soldOut && <div style={{fontSize:9,fontWeight:900,letterSpacing:2,padding:"2px 8px",borderRadius:20,background:"rgba(239,68,68,0.12)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.25)"}}>SOLD OUT</div>}
                               </div>
                               <div style={{fontSize:12,color:"#aaa"}}>{evt.location}</div>
-                              <div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})}{evt.time ? ` · ${_fmtEventTime(evt.date, evt.time, evt.venueTz)}` : ""}</div>
+                              <div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})}{evt.time ? ` · ${formatShowTime(evt.date, evt.time, evt.venueTz)}` : ""}</div>
                             </div>
                             <div style={{display:"flex",alignItems:"center",gap:"clamp(10px,2cqi,14px)"}}>
                               <div style={{fontSize:"clamp(15px,2.2cqi,18px)",fontWeight:900,color:soldOut?"#555":"#00ffff"}}>{formatTicketPrice(evt.price * 100)}</div>
@@ -2991,10 +2950,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   >
                     <h2 className="section-heading">2MRRW LIVE</h2>
                     {auth.isAdminStable && <InlineLiveAdmin />}
-                    <LiveCountdownLiveTab
-                      liveStreamDate={liveStreamDate}
-                      liveStreamTime={liveStreamTime}
-                    />
+                    <LiveCountdownLiveTab />
                   </section>
                 )}
               </AuthSurfaceIsland>

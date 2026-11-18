@@ -52,8 +52,6 @@ const HomeStorefront = memo(function HomeStorefront({
   accountState,
   userId,
   onLibraryChange,
-  liveStreamDate,
-  liveStreamTime,
   onOpenFeature,
   albums,
   hoverIn,
@@ -136,8 +134,6 @@ const HomeStorefront = memo(function HomeStorefront({
           onPlayMixtapeEp={onPlayMixtapeEp}
           onPlaySingle={onPlaySingle}
           onPlayFeature={onPlayFeature}
-          liveStreamDate={liveStreamDate}
-          liveStreamTime={liveStreamTime}
         />
       </motion.div>
 
@@ -305,7 +301,7 @@ const HomeStorefront = memo(function HomeStorefront({
 
       <div style={{ margin: "32px 0 24px", height: 1, background: "#1a1a1a" }} />
 
-      <LiveCountdownHomeSection liveStreamDate={liveStreamDate} liveStreamTime={liveStreamTime} />
+      <LiveCountdownHomeSection />
       <div style={{ height: 40 }} />
     </>
   );

@@ -95,8 +95,6 @@ function homeCatalogMediaPropsEqual(prev, next) {
     "onPlayMixtapeEp",
     "onPlaySingle",
     "onPlayFeature",
-    "liveStreamDate",
-    "liveStreamTime",
   ];
   for (const key of keys) {
     if (prev[key] !== next[key]) return false;
@@ -125,8 +123,6 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
   onPlayMixtapeEp,
   onPlaySingle,
   onPlayFeature,
-  liveStreamDate,
-  liveStreamTime,
 }) {
   const pinnedSingles = useStorefrontDisplaySingles();
   const surface = useCatalogSurface();
@@ -172,7 +168,7 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
         </div>
 
         <div className="home-live-panel-wide">
-          <LiveCountdownDesktopPanel liveStreamDate={liveStreamDate} liveStreamTime={liveStreamTime} />
+          <LiveCountdownDesktopPanel />
         </div>
       </div>
 

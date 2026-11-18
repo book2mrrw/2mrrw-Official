@@ -159,3 +159,17 @@ test("the admin can create a free show; an unpicked or below-minimum price is re
   }
   assert.equal(db.state.shows.length, 1);
 });
+
+test("the admin can schedule a 2MRRW Live event; an unknown event type is refused", async () => {
+  reset({ price_cents: 0 });
+  const event = { name: "2MRRW Live", location: "Dallas, TX", event_date: "2026-12-20", event_time: "8:00 PM", price_cents: 0 };
+  assert.equal((await adminShows.POST(post({ ...event, event_type: "live" }))).status, 200);
+  assert.equal(db.state.shows[0].event_type, "live");
+  assert.equal((await adminShows.POST(post(event))).status, 200);
+  assert.equal(db.state.shows[1].event_type, "show", "a show unless the admin picks 2MRRW Live");
+  assert.equal((await adminShows.POST(post({ ...event, event_type: "concert" }))).status, 400);
+  const patch = (body) => adminShows.PATCH(new Request("https://www.2mrrw.com/api", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+  assert.equal((await patch({ id: "show-1", event_type: "live" })).status, 200);
+  assert.equal((await patch({ id: "show-1", event_type: "concert" })).status, 400);
+  assert.equal(db.state.shows.length, 2);
+});

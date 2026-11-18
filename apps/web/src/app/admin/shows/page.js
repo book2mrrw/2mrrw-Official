@@ -20,7 +20,7 @@ function ShowsManager() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  const blank = { name:"", location:"", event_date:"", event_time:"", price_cents:"", tickets_available:"", active:true };
+  const blank = { event_type:"show", name:"", location:"", event_date:"", event_time:"", price_cents:"", tickets_available:"", active:true };
   const [form, setForm] = useState(blank);
 
   const load = useCallback(async () => {
@@ -43,6 +43,7 @@ function ShowsManager() {
   const openCreate = () => { setForm(blank); setEditingId(null); setShowForm(true); };
   const openEdit = (show) => {
     setForm({
+      event_type: show.event_type === "live" ? "live" : "show",
       name: show.name,
       location: show.location,
       event_date: show.event_date,
@@ -126,6 +127,13 @@ function ShowsManager() {
         {showForm && (
           <form onSubmit={handleSave} style={s.form}>
             <div style={s.formTitle}>{editingId ? "Edit Show" : "New Show"}</div>
+            <label style={s.label}>
+              Event Type <span style={s.opt}>(2MRRW Live drives the homepage countdown)</span>
+              <select style={s.input} value={form.event_type} onChange={e=>{const event_type=e.target.value;setForm(f=>({...f,event_type,name:event_type==="live"&&!f.name.trim()?"2MRRW Live":f.name}));}}>
+                <option value="show">Show</option>
+                <option value="live">2MRRW Live</option>
+              </select>
+            </label>
             <div style={s.fieldRow}>
               <label style={s.label}>
                 Show Name <span style={s.req}>*</span>
@@ -176,7 +184,7 @@ function ShowsManager() {
             {shows.map(show => (
               <div key={show.id} style={{...s.showRow, opacity: (!show.active || isPast(show.event_date)) ? 0.5 : 1}}>
                 <div style={s.showInfo}>
-                  <div style={s.showName}>{show.name}</div>
+                  <div style={s.showName}>{show.name}{show.event_type === "live" && <span style={{marginLeft:8,fontSize:9,fontWeight:800,letterSpacing:1.5,color:"#00ffff"}}>2MRRW LIVE</span>}</div>
                   <div style={s.showMeta}>{show.location} · {fmtDate(show.event_date)}{show.event_time ? ` · ${show.event_time}` : ""}</div>
                   <div style={s.showMeta}>
                     {fmtPrice(show.price_cents)}

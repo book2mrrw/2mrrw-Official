@@ -16,8 +16,6 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
   onCardClick,
   addToCart,
   onCheckoutNow,
-  liveStreamDate,
-  liveStreamTime,
   onOpenFeature,
   albums,
   hoverIn,
@@ -66,8 +64,6 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
               accountState={ent.entitlementAccountState}
               userId={auth.userId}
               onLibraryChange={auth.handleLibraryChange}
-              liveStreamDate={liveStreamDate}
-              liveStreamTime={liveStreamTime}
               onOpenFeature={onOpenFeature}
               albums={albums}
               hoverIn={hoverIn}

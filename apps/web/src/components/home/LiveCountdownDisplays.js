@@ -140,11 +140,8 @@ function LiveAccessGate({ access, broadcastTitle }) {
   );
 }
 
-export const LiveCountdownDesktopPanel = memo(function LiveCountdownDesktopPanel({
-  liveStreamDate,
-  liveStreamTime,
-}) {
-  const { liveIsLive, liveCountdown } = useLiveCountdown();
+export const LiveCountdownDesktopPanel = memo(function LiveCountdownDesktopPanel() {
+  const { liveIsLive, liveCountdown, liveStreamDate, liveStreamTime } = useLiveCountdown();
   return (
     <LivePanel
       liveIsLive={liveIsLive}
@@ -232,11 +229,8 @@ export const LiveCountdownMobileHomeStrip = memo(function LiveCountdownMobileHom
   );
 });
 
-export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection({
-  liveStreamDate,
-  liveStreamTime,
-}) {
-  const { liveIsLive, liveCountdown } = useLiveCountdown();
+export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection() {
+  const { liveIsLive, liveCountdown, liveTitle, liveLocation, liveStreamDate, liveStreamTime } = useLiveCountdown();
   return (
     <div id="home-live">
       <h2 className="section-heading" style={{ marginBottom: 16 }}>
@@ -252,9 +246,11 @@ export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection({
         }}
       >
         <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 8 }}>NEXT LIVE STREAM</div>
-        <div style={{ fontSize: "clamp(16px, 2.6cqi, 20px)", fontWeight: 800, marginBottom: 4 }}>2MRRW LIVE – Dallas</div>
+        <div style={{ fontSize: "clamp(16px, 2.6cqi, 20px)", fontWeight: 800, marginBottom: 4 }}>
+          {liveTitle}{liveLocation ? ` – ${liveLocation}` : ""}
+        </div>
         <div style={{ fontSize: 13, color: "#aaa", marginBottom: 24 }}>
-          {liveStreamDate} · {liveStreamTime}
+          {liveStreamDate}{liveStreamTime ? ` · ${liveStreamTime}` : ""}
         </div>
         {liveIsLive ? (
           <div
@@ -336,18 +332,8 @@ export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection({
   );
 });
 
-const LiveCountdownHeader = memo(function LiveCountdownHeader({
-  liveStreamDate,
-  liveStreamTime,
-}) {
-  const { liveIsLive, liveCountdown, liveTitle, liveGoesLiveAt } = useLiveCountdown();
-
-  const displayDate = liveGoesLiveAt
-    ? new Date(liveGoesLiveAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
-    : liveStreamDate;
-  const displayTime = liveGoesLiveAt
-    ? new Date(liveGoesLiveAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
-    : liveStreamTime;
+const LiveCountdownHeader = memo(function LiveCountdownHeader() {
+  const { liveIsLive, liveCountdown, liveTitle, liveStreamDate: displayDate, liveStreamTime: displayTime } = useLiveCountdown();
 
   return (
     <div
@@ -369,7 +355,7 @@ const LiveCountdownHeader = memo(function LiveCountdownHeader({
       </div>
       {!liveIsLive && (
         <div style={{ fontSize: 13, color: "#aaa", marginBottom: 28 }}>
-          {displayDate} · {displayTime}
+          {displayDate}{displayTime ? ` · ${displayTime}` : ""}
         </div>
       )}
       {liveIsLive ? (
@@ -600,13 +586,10 @@ function PastLivesSection() {
   );
 }
 
-export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
-  liveStreamDate,
-  liveStreamTime,
-}) {
+export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab() {
   return (
     <>
-      <LiveCountdownHeader liveStreamDate={liveStreamDate} liveStreamTime={liveStreamTime} />
+      <LiveCountdownHeader />
       <PersistentTwitchPlayer />
       <PastLivesSection />
     </>

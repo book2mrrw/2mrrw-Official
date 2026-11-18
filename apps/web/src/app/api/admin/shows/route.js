@@ -7,6 +7,9 @@ import { ticketPriceError } from "@/lib/commerce/tickets";
 
 export const dynamic = "force-dynamic";
 
+// "live" = a 2MRRW Live event: the homepage countdown follows the next one.
+const EVENT_TYPES = new Set(["show", "live"]);
+
 async function guard(req) {
   const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) return { user: null, err: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
@@ -46,7 +49,7 @@ export async function GET(req) {
   const admin = getAdminClient();
   const { data, error } = await admin
     .from("shows_events")
-    .select("id, name, location, event_date, event_time, price_cents, tickets_available, ticket_url, active, created_at")
+    .select("id, name, location, event_date, event_time, venue_timezone, price_cents, tickets_available, ticket_url, active, event_type, created_at")
     .order("event_date", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -58,11 +61,12 @@ export async function POST(req) {
   if (err) return err;
 
   const body = await req.json();
-  const { name, location, event_date, event_time, venue_timezone, price_cents, tickets_available, active = true } = body;
+  const { name, location, event_date, event_time, venue_timezone, price_cents, tickets_available, active = true, event_type = "show" } = body;
 
   if (!name || !location || !event_date) {
     return NextResponse.json({ error: "name, location, and event_date are required" }, { status: 400 });
   }
+  if (!EVENT_TYPES.has(event_type)) return NextResponse.json({ error: "event_type must be show or live" }, { status: 400 });
   // 0 is a free show, not a missing price.
   const priceError = ticketPriceError(price_cents);
   if (priceError) return NextResponse.json({ error: priceError }, { status: 400 });
@@ -77,6 +81,7 @@ export async function POST(req) {
       price_cents: Number(price_cents),
       tickets_available: tickets_available ?? null,
       active,
+      event_type,
     })
     .select()
     .single();
@@ -95,8 +100,11 @@ export async function PATCH(req) {
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
-  const allowed = ["name", "location", "event_date", "event_time", "venue_timezone", "price_cents", "tickets_available", "ticket_url", "active"];
+  const allowed = ["name", "location", "event_date", "event_time", "venue_timezone", "price_cents", "tickets_available", "ticket_url", "active", "event_type"];
   const update = Object.fromEntries(Object.entries(fields).filter(([k]) => allowed.includes(k)));
+  if (update.event_type !== undefined && !EVENT_TYPES.has(update.event_type)) {
+    return NextResponse.json({ error: "event_type must be show or live" }, { status: 400 });
+  }
   if (update.price_cents !== undefined) {
     const priceError = ticketPriceError(update.price_cents);
     if (priceError) return NextResponse.json({ error: priceError }, { status: 400 });

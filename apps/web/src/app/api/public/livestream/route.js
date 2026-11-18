@@ -5,6 +5,7 @@ import { getUserEntitlements } from "@/lib/entitlements";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getCurrentBroadcast } from "@/lib/server/livestream";
 import { resolveLiveBroadcastAccess } from "@/lib/server/live-access";
+import { fetchNextLiveEvent } from "@/lib/shows/upcoming-shows";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,14 @@ export async function GET() {
     const broadcast = await getCurrentBroadcast(admin);
 
     if (!broadcast) {
+      // Nothing live or scheduled in the studio: count down to the next
+      // 2MRRW Live event on the shows calendar (shows_events.event_type).
+      const scheduledEvent = await fetchNextLiveEvent(admin).catch((error) => {
+        console.error("[public/livestream] scheduled event read failed", error?.message);
+        return null;
+      });
       return NextResponse.json(
-        { broadcast: null, canView: false, access: "none", providerStatus: "offline" },
+        { broadcast: null, scheduledEvent, canView: false, access: "none", providerStatus: "offline" },
         { headers: { "Cache-Control": "private, no-store, max-age=0" } }
       );
     }

@@ -19,9 +19,23 @@ function computeCountdown(targetMs) {
 
 const POLL_MS = 15_000;
 
+/** The date and time the countdown is heading to, in the viewer's time zone. */
+function scheduleLabels(goesLiveAt) {
+  const at = goesLiveAt ? new Date(goesLiveAt) : null;
+  if (!at || Number.isNaN(at.getTime())) {
+    return { liveScheduled: false, liveStreamDate: "Next date to be announced", liveStreamTime: "" };
+  }
+  return {
+    liveScheduled: true,
+    liveStreamDate: at.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
+    liveStreamTime: at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" }),
+  };
+}
+
 const INITIAL_BROADCAST_STATE = Object.freeze({
   isLive: false,
   goesLiveAt: null,
+  location: null,
   channel: "callme2mrrw",
   title: "2MRRW Live",
   broadcastId: null,
@@ -40,12 +54,7 @@ function sameBroadcastState(left, right) {
  * Broadcast state and the 1 Hz clock use separate contexts: countdown ticks can
  * update countdown labels without reconciling the persistent Twitch player.
  */
-export function LiveCountdownProvider({ targetDate, embedParent = "www.2mrrw.com", broadcasterLogin = "callme2mrrw", children }) {
-  // Fallback target from prop (may be overridden by DB goes_live_at).
-  const [fallbackMs] = useState(() => targetDate instanceof Date
-    ? targetDate.getTime()
-    : new Date(targetDate || Date.now()).getTime());
-
+export function LiveCountdownProvider({ embedParent = "www.2mrrw.com", broadcasterLogin = "callme2mrrw", children }) {
   const [dbState, setDbState] = useState(INITIAL_BROADCAST_STATE);
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const requestInFlightRef = useRef(false);
@@ -58,11 +67,14 @@ export function LiveCountdownProvider({ targetDate, embedParent = "www.2mrrw.com
       if (!res.ok) throw new Error(`livestream state ${res.status}`);
       const json = await res.json();
       const b = json.broadcast;
+      // A live or studio-scheduled broadcast, else the next 2MRRW Live event on the shows calendar.
+      const scheduled = b ? null : json.scheduledEvent;
       const next = {
         isLive: Boolean(b?.is_live),
-        goesLiveAt: b?.goes_live_at || null,
+        goesLiveAt: b?.goes_live_at || scheduled?.startsAt || null,
+        location: scheduled?.location || null,
         channel: b?.channel || "callme2mrrw",
-        title: b?.title || "2MRRW Live",
+        title: b?.title || scheduled?.title || "2MRRW Live",
         broadcastId: b?.id || null,
         providerStatus: json.providerStatus || (b?.is_live ? "live" : "offline"),
         stateStatus: "ready",
@@ -93,20 +105,20 @@ export function LiveCountdownProvider({ targetDate, embedParent = "www.2mrrw.com
     };
   }, [fetchState]);
 
-  // Countdown tick — 1 Hz, uses DB goes_live_at if present, else prop.
+  // Countdown tick — 1 Hz toward the scheduled start; nothing scheduled, nothing to count.
   useEffect(() => {
-    const targetMs = dbState.goesLiveAt
-      ? new Date(dbState.goesLiveAt).getTime()
-      : fallbackMs;
-
-    const tick = () => setCountdown(computeCountdown(targetMs));
+    const targetMs = dbState.goesLiveAt ? new Date(dbState.goesLiveAt).getTime() : null;
+    const tick = () => setCountdown(computeCountdown(targetMs ?? 0));
     tick();
+    if (targetMs === null) return undefined;
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [dbState.goesLiveAt, fallbackMs]);
+  }, [dbState.goesLiveAt]);
 
   const broadcastValue = useMemo(
     () => ({
+      ...scheduleLabels(dbState.goesLiveAt),
+      liveLocation: dbState.location,
       liveIsLive:  dbState.isLive,
       liveChannel: dbState.channel,
       liveTitle:   dbState.title,
