@@ -119,10 +119,11 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode }) {
   const csSrc = currentTrack.csCover || null;
   const csType = currentTrack.csCoverType || "image";
   const showCs = Boolean(csMode && csSrc);
+  // Beneath the galaxy (z-index -1), which stays over the blurred cover art.
   const mediaStyle = {
     position: "fixed",
     inset: 0,
-    zIndex: -1,
+    zIndex: -2,
     pointerEvents: "none",
     width: "100%",
     height: "100%",
@@ -134,7 +135,7 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode }) {
   const imageLayerStyle = {
     position: "fixed",
     inset: 0,
-    zIndex: -1,
+    zIndex: -2,
     pointerEvents: "none",
     backgroundSize: "cover",
     backgroundPosition: "center",

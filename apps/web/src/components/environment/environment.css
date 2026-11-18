@@ -6,7 +6,11 @@
 .galaxy-environment {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  /* Below all page content, not just Home's lifted shell: at 0 a fixed layer
+     paints over every unpositioned page (sign-in, admin, subscribe), and on
+     Android the isolated (contain: strict) starfield covered them outright.
+     <html> has no background, so the body's colour is the canvas beneath. */
+  z-index: -1;
   overflow: hidden;
   pointer-events: none;
   contain: strict;
