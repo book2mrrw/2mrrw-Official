@@ -58,7 +58,12 @@ function subscribeScrubPreview(listener) {
 
 // After a committed seek, the bar holds the chosen position this long while
 // the engine lands there, so it never flickers back to the old position.
-const SCRUB_SETTLE_MS = 350;
+// After release the scrubber holds where it was let go until playback reports
+// that position (the seek may still be loading), so it never snaps back and
+// then forward again. The cap only guards a seek that never lands.
+const SCRUB_HOLD_TOLERANCE_SEC = 0.75;
+const SCRUB_HOLD_MAX_MS = 3000;
+const SCRUB_HOLD_POLL_MS = 50;
 
 // ─── Live current-time label (DOM-mutated, no React re-renders per frame) ────
 const PlayerBarCurrentTime = memo(function PlayerBarCurrentTime() {
@@ -174,10 +179,17 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
     setDragging(false);
     if (seconds != null) onSeek(seconds);
     clearTimeout(settleTimerRef.current);
-    settleTimerRef.current = setTimeout(() => {
+    const releasedAt = performance.now();
+    const settle = () => {
+      const landed = seconds == null || Math.abs(getProgressSnapshot().currentTime - seconds) < SCRUB_HOLD_TOLERANCE_SEC;
+      if (!landed && performance.now() - releasedAt < SCRUB_HOLD_MAX_MS) {
+        settleTimerRef.current = setTimeout(settle, SCRUB_HOLD_POLL_MS);
+        return;
+      }
       scrubbingRef.current = false;
       setScrubPreview(null);
-    }, SCRUB_SETTLE_MS);
+    };
+    settleTimerRef.current = setTimeout(settle, SCRUB_HOLD_POLL_MS);
   }, [onSeek]);
 
   const onScrubStart = useCallback(

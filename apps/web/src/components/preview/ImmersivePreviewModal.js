@@ -3,7 +3,7 @@ import { lyricClock } from "@/lib/lyrics/timing";
 import ViewMoreSheet from "@/components/preview/CreditsSheet";
 import { useReleaseCredits } from "@/lib/credits/useReleaseCredits";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { VideoPreviewIcon, AdminVideoLinkedMarker } from "@/components/audio-visual/VideoPreviewIcon";
@@ -513,7 +513,12 @@ function Waveform({ playing, t, bars = 26 }) {
 // While dragging, the bar follows the pointer but audio seeks only once, where
 // the drag (or tap) ends — scrubbing is silent, like a native player. After the
 // commit the chosen position is held briefly while the engine lands there.
-const SCRUB_SETTLE_MS = 350;
+// After release the thumb holds where it was let go until playback reports
+// that position (within half a percent), so it never snaps back while the seek
+// loads; the cap only guards a seek that never lands.
+const SCRUB_HOLD_TOLERANCE_PCT = 0.5;
+const SCRUB_HOLD_MAX_MS = 3000;
+const SCRUB_HOLD_POLL_MS = 50;
 // Above and below the 4px track: a 44px-tall target to grab.
 const SCRUB_HIT_PAD_PX = 20;
 
@@ -526,6 +531,10 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
   // same spot; those must not start a second scrub (and a second seek).
   const lastTouchAtRef = useRef(-Infinity);
   const [dragRatio, setDragRatio] = useState(null);
+  const pctRef = useRef(pct);
+  useLayoutEffect(() => {
+    pctRef.current = pct;
+  }, [pct]);
 
   const seekAt = useCallback((e) => {
     // Preview is fixed-position by design — non-interactive, even though this
@@ -547,7 +556,16 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
     if (ratio == null) return;
     onSeekRatio(ratio);
     clearTimeout(settleTimerRef.current);
-    settleTimerRef.current = setTimeout(() => setDragRatio(null), SCRUB_SETTLE_MS);
+    const releasedAt = performance.now();
+    const settle = () => {
+      const landed = Math.abs(pctRef.current - ratio * 100) < SCRUB_HOLD_TOLERANCE_PCT;
+      if (!landed && performance.now() - releasedAt < SCRUB_HOLD_MAX_MS) {
+        settleTimerRef.current = setTimeout(settle, SCRUB_HOLD_POLL_MS);
+        return;
+      }
+      setDragRatio(null);
+    };
+    settleTimerRef.current = setTimeout(settle, SCRUB_HOLD_POLL_MS);
   }, [onSeekRatio]);
 
   useEffect(() => () => clearTimeout(settleTimerRef.current), []);
@@ -749,7 +767,7 @@ function FloatingPlayer({
         >
           <I.Prev />
         </button>
-        <button type="button" className={`c-lg${playing ? " playing" : ""}`} onClick={onPlay} style={vars}>
+        <button type="button" className={`c-lg${playing ? " playing" : ""}`} aria-label={playing ? "Pause" : "Play"} onClick={onPlay} style={vars}>
           {playing ? <I.Pause /> : <I.Play />}
         </button>
         <button

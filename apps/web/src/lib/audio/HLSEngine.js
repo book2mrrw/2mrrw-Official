@@ -34,6 +34,7 @@ import { createPrefetchLoaderClass } from "./hls-prefetch-loader";
 import { encryptedSegmentStore } from "./encrypted-segment-store";
 import { hlsDownloadManager, parseVariants } from "./hls-download-manager";
 import { createWarmLoaderClasses, takeWarmPlaylist } from "./hls-start-warm";
+import { attachBufferingGuard } from "./hls-buffering-guard";
 
 async function importHls() {
   if (typeof window === "undefined") return null;
@@ -505,6 +506,11 @@ export class HLSEngine {
         });
       }
 
+      // A seek outside the buffer must load there even when iOS has told
+      // hls.js to stop buffering (see hls-buffering-guard.js). Before
+      // attachMedia, so it runs ahead of hls.js's own seeking handler.
+      this._removeBufferingGuard = attachBufferingGuard(hls, audioEl);
+
       hls.loadSource(manifestUrl);
       hls.attachMedia(audioEl);
 
@@ -576,6 +582,8 @@ export class HLSEngine {
   }
 
   _destroyHls() {
+    this._removeBufferingGuard?.();
+    this._removeBufferingGuard = null;
     this._stopDownload?.();
     this._stopDownload = null;
     this._cancelPendingLoad?.();
