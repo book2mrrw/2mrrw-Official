@@ -60,6 +60,7 @@ function SignaturePlayRing({
         type="button"
         layoutId={layoutId}
         aria-label={ariaLabel || (isPlaying ? "Pause" : "Play")}
+        aria-busy={isBuffering || undefined}
         className={ringClass}
         style={{ width: size, height: size }}
         whileTap={{ scale: 0.94 }}
@@ -113,7 +114,8 @@ function SignaturePlayRing({
             <PlayIcon size={iconSize} />
           )}
         </span>
-        {isBuffering ? <span className="player-signature-ring__buffer" aria-hidden /> : null}
+        {/* Always present so it can fade out the moment loading ends. */}
+        <span className="player-signature-ring__buffer" aria-hidden />
       </motion.button>
     </div>
   );

@@ -29,3 +29,13 @@ test("loaded card loops are never paused for audio; only a hidden page pauses th
   const ensureMedia = home.slice(home.indexOf("const ensureStorefrontCarouselMedia = useCallback("));
   assert.doesNotMatch(ensureMedia.slice(0, ensureMedia.indexOf("}, [")), /isPlaying\) return;/);
 });
+
+test("the header video is never paused to make room for carousel cards", () => {
+  const media = fs.readFileSync(path.join(root, "src/lib/storefront/storefront-persistent-media.js"), "utf8");
+  const keep = media.slice(media.indexOf("export function keepHeroVideoPlaying"), media.indexOf("}", media.indexOf("export function keepHeroVideoPlaying")) + 1);
+  assert.doesNotMatch(keep, /\.pause\(/);
+  assert.match(keep, /heroVideo\.play\(\)/);
+  assert.doesNotMatch(media, /syncMobileHeroWithStorefrontCarousel/);
+  const home = fs.readFileSync(path.join(root, "src/app/HomeClient.js"), "utf8");
+  assert.match(home, /keepHeroVideoPlaying\(heroVideoRef\.current\);/);
+});

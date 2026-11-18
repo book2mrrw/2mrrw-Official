@@ -3764,15 +3764,6 @@ body {
   animation-delay: 0.24s;
 }
 
-@keyframes playerBufferSpin {
-  to {
-    transform: translateX(-50%) rotate(360deg);
-  }
-}
-@keyframes playerBufferFadeIn {
-  to { opacity: 1; }
-}
-
 @keyframes audioIslandWave {
   0%,
   100% {
@@ -4274,13 +4265,48 @@ body.is-player-modal-open::before {
   stroke: #8a6a6a;
 }
 
-.player-signature-ring--buffering .player-signature-ring__buffer {
+/* Loading: the play button's own circle is the buffer indicator — a fine
+   light running around its exact circumference over a faint track, layered
+   on the button (no layout, no input). It fades in only if loading takes a
+   moment and fades out the instant the song is ready. */
+.player-signature-ring__buffer {
+  --buffer-light: 255, 255, 255;
   position: absolute;
-  inset: -4px;
+  inset: 0;
   border-radius: 50%;
-  border: 2px solid transparent;
-  border-top-color: var(--player-accent, rgba(220, 218, 212, 0.6));
-  animation: playerBufferSpin 0.85s linear infinite;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  background:
+    conic-gradient(
+      rgba(var(--buffer-light), 0) 0deg,
+      rgba(var(--buffer-light), 0) 150deg,
+      rgba(var(--buffer-light), 0.5) 290deg,
+      rgba(var(--buffer-light), 1) 356deg,
+      rgba(var(--buffer-light), 0) 360deg
+    ),
+    linear-gradient(rgba(var(--buffer-light), 0.16), rgba(var(--buffer-light), 0.16));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  animation: playerRingOrbit 1s linear infinite;
+  animation-play-state: paused;
+}
+
+.player-signature-ring--buffering .player-signature-ring__buffer {
+  opacity: 1;
+  transition-delay: 120ms;
+  animation-play-state: running;
+}
+
+/* On the bar's cyan button the light is dark, like its icon. */
+.player-bar-compact .player-signature-ring__buffer {
+  --buffer-light: 0, 0, 0;
+}
+
+@keyframes playerRingOrbit {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .player-immersive-expanded {
@@ -4450,25 +4476,6 @@ body.is-player-modal-open::before {
   cursor: pointer;
   font-size: 12px;
   font-weight: 800;
-}
-
-.player-immersive-buffer-indicator {
-  position: fixed;
-  left: 50%;
-  bottom: calc(120px + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  z-index: 7700;
-  width: 26px;
-  height: 26px;
-  border: 2px solid rgba(255, 255, 255, 0.12);
-  border-top-color: var(--player-accent, rgba(220, 218, 212, 0.75));
-  border-radius: 50%;
-  opacity: 0;
-  animation: playerBufferFadeIn 0.15s ease 0.25s forwards, playerBufferSpin 0.8s 0.25s linear infinite;
-}
-
-.player-immersive-buffer-indicator[data-mobile="1"] {
-  bottom: calc(120px + env(safe-area-inset-bottom, 0px));
 }
 
 .player-immersive-island {

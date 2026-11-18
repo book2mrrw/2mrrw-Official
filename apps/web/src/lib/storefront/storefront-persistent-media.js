@@ -30,7 +30,7 @@ export function isStorefrontCarouselCardInView(video) {
  * Persistent contract: start or resume muted loops; never pause on scroll or
  * for audio, never load().
  * @param {HTMLElement | null} row - singles row container (singlesRowRef.current)
- * @returns {boolean} anyCarouselInView - for mobile hero coordination
+ * @returns {boolean} whether any carousel card is in view
  */
 export function ensureStorefrontCarouselVideosPlaying(row) {
   if (!row || document.hidden) return false;
@@ -92,15 +92,14 @@ export function isStorefrontCarouselMediaHealthy(row) {
  * Mobile hero: pause ambient hero when singles row has in-view carousel decoders.
  * Does not pause or load() carousel videos.
  */
-export function syncMobileHeroWithStorefrontCarousel(heroVideo, anyCarouselInView, isMobile) {
-  if (!heroVideo || !isMobile) return;
-  if (anyCarouselInView) {
-    try {
-      heroVideo.pause();
-    } catch {
-      /* non-fatal */
-    }
-  } else {
-    heroVideo.play().catch(() => {});
-  }
+/**
+ * The header video keeps playing on every screen size. It used to be paused on
+ * phones whenever a Latest Singles card was in view (a decoder-saving trade),
+ * which on a phone's first screen meant the header never moved; motion is not
+ * traded away. This only restarts it if something else stopped it while the
+ * page is visible.
+ */
+export function keepHeroVideoPlaying(heroVideo) {
+  if (!heroVideo || document.hidden || !heroVideo.paused) return;
+  heroVideo.play().catch(() => {});
 }

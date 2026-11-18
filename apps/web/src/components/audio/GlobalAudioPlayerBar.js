@@ -61,6 +61,19 @@ function subscribeScrubPreview(listener) {
 // After release the scrubber holds where it was let go until playback reports
 // that position (the seek may still be loading), so it never snaps back and
 // then forward again. The cap only guards a seek that never lands.
+// Screen-reader-only text (track changes, buffering).
+const VISUALLY_HIDDEN = {
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  padding: 0,
+  margin: "-1px",
+  overflow: "hidden",
+  clip: "rect(0,0,0,0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
 const SCRUB_HOLD_TOLERANCE_SEC = 0.75;
 const SCRUB_HOLD_MAX_MS = 3000;
 const SCRUB_HOLD_POLL_MS = 50;
@@ -1401,29 +1414,16 @@ function GlobalAudioPlayerBar() {
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        style={{
-          position: "absolute",
-          width: "1px",
-          height: "1px",
-          padding: 0,
-          margin: "-1px",
-          overflow: "hidden",
-          clip: "rect(0,0,0,0)",
-          whiteSpace: "nowrap",
-          border: 0,
-        }}
+        style={VISUALLY_HIDDEN}
       />
       {conflictDialog}
       {queueSheet}
       {sleepSheet}
-      {playbackOrchestrationState === "RECOVERING" && !isBuffering && (
-        <div
-          className="player-immersive-buffer-indicator"
-          aria-live="polite"
-          aria-label="Buffering"
-          data-playback-orchestration={playbackOrchestrationState}
-        />
-      )}
+      {/* Recovery shows on the play button's ring like any other loading;
+          screen readers still hear it. */}
+      <span style={VISUALLY_HIDDEN} aria-live="polite" data-playback-orchestration={playbackOrchestrationState}>
+        {playbackOrchestrationState === "RECOVERING" ? "Buffering" : ""}
+      </span>
       {playbackState === "ended_preview" && dockCurrentTrack && !entitlementAccountState?.permissions?.admin ? (
         <div className="player-preview-ended-cta">
           <span className="player-preview-ended-label">PREVIEW ENDED</span>
@@ -1437,7 +1437,7 @@ function GlobalAudioPlayerBar() {
         currentTrack={dockCurrentTrack}
         duration={dockDuration}
         isPlaying={dockIsPlaying}
-        isBuffering={isBuffering || (Boolean(osInterrupted) && !dockIsPlaying)}
+        isBuffering={isBuffering || playbackOrchestrationState === "RECOVERING" || (Boolean(osInterrupted) && !dockIsPlaying)}
         error={error}
         streamRetryable={streamRetryable}
         onRetryStream={retryStreamPlayback}

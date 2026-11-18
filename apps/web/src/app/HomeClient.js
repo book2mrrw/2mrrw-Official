@@ -6,7 +6,7 @@ import { excludeDeletedReleases } from "@/lib/releases/deletion-projection";
 import OwnershipRecoveryForm from "@/components/account/OwnershipRecoveryForm";
 
 import { playSectionQueue } from "@/lib/playback/section-queue";
-import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition, Suspense } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, memo, startTransition, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -42,7 +42,7 @@ import {
   isStorefrontCarouselMediaHealthy,
   pauseStorefrontCarouselVideos,
   pauseStorefrontCarouselVideosWhenDocumentHidden,
-  syncMobileHeroWithStorefrontCarousel,
+  keepHeroVideoPlaying,
 } from "@/lib/storefront/storefront-persistent-media";
 import { releaseRetainedOfflineBlobUrls } from "@/lib/offline-cache";
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
@@ -1448,13 +1448,9 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       carouselMediaHealthyRef.current = true;
       return;
     }
-    const anyCarouselInView = ensureStorefrontCarouselVideosPlaying(row);
+    ensureStorefrontCarouselVideosPlaying(row);
     carouselMediaHealthyRef.current = isStorefrontCarouselMediaHealthy(row);
-    syncMobileHeroWithStorefrontCarousel(
-      heroVideoRef.current,
-      anyCarouselInView,
-      isMobileRef.current
-    );
+    keepHeroVideoPlaying(heroVideoRef.current);
   }, []);
 
   // ── AUDIO VISUALS VIEWPORT (music pause/resume via AudioContext) ───────────
@@ -1610,6 +1606,19 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       });
     }
     prevActiveTabForHomeScrollRef.current = next;
+  }, [activeTab]);
+
+  // Arriving at the Vault puts the vault on screen whole and centred, ready to
+  // press and hold — nobody has to scroll to reach it. Runs before paint, so
+  // the tab opens already in position (taller than the screen: top-aligned).
+  useLayoutEffect(() => {
+    if (activeTab !== "vault") return;
+    const scroller = mainScrollRef.current;
+    const gate = scroller?.querySelector("[data-vault-stage] .vault-door-gate");
+    if (!scroller || !gate) return;
+    const gateTop = gate.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    const centred = gateTop - Math.max(0, (scroller.clientHeight - gate.offsetHeight) / 2);
+    scroller.scrollTop = Math.max(0, Math.min(centred, scroller.scrollHeight - scroller.clientHeight));
   }, [activeTab]);
 
   useEffect(() => {
@@ -2857,7 +2866,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               <KeepAliveTab active={activeTab==="vault"}>
                 <>
                   <h2 className="section-heading">Vault</h2>
-                  <div style={{marginTop:28}}>
+                  <div data-vault-stage style={{marginTop:28}}>
                     <PublicVaultIsland>{(publicVault) => (
                     <VaultDoorGate
                       canUnlock={Boolean(publicVault?.unlocked)}
