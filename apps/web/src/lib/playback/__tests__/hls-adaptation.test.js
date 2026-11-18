@@ -166,6 +166,17 @@ test('native HLS counts as loaded and unsupported browsers fall back', async (t)
   assert.equal(await engine.loadTrack('/unsupported.m3u8', { canPlayType: () => '' }), false);
 });
 
+test('native HLS without a network hint (Safari has no Network Information API) plays the highest rendition', async (t) => {
+  environment(t, undefined);
+  FakeHls.supported = false;
+  t.after(() => { FakeHls.supported = true; });
+  t.mock.method(globalThis, 'fetch', async () => new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n/low\n#EXT-X-STREAM-INF:BANDWIDTH=320000\n/high'));
+  const engine = new HLSEngine();
+  const audio = { canPlayType: () => 'probably' };
+  assert.equal(await engine.loadTrack('/native.m3u8', audio), true);
+  assert.equal(audio.src, 'https://www.2mrrw.com/high');
+});
+
 test('native manifest authorization failure never falls through to an uncontrolled adaptive master', async t => {
   environment(t, '4g'); FakeHls.supported = false;
   t.after(() => { FakeHls.supported = true; });

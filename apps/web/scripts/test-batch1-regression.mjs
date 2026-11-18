@@ -38,6 +38,14 @@ import {
   signKeyToken,
   verifyKeyToken,
 } from '@/lib/hls/token.js';
+
+// Node has no hls.js, so loadTrack takes the native-HLS path. Since 6536342c
+// that path plays exactly one rendition: it needs an element that can play
+// HLS and fetches the master to pick it (it never hands the master to src).
+const NATIVE_MASTER = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=330000,CODECS="mp4a.40.2"\nvariant-320k.m3u8\n';
+const NATIVE_RENDITION = 'https://example.com/variant-320k.m3u8';
+const nativeHlsElement = () => ({ src: null, canPlayType: () => 'maybe' });
+const serveNativeMaster = (t) => t.mock.method(globalThis, 'fetch', async () => new Response(NATIVE_MASTER, { status: 200 }));
 import { getOrFetchManifest } from '@/lib/server/hls-manifest-cache.js';
 import { withInflight }       from '@/lib/server/entitlement-cache.js';
 
@@ -81,10 +89,11 @@ describe('A: HLSEngine — stale-renewal race guard', () => {
     assert.equal(engine._audioEl, null, '_audioEl must not be overwritten');
   });
 
-  test('matched _version allows load (Node SSR / null-Hls path returns true)', async () => {
+  test('matched _version allows load (Node SSR / null-Hls path returns true)', async (t) => {
+    serveNativeMaster(t);
     const engine = new HLSEngine();
     engine._manifestVersion = 5;
-    const mockAudio = { src: null };
+    const mockAudio = nativeHlsElement();
 
     // In Node.js, importHls() returns null (no window).
     // The !Hls branch assigns src directly and returns true — no hls.js needed.
@@ -95,14 +104,15 @@ describe('A: HLSEngine — stale-renewal race guard', () => {
     );
 
     assert.equal(result, true, 'matched _version must allow load');
-    assert.equal(mockAudio.src, 'https://example.com/master.m3u8',
-      'SSR path must assign manifest URL to audioEl.src');
+    assert.equal(mockAudio.src, NATIVE_RENDITION,
+      'native path must assign its one selected rendition to audioEl.src');
   });
 
-  test('external callers (no _version, defaults to -1) bypass guard entirely', async () => {
+  test('external callers (no _version, defaults to -1) bypass guard entirely', async (t) => {
+    serveNativeMaster(t);
     const engine = new HLSEngine();
     engine._manifestVersion = 999; // any value — guard must not fire
-    const mockAudio = { src: null };
+    const mockAudio = nativeHlsElement();
 
     // External callers omit _version; it defaults to -1; -1 >= 0 is false → guard skipped
     const result = await engine.loadTrack(
@@ -184,7 +194,8 @@ describe('B: HLSEngine — renewal counter state', () => {
       'destroy must reset _renewalAttempts');
   });
 
-  test('successful renewal resets _renewalAttempts via .then(ok) callback', async () => {
+  test('successful renewal resets _renewalAttempts via .then(ok) callback', async (t) => {
+    serveNativeMaster(t);
     // Reproduces the callback from the KEY_LOAD_ERROR / FRAG_DECRYPT_ERROR handlers:
     //   this.loadTrack(...).then((ok) => { if (ok) this._renewalAttempts = 0; })
     // In Node.js the null-Hls path resolves true, so this verifies the callback fires.
@@ -194,7 +205,7 @@ describe('B: HLSEngine — renewal counter state', () => {
 
     const ok = await engine.loadTrack(
       'https://example.com/master.m3u8',
-      { src: null },
+      nativeHlsElement(),
       { _version: 0 },
     );
 

@@ -165,10 +165,13 @@ export class HLSEngine {
         if (controller.signal.aborted || this._destroyed || version !== this._manifestVersion) return false;
         const base = response?.url || new URL(manifestUrl, globalThis.location?.href || 'https://www.2mrrw.com/').href;
         const variants = parseVariants(body, base);
-        const tier = this._trackQualityCap ?? (this._currentLevel >= 0 ? this._currentLevel : getStartupQualityLevel());
-        const selected = variants[Math.min(tier, variants.length - 1)];
+        const hint = this._trackQualityCap ?? (this._currentLevel >= 0 ? this._currentLevel : getStartupQualityLevel());
+        // No pin and no network hint (Safari has no Network Information API)
+        // means the highest rendition, as MANIFEST_PARSED and hls-start-warm do.
+        const tier = hint >= 0 ? Math.min(hint, variants.length - 1) : 0;
+        const selected = variants[tier];
         if (!selected) return false;
-        this._trackQualityCap = Math.min(tier, variants.length - 1);
+        this._trackQualityCap = tier;
         this._native = true;
         audioEl.src = selected.url;
         this._audioEl = audioEl;
