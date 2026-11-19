@@ -1,20 +1,21 @@
 /**
  * Cover art lane worker (2MRRW-Cloud). Claims queued cover versions, makes
- * their silent renditions (transcode.js) and publishes them under cover-art/.
+ * their silent renditions (transcode.js) and publishes them under cover-art/
+ * through links the website signs for the job it holds (lane-api.js).
  *
  *   node src/worker.js          keep polling the queue
  *   node src/worker.js --once   drain the queue, then exit (backfill runs)
  *
- * Environment (cover-art.env.example): COVER_ART_DATABASE_URL, R2_ACCOUNT_ID,
- * R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME; optional
- * COVER_ART_SCRATCH (work directory), IDLE_POLL_MS.
+ * Environment (cover-art.env.example): COVER_ART_DATABASE_URL; optional
+ * COVER_ART_API_URL (the website, default https://www.2mrrw.com),
+ * COVER_ART_SCRATCH (work directory), IDLE_POLL_MS. No storage credential.
  */
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { claim, closeQueue, complete, fail, heartbeat } from "./queue.js";
-import { download, renditionKey, upload } from "./storage.js";
+import { download, transfers, upload } from "./lane-api.js";
 import { transcodeCover } from "./transcode.js";
 
 const once = process.argv.includes("--once");
@@ -32,15 +33,18 @@ async function processJob(job) {
   const started = Date.now();
   try {
     const input = join(scratch, "source");
-    const etag = await download(job.source_key, input);
+    const { source: original } = await transfers(job);
+    const etag = await download(original.url, input);
     // A cover replaced after it was queued is queued again as its own version.
     if (etag !== job.source_etag) throw new Error("the original changed since it was queued");
     const { source, renditions } = await transcodeCover(input, scratch);
+    const links = await transfers(job, renditions.map((r) => r.id));
     const published = [];
     for (const rendition of renditions) {
-      const key = renditionKey(job.source_key, job.source_etag, rendition.id);
-      const bytes = await upload(key, rendition.file);
-      published.push({ id: rendition.id, key, width: rendition.width, height: rendition.height, bytes });
+      const link = links.uploads.find((u) => u.id === rendition.id);
+      if (!link) throw new Error(`no upload link for ${rendition.id}`);
+      const bytes = await upload(link.url, rendition.file, links);
+      published.push({ id: rendition.id, key: link.key, width: rendition.width, height: rendition.height, bytes });
     }
     await complete(job, published);
     log("ready", { id: job.id, source: job.source_key, size: `${source.width}x${source.height}`, renditions: published.map((r) => r.id), ms: Date.now() - started });

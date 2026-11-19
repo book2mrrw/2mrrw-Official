@@ -6,11 +6,12 @@ shares nothing with the audio, video, vault or track-visual lanes.
 
 | Piece | Where |
 |---|---|
-| Worker (this folder) | `src/worker.js` claims, `src/transcode.js` encodes, `src/storage.js` reads originals / writes renditions, `src/queue.js` talks to the queue |
+| Worker (this folder) | `src/worker.js` claims, `src/transcode.js` encodes, `src/lane-api.js` reads originals / writes renditions through the website's signed links, `src/queue.js` talks to the queue |
 | Queue | table `cover_art_versions`, functions `queue_cover_art`, `claim_cover_art_job`, `heartbeat_cover_art_job`, `complete_cover_art_job` (`supabase/migrations/20261118190000_cover_art_lane.sql`) |
 | Database login | role `cover_art_worker`: may only claim, heartbeat and finish jobs (no table access, no queueing) |
 | Renditions | R2 media bucket, `cover-art/<type>/<slug>/<version>/<id>.mp4`, immutable |
 | Delivery | `src/lib/cover-art/delivery.js`, used by `/api/media/visual` |
+| Storage links | `src/lib/cover-art/transfers.js`, `POST /api/cover-art/transfers` (the website holds the bucket key) |
 
 ## What it makes
 
@@ -27,8 +28,12 @@ has to list or register covers.
 
 ## Credentials
 
-`cover-art.env` (template: `cover-art.env.example`) holds two credentials, both
-narrow on purpose:
+`cover-art.env` (template: `cover-art.env.example`) holds one credential and
+the website's address. The lane has **no storage key**: for the job it holds,
+`POST /api/cover-art/transfers` with the job id and lease token returns a
+15-minute link to read that job's original and links to write its renditions
+under `cover-art/` — nothing else, and only while the lease is current.
+
 
 - `COVER_ART_DATABASE_URL` — the `cover_art_worker` login through the Supabase
   session pooler. TLS is verified against `certs/supabase-root-2021.crt`
@@ -49,9 +54,7 @@ narrow on purpose:
   # then, as the database owner: alter role cover_art_worker with login password '<verifier>';
   ```
 
-- `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` — an R2 API token with Object
-  Read & Write on the media bucket only. R2 cannot scope a token to a prefix;
-  the worker itself refuses to write anywhere but `cover-art/`.
+- `COVER_ART_API_URL` — the website (default `https://www.2mrrw.com`).
 
 ## Running it
 

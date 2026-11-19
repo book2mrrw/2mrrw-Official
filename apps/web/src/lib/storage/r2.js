@@ -91,6 +91,8 @@ export async function createR2SignedPutUrl(key, contentType, expiresIn = 300, op
     Bucket: resolveStorageBucket(options.storageScope),
     Key: key,
     ContentType: contentType,
+    // Signed when given: the uploader must send exactly this Cache-Control.
+    ...(options.cacheControl ? { CacheControl: options.cacheControl } : {}),
   });
   return getSignedUrl(r2Client, command, { expiresIn });
 }

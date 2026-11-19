@@ -76,7 +76,8 @@ export async function coverArtUrl(sourceKey, { variant = null, schedule = (task)
   }
   if (entry.row?.status !== "ready") return null;
   const rendition = pickRendition(entry.row.renditions, variant);
-  return rendition?.key ? getPublicR2Url(rendition.key) : null;
+  // Only the lane's own files are ever served in place of a cover.
+  return String(rendition?.key || "").startsWith("cover-art/") ? getPublicR2Url(rendition.key) : null;
 }
 
 /** Test-only: forget every cached version. */
