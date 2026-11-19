@@ -5,6 +5,22 @@ import { nextQueueIndex } from "./queue-order";
 import { MARKS, PLAYBACK_SCENARIOS, perfMark, perfMeasure } from "@/lib/dev/performanceMarks";
 import { playbackQueuesMatch, normalizeTrack } from "@/lib/playback/playback-track-utils";
 import { upgradeTrackAccessForPlay } from "@/lib/playback/access-reconciliation";
+import { buildClientEvent, listenTracker, sendPlaybackEvent } from "@/lib/analytics/playback-event-client";
+
+/** Analytics: the listener left this song for the next one before it ended. */
+function recordSkip(track, audio) {
+  if (!track?.slug || !audio || audio.ended) return;
+  const durationSeconds = isFinite(audio.duration) ? audio.duration : 0;
+  const positionSeconds = audio.currentTime || 0;
+  if (durationSeconds > 0 && positionSeconds >= durationSeconds - 1) return;
+  const listen = listenTracker.snapshot();
+  sendPlaybackEvent(buildClientEvent(track, "skip", {
+    positionSeconds,
+    durationSeconds,
+    listenId: listen.listenId,
+    listenedSeconds: listen.listenedSeconds,
+  }));
+}
 
 /**
  * Attaches Group 4 (queue management) commands to the shared `self` service object.
@@ -78,6 +94,7 @@ export function attachQueueCommands(self) {
       queueIndexRef.current = nextIndex;
       patchState({ queueIndex: nextIndex });
       if (typeof requestAuthoritativePlay !== "function") return false;
+      if (!autoAdvance) recordSkip(current, self._deps.audioRef?.current);
       return requestAuthoritativePlay(track, {
         resumeAt: 0,
         ...(autoAdvance

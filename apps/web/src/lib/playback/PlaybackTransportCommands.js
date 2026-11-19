@@ -23,6 +23,7 @@ import {
 import { logPlayback } from "@/lib/observability/client-log";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
+import { buildClientEvent, listenKey, listenTracker, sendPlaybackEvent } from "@/lib/analytics/playback-event-client";
 import { clearPersistedMediaSessionTrack } from "@/lib/media-session-artwork";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
 import { captureRecoveryOperation } from "./recovery-operation";
@@ -290,10 +291,18 @@ export function attachTransportCommands(self) {
         syncProgressTime(position);
         syncPositionState(true);
         if (stateRef.current.currentTrack) {
-          sendControlSystemPlaybackEvent(stateRef.current.currentTrack, "seek", {
+          const seekTrack = stateRef.current.currentTrack;
+          sendControlSystemPlaybackEvent(seekTrack, "seek", {
             mediaType: "audio", positionSeconds: position,
             durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
           });
+          // Analytics: the jump itself is not listening time.
+          listenTracker.reanchor(listenKey(seekTrack), position);
+          sendPlaybackEvent(buildClientEvent(seekTrack, "seek", {
+            positionSeconds: position,
+            durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
+            listenId: listenTracker.snapshot().listenId,
+          }));
         }
       },
     });

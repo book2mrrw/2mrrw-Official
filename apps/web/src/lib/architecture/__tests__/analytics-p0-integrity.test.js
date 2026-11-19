@@ -46,7 +46,8 @@ test("a resume-after-pause (currentTime not near zero) is reported as 'progress'
 test("full (non-preview, non-admin) playback is otherwise untouched by the guard — persistPlayback is still called synchronously from onPlay, not deferred or moved", () => {
   const src = read("src/lib/playback/PlaybackEventHandlers.js");
   const fnAt = src.indexOf("const onPlay = () => {");
-  const body = src.slice(fnAt, fnAt + 4000);
+  // The whole onPlay body (to the next handler), not a fixed character window.
+  const body = src.slice(fnAt, src.indexOf("\n  const onPause", fnAt));
   // Everything else onPlay already did (SM transition, keep-alive ping, progress raf,
   // media session update, local listening record) must remain reachable unconditionally —
   // only the analytics persistPlayback call was made conditional.

@@ -1,4 +1,12 @@
 import { storeAudioBlob, getAudioBlob, removeAudioBlob, getAllAudioKeys } from "@/lib/idb-audio-cache";
+import { buildClientEvent, sendPlaybackEvent } from "@/lib/analytics/playback-event-client";
+
+/** Analytics: an in-app offline download was saved or removed (never a file export). */
+function recordOfflineDownload(track, eventType) {
+  try {
+    if (track?.slug) sendPlaybackEvent(buildClientEvent(track, eventType, { extra: { source: "offline_download" } }));
+  } catch { /* analytics never blocks downloads */ }
+}
 
 const OFFLINE_PREFIX = "2mrrw_offline";
 const QUEUED_PREFIX = "2mrrw_offline_queued";
@@ -159,6 +167,7 @@ export async function queueOfflineDownload(userId, track, { streamUrl, onProgres
     status: blobUrl ? "cached" : "queued",
   };
   window.localStorage.setItem(offlineKey(userId, track.slug), JSON.stringify(meta));
+  if (blobUrl) recordOfflineDownload(track, "download");
   return meta;
 }
 
@@ -189,7 +198,9 @@ export async function initOfflineAudioCache(userId) {
 
 export function removeOfflineCache(userId, slug) {
   if (typeof window === "undefined") return;
+  const removedMeta = getOfflineCacheMeta(userId, slug);
   window.localStorage.removeItem(offlineKey(userId, slug));
+  if (removedMeta?.status === "cached") recordOfflineDownload({ slug, title: removedMeta.title }, "download_remove");
   const queued = getOfflineQueuedSlugs(userId).filter((s) => s !== slug);
   window.localStorage.setItem(queuedKey(userId), JSON.stringify(queued));
   const key = idbKey(userId, slug);

@@ -59,6 +59,13 @@ import {
 } from "@/lib/diagnostics/playback-trace";
 import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
 import {
+  buildClientEvent,
+  isNonCountingTrack,
+  listenKey,
+  listenTracker,
+  sendPlaybackEvent,
+} from "@/lib/analytics/playback-event-client";
+import {
   MARKS,
   perfMark,
   dumpPlaybackTiming,
@@ -257,35 +264,31 @@ export function createPlaybackEventHandlers({
       return;
     }
     lastPersistRef.current = { key: eventType === "progress" ? track.slug : key, at: now };
-    fetch("/api/media/playback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      keepalive: true,
-      body: JSON.stringify({
-        slug: track.slug,
-        // Disambiguates track.slug across albums (e.g. two different albums'
-        // "intro") for per-track analytics — see media_stream_events.product_id.
-        albumSlug: track.metadata?.albumSlug || null,
-        title: track.title,
-        eventType,
+    // Analytics schema v1 (lib/analytics): event ID, device/session/listen IDs,
+    // release + song slugs (albumSlug disambiguates album songs — see
+    // media_stream_events.product_id), seconds actually heard, platform,
+    // access tier. Undeliverable events wait in the on-device outbox.
+    const listen = listenTracker.snapshot();
+    sendPlaybackEvent(
+      buildClientEvent(track, eventType, {
         mediaType: "audio",
-        source: track.source,
         positionSeconds: audio.currentTime,
         durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
-        completed: eventType === "complete",
+        listenId: listen.key === listenKey(track) ? listen.listenId : null,
+        listenedSeconds: listen.key === listenKey(track) ? listen.listenedSeconds : undefined,
       }),
-    }).catch((error) => {
-      reportPlaybackDiagnostic({
-        level: "warn",
-        code: "PLAYBACK_EVENT_POST_FAILED",
-        command: "PLAYBACK_EVENT_POST",
-        requestId: activeCommandRef.current?.requestId || null,
-        state: stateRef.current,
-        error,
-        context: { eventType, slug: track.slug },
-      });
-    });
+      (error) => {
+        reportPlaybackDiagnostic({
+          level: "warn",
+          code: "PLAYBACK_EVENT_POST_FAILED",
+          command: "PLAYBACK_EVENT_POST",
+          requestId: activeCommandRef.current?.requestId || null,
+          state: stateRef.current,
+          error,
+          context: { eventType, slug: track.slug },
+        });
+      }
+    );
     sendControlSystemPlaybackEvent(track, eventType, {
       mediaType: "audio",
       positionSeconds: audio.currentTime,
@@ -414,6 +417,12 @@ export function createPlaybackEventHandlers({
     startKeepAlivePing();
     startProgressRaf();
     startPositionSaveTimer();
+    // Analytics: a new recording, or a restart from 0, begins a new listen.
+    const listenTrack = stateRef.current.currentTrack;
+    const listenAt = audioRef.current?.currentTime || 0;
+    if (listenTrack?.slug && (listenAt < 1 || listenTracker.snapshot().key !== listenKey(listenTrack))) {
+      listenTracker.begin(listenKey(listenTrack), listenAt);
+    }
     // Analytics only — does not affect playback. Three fixes to what gets
     // reported here, not what the user hears: (1) a preview play must never
     // count toward "plays" analytics, since it isn't a genuine listen to the
@@ -780,6 +789,13 @@ export function createPlaybackEventHandlers({
     syncPositionState(false);
 
     const track = stateRef.current.currentTrack;
+    // Qualified play: fires once per listen, after 30 s actually heard.
+    if (track?.slug && listenTracker.advance(listenKey(track), audio.currentTime, {
+      playing: !audio.paused && !audio.ended,
+      durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
+    }) && !isNonCountingTrack(track)) {
+      persistPlayback("qualified");
+    }
     const previewOnly = track?.metadata?.access?.previewOnly;
 
     if (previewOnly && audio.currentTime >= PREVIEW_HARD_CAP_SEC - 2) {
@@ -939,6 +955,14 @@ export function createPlaybackEventHandlers({
     }
     stopProgressRaf();
     stopPositionSaveTimer();
+    // A song shorter than 30 s qualifies by being heard to the end.
+    if (track?.slug) {
+      const endDuration = isFinite(audio.duration) ? audio.duration : 0;
+      if (listenTracker.advance(listenKey(track), endDuration || audio.currentTime, { playing: true, durationSeconds: endDuration })
+        && !isNonCountingTrack(track)) {
+        persistPlayback("qualified");
+      }
+    }
     persistPlayback("complete");
     patchState({ playbackState: "ending" });
 

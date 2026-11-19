@@ -28,6 +28,8 @@ function syncPositionToServer(userId, slug, positionSeconds, durationSeconds) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       slug,
+      // Resume point only — the route stores no analytics event for this.
+      positionSync: true,
       eventType: "progress",
       positionSeconds,
       durationSeconds,

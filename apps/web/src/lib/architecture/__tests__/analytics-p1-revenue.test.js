@@ -21,13 +21,18 @@ test("media_stream_events gains a nullable, FK'd product_id column with a suppor
 });
 
 test("the analytics-event write route resolves product_id from albumSlug (multi-track) or slug (single) before inserting", () => {
+  // Behavior is proven in src/lib/analytics/__tests__/playback-ingest-route.test.js
+  // ("product ids resolved per release"); this pins the structure.
   const src = read("src/app/api/media/playback/route.js");
   const albumSlugAt = src.indexOf("const albumSlug = cleanSlug(body.albumSlug);");
   const lookupAt = src.indexOf('.eq("slug", albumSlug || slug)', albumSlugAt);
-  const insertAt = src.indexOf('await admin.from("media_stream_events").insert(eventPayload)');
   assert.ok(albumSlugAt > -1 && lookupAt > albumSlugAt, "must prefer albumSlug over the bare track slug when resolving the owning product");
-  assert.ok(insertAt > lookupAt, "product_id must be resolved before the event row is inserted");
-  assert.match(src, /product_id: productId,/, "the resolved id must actually be written onto the event payload");
+  const postAt = src.indexOf("export async function POST");
+  const resolveCallAt = src.indexOf("await resolveProductId(admin, event, productIds)", postAt);
+  const buildAt = src.indexOf("buildPlaybackEventRow({ body: event, user, geo, productId })", resolveCallAt);
+  const storeAt = src.indexOf("await storeRows(admin, built)", buildAt);
+  assert.ok(resolveCallAt > postAt && buildAt > resolveCallAt && storeAt > buildAt, "product_id must be resolved, then built into the row, before rows are stored");
+  assert.match(read("src/lib/analytics/playback-events.js"), /product_id: productId,/, "the resolved id must actually be written onto the event row");
 });
 
 test("a failed product_id lookup degrades to null rather than failing the analytics write", () => {
@@ -38,10 +43,15 @@ test("a failed product_id lookup degrades to null rather than failing the analyt
 });
 
 test("onPlay's analytics beacon sends albumSlug alongside slug, sourced from the track's existing metadata — no new plumbing required", () => {
+  // Behavior is proven in src/lib/analytics/__tests__/playback-event-client.test.js
+  // ("an album song is identified by release + song"); this pins the wiring.
   const src = read("src/lib/playback/PlaybackEventHandlers.js");
   const persistAt = src.indexOf("const persistPlayback = (eventType");
-  const body = src.slice(persistAt, persistAt + 1200);
-  assert.match(body, /albumSlug: track\.metadata\?\.albumSlug \|\| null,/);
+  const body = src.slice(persistAt, persistAt + 2000);
+  assert.match(body, /sendPlaybackEvent\(\s*buildClientEvent\(track, eventType,/);
+  const client = read("src/lib/analytics/playback-event-client.js");
+  assert.match(client, /const albumSlug = track\.albumSlug \|\| meta\.albumSlug \|\| null;/);
+  assert.match(client, /albumSlug,\n/);
 });
 
 test("every track object already carries metadata.albumSlug — confirms the write-path fix needed no new field, just reading what normalizeTrackForPlayback already produces", () => {
