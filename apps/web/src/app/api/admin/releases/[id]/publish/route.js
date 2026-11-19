@@ -3,11 +3,12 @@ import { publicationCredits, metadataPatch, publicationTrackOverrides } from "@/
 import { validateCreditGroups, optionalIdentifier, publicCredits } from "@/lib/credits/contract";
 import { creditStorageCapabilities } from "@/lib/credits/admin-store";
 import { randomUUID } from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { headR2ObjectKey, copyR2Object, getPublicR2Url } from "@/lib/storage/r2";
+import { queueCoverArt } from "@/lib/cover-art/delivery";
 import { submitAudioJob } from "@/lib/hls/submit-audio-job";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
@@ -499,6 +500,11 @@ export async function POST(req, { params }) {
     // outlive this fix for up to CACHE_TTL_MS — the freshly-canonicalized
     // video should be discoverable immediately, not after a 5-minute wait.
     clearEntityResolverCaches();
+    // Its silent cover-art versions, under the published key, start now.
+    const publishedVideoKey = canonicalVideoKey;
+    after(() => queueCoverArt(publishedVideoKey).catch((err) => {
+      console.warn("[publish] cover art queue failed", { key: publishedVideoKey, message: err?.message });
+    }));
   }
 
   // ── 6. Build storefront media paths ───────────────────────────────────────

@@ -36,7 +36,8 @@ async function processJob(job) {
     const { source: original } = await transfers(job);
     const etag = await download(original.url, input);
     // A cover replaced after it was queued is queued again as its own version.
-    if (etag !== job.source_etag) throw new Error("the original changed since it was queued");
+    // (A version is "<etag>:r<recipe>", see COVER_ART_RECIPE in lib/cover-art/delivery.js.)
+    if (etag !== job.source_etag.split(":")[0]) throw new Error("the original changed since it was queued");
     const { source, renditions } = await transcodeCover(input, scratch);
     const links = await transfers(job, renditions.map((r) => r.id));
     const published = [];

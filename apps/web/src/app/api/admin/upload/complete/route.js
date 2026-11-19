@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -9,6 +9,7 @@ import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 import { clearEntityResolverCaches } from "@/lib/media/entity-resolver";
 import { ADMIN_UPLOAD_CONTRACTS } from "@/lib/media/admin-upload-contract";
 import { emitServerEvent } from "@/lib/observability/server-events";
+import { queueCoverArt } from "@/lib/cover-art/delivery";
 
 export const dynamic = "force-dynamic";
 
@@ -224,6 +225,10 @@ export async function POST(req) {
       if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > ADMIN_UPLOAD_CONTRACTS["cover-video"].maxDurationSeconds + 0.5) {
         return NextResponse.json({ error: "Cover video must be no longer than 7 minutes" }, { status: 400 });
       }
+      // Its silent cover-art versions start now (after the response), not at its first view.
+      after(() => queueCoverArt(key).catch((err) => {
+        console.warn("[admin/upload/complete] cover art queue failed", { key, message: err?.message });
+      }));
       const { data: rel } = await admin.from("releases").select("id, status, metadata").eq("id", releaseId).maybeSingle();
       if (rel) {
         const meta = (rel.metadata && typeof rel.metadata === "object") ? rel.metadata : {};

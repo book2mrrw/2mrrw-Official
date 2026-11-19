@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 import test, { beforeEach, mock } from "node:test";
 
@@ -57,7 +58,7 @@ mock.module("@/lib/media/entity-resolver", { namedExports: {
     : { type: "video", key: `videos/singles/${slug}/${slug}.mp4`, url: `${CDN}/videos/singles/${slug}/${slug}.mp4`, source: "canonical_direct" }),
 } });
 
-const { coverArtUrl, pickRendition, resetCoverArtDelivery } = await import("../delivery.js");
+const { coverArtUrl, pickRendition, queueCoverArt, resetCoverArtDelivery } = await import("../delivery.js");
 const { GET } = await import("../../../app/api/media/visual/route.js");
 
 const LADDER = [
@@ -66,7 +67,7 @@ const LADDER = [
   { id: "square-480", key: "cover-art/singles/w2d/v1/square-480.mp4", width: 480, height: 480 },
   { id: "tall", key: "cover-art/singles/w2d/v1/tall.mp4", width: 810, height: 1080 },
 ];
-const ready = (slug, etag = "e1", renditions = LADDER) => ({ id: `${slug}-v`, source_key: `videos/singles/${slug}/${slug}.mp4`, source_etag: etag, status: "ready", renditions });
+const ready = (slug, etag = "e1:r2", renditions = LADDER) => ({ id: `${slug}-v`, source_key: `videos/singles/${slug}/${slug}.mp4`, source_etag: etag, status: "ready", renditions });
 const visual = (query) => GET({ nextUrl: new URL(`https://www.2mrrw.com/api/media/visual?${query}`), headers: new Headers() });
 const drainAfter = async () => { while (after.length) await after.shift()(); };
 
@@ -106,15 +107,15 @@ test("a cover video with no version is queued with its fingerprint after the res
   await visual("releaseType=singles&slug=all-yourz");
   assert.deepEqual(db.queued, [], "nothing runs before the response");
   await drainAfter();
-  assert.deepEqual(db.queued, [{ name: "queue_cover_art", p_source_key: "videos/singles/all-yourz/all-yourz.mp4", p_source_etag: "abc123" }]);
-  db.rows.push({ id: "q", source_key: "videos/singles/all-yourz/all-yourz.mp4", source_etag: "abc123", status: "queued" });
+  assert.deepEqual(db.queued, [{ name: "queue_cover_art", p_source_key: "videos/singles/all-yourz/all-yourz.mp4", p_source_etag: "abc123:r2" }]);
+  db.rows.push({ id: "q", source_key: "videos/singles/all-yourz/all-yourz.mp4", source_etag: "abc123:r2", status: "queued" });
   await visual("releaseType=singles&slug=all-yourz");
   await drainAfter();
   assert.equal(db.queued.length, 1, "a queued cover is not queued again");
 });
 
 test("a replaced original is queued as a new version on the next fingerprint check", async () => {
-  db = fakeDb([ready("w2d", "e1")]);
+  db = fakeDb([ready("w2d", "e1:r2")]);
   etags["videos/singles/w2d/w2d.mp4"] = "e1";
   const start = Date.now();
   assert.match(await coverArtUrl("videos/singles/w2d/w2d.mp4", { db, now: start, schedule: (t) => after.push(t) }), /square-1080/);
@@ -123,7 +124,15 @@ test("a replaced original is queued as a new version on the next fingerprint che
   etags["videos/singles/w2d/w2d.mp4"] = "e2";
   await coverArtUrl("videos/singles/w2d/w2d.mp4", { db, now: start + 11 * 60 * 1000, schedule: (t) => after.push(t) });
   await drainAfter();
-  assert.deepEqual(db.queued.map((q) => q.p_source_etag), ["e2"]);
+  assert.deepEqual(db.queued.map((q) => q.p_source_etag), ["e2:r2"]);
+});
+
+test("covers made by an older recipe are made again (and served from their originals meanwhile)", async () => {
+  db = fakeDb([ready("w2d", "e1")]);
+  etags["videos/singles/w2d/w2d.mp4"] = "e1";
+  assert.match(await coverArtUrl("videos/singles/w2d/w2d.mp4", { db, schedule: (t) => after.push(t) }), /square-1080/);
+  await drainAfter();
+  assert.deepEqual(db.queued.map((q) => q.p_source_etag), ["e1:r2"]);
 });
 
 test("a database failure serves the original instead of failing the cover", async (t) => {
@@ -131,4 +140,25 @@ test("a database failure serves the original instead of failing the cover", asyn
   t.mock.method(console, "warn", () => {});
   const res = await visual("releaseType=singles&slug=w2d");
   assert.equal(res.headers.get("location"), `${CDN}/videos/singles/w2d/w2d.mp4`);
+});
+
+test("an admin upload, replacement or publish queues its cover at once; a current version is left alone", async () => {
+  db = fakeDb([ready("w2d", "e1:r2")]);
+  etags["videos/singles/w2d/w2d.mp4"] = "e1";
+  etags["videos/singles/new-drop/new-drop.mp4"] = "n1";
+  assert.equal(await queueCoverArt("videos/singles/new-drop/new-drop.mp4", { db }), true);
+  assert.equal(await queueCoverArt("videos/singles/w2d/w2d.mp4", { db }), true);
+  assert.equal(await queueCoverArt("images/singles/w2d/w2d.jpeg", { db }), false, "still covers are not this lane's");
+  assert.deepEqual(db.queued.map((q) => [q.p_source_key, q.p_source_etag]), [["videos/singles/new-drop/new-drop.mp4", "n1:r2"]]);
+  etags["videos/singles/w2d/w2d.mp4"] = "e2";
+  await queueCoverArt("videos/singles/w2d/w2d.mp4", { db });
+  assert.deepEqual(db.queued.at(-1), { name: "queue_cover_art", p_source_key: "videos/singles/w2d/w2d.mp4", p_source_etag: "e2:r2" }, "a replaced cover is queued");
+});
+
+test("the admin upload and publish paths queue cover videos after their response", () => {
+  const read = (file) => readFileSync(new URL(`../../../app/api/admin/${file}`, import.meta.url), "utf8");
+  const upload = read("upload/complete/route.js");
+  const branch = upload.slice(upload.indexOf('if (assetType === "cover-video")'));
+  assert.match(branch.slice(0, 900), /after\(\(\) => queueCoverArt\(key\)/);
+  assert.match(read("releases/[id]/publish/route.js"), /after\(\(\) => queueCoverArt\(publishedVideoKey\)/);
 });

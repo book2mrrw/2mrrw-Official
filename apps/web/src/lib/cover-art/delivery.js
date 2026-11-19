@@ -13,6 +13,14 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getPublicR2Url, getR2ObjectMetadata } from "@/lib/storage/r2";
 
+/**
+ * The rendition recipe the website wants (workers/cover-art/src/transcode.js).
+ * Bumped whenever those settings change: a version is "<etag>:r<recipe>", so
+ * every cover is made again under new keys (old files stay valid in caches)
+ * and served as its original until the new versions are ready.
+ *   1: initial ladder.  2: bitrate never above the source's for its pixels.
+ */
+export const COVER_ART_RECIPE = 2;
 const VERSION_TTL_MS = 2 * 60 * 1000;
 const SOURCE_CHECK_MS = 10 * 60 * 1000;
 const VIDEO_KEY = /\.(mp4|m4v|mov|webm)$/i;
@@ -47,14 +55,27 @@ async function readVersion(db, sourceKey) {
   return data ?? null;
 }
 
-/** Queue the original when it has no version yet or has been replaced since. */
+/** Queue the original when it has no current version: new, replaced, or made by an older recipe. */
 async function queueIfChanged(db, sourceKey, row) {
   const meta = await getR2ObjectMetadata(sourceKey);
   const etag = String(meta?.etag || "").replace(/"/g, "");
-  if (!etag || row?.source_etag === etag) return;
-  const { error } = await db.rpc("queue_cover_art", { p_source_key: sourceKey, p_source_etag: etag });
+  const version = `${etag}:r${COVER_ART_RECIPE}`;
+  if (!etag || row?.source_etag === version) return;
+  const { error } = await db.rpc("queue_cover_art", { p_source_key: sourceKey, p_source_etag: version });
   if (error) throw error;
   versions.delete(sourceKey);
+}
+
+/**
+ * Queue a cover video now — an admin upload, replacement or publish — rather
+ * than at its first view. A no-op when its current version is already queued
+ * or made.
+ */
+export async function queueCoverArt(sourceKey, { db } = {}) {
+  if (!sourceKey || !VIDEO_KEY.test(sourceKey)) return false;
+  const client = db ?? getAdminClient();
+  await queueIfChanged(client, sourceKey, await readVersion(client, sourceKey));
+  return true;
 }
 
 /**

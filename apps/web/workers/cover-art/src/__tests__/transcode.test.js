@@ -41,6 +41,17 @@ test("a 1080 cover gets three silent squares and a 3:4 tall; a 720 cover is neve
     ["square-300 300x300", "tall 224x300"]);
 });
 
+test("no rendition carries more data per pixel than its source", () => {
+  const rates = (source) => Object.fromEntries(planRenditions(source).map((r) => [r.id, r.maxrate]));
+  // All Yourz: 720x720 at 274 kbps.
+  assert.deepEqual(rates({ width: 720, height: 720, bitRate: 274_000 }), { "square-720": "274k", "square-480": "122k", tall: "206k" });
+  // W.2.D: 1080x1080 at 667 kbps.
+  assert.deepEqual(rates({ width: 1080, height: 1080, bitRate: 667_000 }), { "square-1080": "667k", "square-720": "296k", "square-480": "132k", tall: "500k" });
+  // A rich source keeps the lane's own ceilings; an unknown bitrate changes nothing.
+  assert.deepEqual(rates({ width: 1080, height: 1080, bitRate: 20_000_000 }), { "square-1080": "3000k", "square-720": "1600k", "square-480": "800k", tall: "2600k" });
+  assert.deepEqual(rates({ width: 1080, height: 1080 }), rates({ width: 1080, height: 1080, bitRate: 20_000_000 }));
+});
+
 test("every rendition is silent, exactly sized, at most 30 fps and starts from its first bytes", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "cover-art-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
