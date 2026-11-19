@@ -1,37 +1,33 @@
 ﻿import { NextResponse } from "next/server";
-import { getAdminClient } from "@/lib/supabase/admin";
 
-function authorizeCron(request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return process.env.NODE_ENV !== "production";
-  const header = request.headers.get("authorization") ?? "";
-  if (header === `Bearer ${secret}`) return true;
-  return request.headers.get("x-cron-secret") === secret;
+/**
+ * Retired. Analytics history is the artist's permanent career record —
+ * plays, downloads, purchases and every other stat are kept for life.
+ *
+ * This route used to delete every media_stream_events row older than 90 days
+ * on a weekly Vercel cron, which silently destroyed history (production lost
+ * everything before 2026-08-17 that way). The cron entry is gone from both
+ * vercel.json files and this handler no longer touches the database at all.
+ * Long-range performance is handled by rollups, never by deleting raw events.
+ *
+ * The path stays registered (route-access-policy.js) so an old scheduler or a
+ * manual call gets an explicit answer instead of a 404 that looks like an outage.
+ */
+function retired() {
+  return NextResponse.json(
+    {
+      purged: 0,
+      retired: true,
+      reason: "Analytics history is permanent. Nothing is deleted.",
+    },
+    { status: 410 }
+  );
 }
 
-export async function GET(request) {
-  if (!authorizeCron(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  try {
-    const admin = getAdminClient();
-    const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-
-    const { data, error } = await admin
-      .from("media_stream_events")
-      .delete()
-      .lt("created_at", cutoff)
-      .select("id");
-
-    if (error) throw error;
-    return NextResponse.json({ purged: data?.length || 0, cutoff });
-  } catch (err) {
-    console.error("purge-stream-events cron:", err);
-    return NextResponse.json({ error: err.message || "Cron failed" }, { status: 500 });
-  }
+export async function GET() {
+  return retired();
 }
 
-export async function POST(request) {
-  return GET(request);
+export async function POST() {
+  return retired();
 }
