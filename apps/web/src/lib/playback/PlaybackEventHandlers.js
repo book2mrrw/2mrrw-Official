@@ -79,6 +79,11 @@ import { cancelHlsSegmentPrefetch } from "@/lib/audio/hls-segment-prefetcher";
 import { captureRecoveryOperation, confirmRecoveryPlayback } from "./recovery-operation";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 
+/** The app's native player changed play/pause by itself (see NativeAudioElement.changedByNative). */
+function nativeDecided(audio) {
+  return isNativeAudioElement(audio) && audio.changedByNative === true;
+}
+
 // ── Exported constants ─────────────────────────────────────────────────────────
 // Defined here because handler logic is their primary consumer.
 // AudioContext.js (for seekInternal, playTrackInternal) imports them from here.
@@ -362,6 +367,12 @@ export function createPlaybackEventHandlers({
   const onPlay = () => {
     // A delayed native play event is not permission to undo a deliberate pause.
     if (audio.paused || audio.ended) return;
+    // In the app, a play the native player made itself (lock screen, Control
+    // Center, headphones, the end of a call) is the listener's decision.
+    if (nativeDecided(audio)) {
+      userPausedRef.current = false;
+      userIntentPausedRef.current = false;
+    }
     if (userPausedRef.current || userIntentPausedRef.current) {
       audio.pause();
       return;
@@ -520,7 +531,12 @@ export function createPlaybackEventHandlers({
     // or attach a stale canplay listener to its successor.
     if (audio.ended && !userPausedRef.current && !userIntentPausedRef.current) return;
 
-    const userInitiated = userPausedRef.current;
+    // In the app, a pause the native player made itself (lock screen, Control
+    // Center, headphones, a call) is the listener's decision, never an
+    // interruption to resume: native resumes by itself when iOS says to.
+    const pausedByNative = nativeDecided(audio);
+    if (pausedByNative) userIntentPausedRef.current = true;
+    const userInitiated = userPausedRef.current || pausedByNative;
     const wasViewportPause = viewportPauseRef.current;
     userPausedRef.current = false;
 
