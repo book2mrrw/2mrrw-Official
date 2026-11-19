@@ -1,0 +1,20 @@
+{
+  "name": "cover-art-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "2MRRW-Cloud lane: silent, phone-sized looping versions of animated cover art",
+  "main": "src/worker.js",
+  "scripts": {
+    "start": "node src/worker.js",
+    "once": "node src/worker.js --once",
+    "test": "node --test src/__tests__/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "pg": "^8.13.0"
+  }
+}

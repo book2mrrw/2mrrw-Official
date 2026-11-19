@@ -1,0 +1,27 @@
+# Cover art lane (2MRRW-Cloud). The same file runs the lane on any Docker
+# Compose host — the Lima VM on the Mac today, the owned primary later. The
+# lane is stateless: the queue is in the database, the renditions in R2, and
+# scratch is memory-backed and discarded, so moving hosts is stop here, start
+# there (an interrupted job's lease expires after five minutes and is retried).
+name: 2mrrw-cover-art
+
+services:
+  cover-art:
+    image: 2mrrw/cover-art:${COVER_ART_IMAGE_TAG:-local}
+    build: .
+    env_file: ${COVER_ART_ENV_FILE:-./cover-art.env}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /scratch:size=2g,mode=1777
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 3g
+    cpus: 2
+    stop_grace_period: 2m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"

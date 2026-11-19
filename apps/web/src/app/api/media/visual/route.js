@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { resolveVisualMedia } from "@/lib/media/entity-resolver";
 import { normalizeToEntityFolder, getArtworkPlaceholderUrl } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
 import { catalogCoverUrl } from "@/lib/media-urls";
+import { coverArtUrl } from "@/lib/cover-art/delivery";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,21 @@ export async function GET(req) {
       slug,
       message: err?.message,
     });
+  }
+
+  // A cover video's silent rendition (cover-art lane) when one is ready; the
+  // original otherwise. ?variant= picks "tall" (3:4 lock screen) or a square size.
+  if (resolved?.type === "video" && resolved.key) {
+    const silent = await coverArtUrl(resolved.key, {
+      variant: searchParams.get("variant"),
+      schedule: (task) => after(() => task().catch((err) => {
+        console.warn("[media/visual] cover art queue check failed", { key: resolved.key, message: err?.message });
+      })),
+    }).catch((err) => {
+      console.warn("[media/visual] cover art lookup failed", { key: resolved.key, message: err?.message });
+      return null;
+    });
+    if (silent) resolved = { ...resolved, url: silent, source: "cover_art" };
   }
 
   if (!resolved?.url) {

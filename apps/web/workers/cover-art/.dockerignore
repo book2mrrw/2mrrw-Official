@@ -1,0 +1,5 @@
+node_modules
+*.env
+!cover-art.env.example
+src/__tests__
+._*
