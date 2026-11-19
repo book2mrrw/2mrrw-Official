@@ -3,6 +3,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { analyticsRange, sinceOrEpoch } from "@/lib/analytics/range";
 
 export const dynamic = "force-dynamic";
 
@@ -46,11 +47,12 @@ export async function GET(req) {
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
   const admin = getAdminClient();
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  // Lifetime by default (?range= / ?since=&until= narrow it).
+  const since = sinceOrEpoch(analyticsRange(new URL(req.url).searchParams));
 
   const [globalResult, regionalResult] = await Promise.all([
-    admin.rpc("get_listening_time_patterns", { since: ninetyDaysAgo }),
-    admin.rpc("get_regional_listening_patterns", { since: ninetyDaysAgo }),
+    admin.rpc("get_listening_time_patterns", { since }),
+    admin.rpc("get_regional_listening_patterns", { since }),
   ]);
   if (globalResult.error) {
     return NextResponse.json({ error: globalResult.error.message }, { status: 500 });

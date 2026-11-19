@@ -50,6 +50,7 @@ function fmtRevenue(cents) {
   if (!cents) return "$0";
   return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(cents/100);
 }
+const growthValue = (d) => Number(d?.newListeners ?? d?.newFans ?? 0);
 function pct(part, total) { return total ? Math.round((part/total)*100) : 0; }
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function monthLabel(key) { const [,m]=key.split("-"); return MONTHS_SHORT[parseInt(m,10)-1]||key; }
@@ -149,14 +150,14 @@ function GrowthChart({ data }) {
   const [hoverIdx, setHoverIdx] = useState(null);
   if (!data?.length) return null;
 
-  const max = Math.max(...data.map(d=>d.newFans), 1);
+  const max = Math.max(...data.map(d=>growthValue(d)), 1);
   const W=600, H=140, PL=6, PR=6, PT=14, PB=28;
   const cW=W-PL-PR, cH=H-PT-PB, n=data.length;
   const px=i=>PL+(i/(n-1))*cW;
   const py=v=>PT+cH-(v/max)*cH;
 
-  const pts = data.map((d,i)=>`${px(i)},${py(d.newFans)}`).join(" ");
-  const area = `M${px(0)},${py(data[0].newFans)} ${data.map((d,i)=>`L${px(i)},${py(d.newFans)}`).join(" ")} L${px(n-1)},${PT+cH} L${px(0)},${PT+cH} Z`;
+  const pts = data.map((d,i)=>`${px(i)},${py(growthValue(d))}`).join(" ");
+  const area = `M${px(0)},${py(growthValue(data[0]))} ${data.map((d,i)=>`L${px(i)},${py(growthValue(d))}`).join(" ")} L${px(n-1)},${PT+cH} L${px(0)},${PT+cH} Z`;
 
   const hovData = hoverIdx!=null ? data[hoverIdx] : null;
   const hovX = hoverIdx!=null ? px(hoverIdx) : 0;
@@ -222,14 +223,14 @@ function GrowthChart({ data }) {
               onMouseLeave={()=>setHoverIdx(null)}
               style={{ cursor:"crosshair" }}
             >
-              <circle cx={px(i)} cy={py(d.newFans)} r="14" fill="transparent" />
-              {(d.newFans>0 || isHov || isLast) && (
+              <circle cx={px(i)} cy={py(growthValue(d))} r="14" fill="transparent" />
+              {(growthValue(d)>0 || isHov || isLast) && (
                 <circle
-                  cx={px(i)} cy={py(d.newFans)}
+                  cx={px(i)} cy={py(growthValue(d))}
                   r={isHov ? 4.5 : isLast ? 3.5 : 2.5}
                   fill={isHov ? "#fff" : C.accent}
                   filter={isHov || isLast ? "url(#adDotGlow)" : undefined}
-                  opacity={d.newFans===0 && !isHov ? 0.2 : 1}
+                  opacity={growthValue(d)===0 && !isHov ? 0.2 : 1}
                 />
               )}
             </g>
@@ -268,7 +269,7 @@ function GrowthChart({ data }) {
             {monthLabel(hovData.month)}
           </div>
           <div style={{ fontSize:22, fontWeight:900, color:C.accent, fontVariantNumeric:"tabular-nums", lineHeight:1 }}>
-            +{fmt(hovData.newFans)}
+            +{fmt(growthValue(hovData))}
           </div>
           <div style={{ fontSize:9, color:C.muted, marginTop:3 }}>new fans</div>
         </div>
@@ -517,6 +518,7 @@ function TrackRow({ track, rank, isFirst, isMobile }) {
           {[
             { label:"Plays", val:fmt(track.plays), color:C.text },
             { label:"Purchases", val:fmt(track.purchases), color:C.gold },
+            { label:"Listeners", val:fmt(track.listeners), color:C.muted },
             cr!=null ? { label:"Completion", val:`${cr}%`, color:crColor } : null,
           ].filter(Boolean).map(s=>(
             <div key={s.label}>
@@ -564,6 +566,16 @@ function TrackRow({ track, rank, isFirst, isMobile }) {
     </div>
   );
 }
+
+// Lifetime first: analytics are a permanent career record.
+const RANGE_OPTS = [
+  { key:"all",  label:"Lifetime", long:"lifetime" },
+  { key:"365d", label:"1Y",  long:"1y" },
+  { key:"90d",  label:"90D", long:"90d" },
+  { key:"30d",  label:"30D", long:"30d" },
+  { key:"7d",   label:"7D",  long:"7d" },
+];
+function rangeLong(key) { return RANGE_OPTS.find(r=>r.key===key)?.long || "lifetime"; }
 
 const TABS = [
   { id:"overview", label:"Overview" },
@@ -660,6 +672,7 @@ export default function AnalyticsDashboard({ isMobile }) {
   const [error,   setError]   = useState(null);
   const [tab,     setTab]     = useState("overview");
   const [sortBy,  setSortBy]  = useState("plays");
+  const [range,   setRange]   = useState("all");
 
   // Revenue tab has its own fetch/loading/error state, entirely separate from
   // the overview/audience/tracks load above — it only fires once the Revenue
@@ -681,37 +694,44 @@ export default function AnalyticsDashboard({ isMobile }) {
 
   const load = useCallback(() => {
     setLoading(true); setError(null);
-    fetch("/api/admin/analytics", { credentials:"include", cache:"no-store" })
+    fetch(`/api/admin/analytics?range=${range}`, { credentials:"include", cache:"no-store" })
       .then(r=>r.ok?r.json():Promise.reject(r.status))
       .then(d=>{ setData(d); setLoading(false); })
       .catch(()=>{ setError("Could not load analytics."); setLoading(false); });
-  }, []);
+  }, [range]);
 
   const loadRevenue = useCallback(() => {
     setRevenueLoading(true); setRevenueError(null);
-    fetch("/api/admin/analytics/revenue", { credentials:"include", cache:"no-store" })
+    fetch(`/api/admin/analytics/revenue?range=${range}`, { credentials:"include", cache:"no-store" })
       .then(r=>r.ok?r.json():Promise.reject(r.status))
       .then(d=>{ setRevenueData(d); setRevenueLoading(false); })
       .catch(()=>{ setRevenueError("Could not load revenue."); setRevenueLoading(false); });
-  }, []);
+  }, [range]);
 
   const loadFunnels = useCallback(() => {
     setFunnelsLoading(true); setFunnelsError(null);
-    fetch("/api/admin/analytics/funnels", { credentials:"include", cache:"no-store" })
+    fetch(`/api/admin/analytics/funnels?range=${range}`, { credentials:"include", cache:"no-store" })
       .then(r=>r.ok?r.json():Promise.reject(r.status))
       .then(d=>{ setFunnelsData(d); setFunnelsLoading(false); })
       .catch(()=>{ setFunnelsError("Could not load funnels."); setFunnelsLoading(false); });
-  }, []);
+  }, [range]);
 
   const loadTiming = useCallback(() => {
     setTimingLoading(true); setTimingError(null);
-    fetch("/api/admin/analytics/timing", { credentials:"include", cache:"no-store" })
+    fetch(`/api/admin/analytics/timing?range=${range}`, { credentials:"include", cache:"no-store" })
       .then(r=>r.ok?r.json():Promise.reject(r.status))
       .then(d=>{ setTimingData(d); setTimingLoading(false); })
       .catch(()=>{ setTimingError("Could not load timing."); setTimingLoading(false); });
-  }, []);
+  }, [range]);
 
   useEffect(()=>{ load(); },[load]);
+  // A new range invalidates the lazily loaded tabs; each refetches when shown.
+  // Cleared in the click itself (one batched update), not in an effect.
+  const selectRange = (key) => {
+    if (key === range) return;
+    setRange(key);
+    setRevenueData(null); setFunnelsData(null); setTimingData(null);
+  };
   useEffect(()=>{
     if (tab==="revenue" && !revenueData && !revenueLoading) loadRevenue();
   },[tab, revenueData, revenueLoading, loadRevenue]);
@@ -755,6 +775,7 @@ export default function AnalyticsDashboard({ isMobile }) {
   } = data;
   const sortedTracks = [...tracks].sort((a,b)=>((b[sortBy]??-1)-(a[sortBy]??-1)));
   const twoCol = !isMobile;
+  const rl = rangeLong(range);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -778,6 +799,16 @@ export default function AnalyticsDashboard({ isMobile }) {
           transition:"border-color 0.2s, color 0.2s",
         }}>↺ Refresh</button>
       </div>
+      <div role="group" aria-label="Date range" style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+        {RANGE_OPTS.map(r=>(
+          <button key={r.key} type="button" onClick={()=>selectRange(r.key)} aria-pressed={range===r.key} style={{
+            background: range===r.key ? "rgba(0,255,255,0.10)" : "none",
+            border:`1px solid ${range===r.key ? C.accent : C.border}`,
+            borderRadius:8, color: range===r.key ? C.accent : C.dim,
+            fontSize:11, padding:"5px 10px", cursor:"pointer", fontFamily:"inherit",
+          }}>{r.label}</button>
+        ))}
+      </div>
 
       {/* ══════════════════════════════════════════════════════════
           OVERVIEW
@@ -786,22 +817,29 @@ export default function AnalyticsDashboard({ isMobile }) {
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
 
           {/* KPI row */}
-          <div style={{ display:"flex", gap:10, flexWrap: isMobile?"wrap":"nowrap" }}>
-            <KPITile isMobile={isMobile} label="Total Fans"      value={fmt(overview.totalFans)}           sub="Streamed at least once"    color={C.accent} glow={C.accentGlow} />
-            <KPITile isMobile={isMobile} label="Plays · 90d"     value={fmt(overview.totalPlays)}          sub="Stream events"        color="#ffffff"  glow="rgba(255,255,255,0.07)" />
-            <KPITile isMobile={isMobile} label="Purchases · 90d" value={fmt(overview.totalPurchases)}      sub="Completed orders"     color={C.gold}   glow={C.goldGlow} />
-            <KPITile isMobile={isMobile} label="Revenue · 90d"   value={fmtRevenue(overview.totalRevenueCents)} sub="Gross sales"    color={C.green}  glow={C.greenGlow} />
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+            <KPITile isMobile={isMobile} label={`Listeners · ${rl}`} value={fmt(overview.totalListeners)} sub="Unique, signed in or not" color={C.accent} glow={C.accentGlow} />
+            <KPITile isMobile={isMobile} label={`Fans · ${rl}`}      value={fmt(overview.totalFans)}      sub="Signed-in listeners"      color={C.accent} glow={C.accentGlow} />
+            <KPITile isMobile={isMobile} label={`Plays · ${rl}`}     value={fmt(overview.totalPlays)}     sub="Listens started"          color="#ffffff"  glow="rgba(255,255,255,0.07)" />
+            <KPITile isMobile={isMobile} label={`Qualified · ${rl}`} value={fmt(overview.qualifiedPlays)} sub="30 s+ actually heard"     color="#ffffff"  glow="rgba(255,255,255,0.07)" />
+            <KPITile isMobile={isMobile} label={`Purchases · ${rl}`} value={fmt(overview.totalPurchases)} sub={overview.giftsClaimed ? `Paid orders · ${fmt(overview.giftsClaimed)} gifts` : "Paid orders"} color={C.gold} glow={C.goldGlow} />
+            <KPITile isMobile={isMobile} label={`Revenue · ${rl}`}   value={fmtRevenue(overview.totalRevenueCents)} sub="Gross sales"     color={C.green}  glow={C.greenGlow} />
           </div>
+          {range==="all" && overview.historyStartsAt && (
+            <div style={{ fontSize:11, color:C.muted }}>
+              Lifetime record · listening history kept from {new Date(overview.historyStartsAt).toLocaleDateString("en-US",{ month:"short", day:"numeric", year:"numeric" })}
+            </div>
+          )}
 
           {/* Growth chart */}
           <Card orbColor="rgba(0,255,255,0.1)">
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:16, flexWrap:"wrap", gap:8 }}>
-              <Label>Fan Growth · Last 12 Months</Label>
+              <Label>New Listeners · Last 12 Months</Label>
               <div style={{ display:"flex", gap:20, alignItems:"baseline" }}>
                 <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
                   <span style={{ fontSize:8, color:C.muted, letterSpacing:2, textTransform:"uppercase" }}>This month</span>
                   <span style={{ fontSize:22, fontWeight:900, color:C.accent, fontVariantNumeric:"tabular-nums" }}>
-                    +{fmt(growth.monthly?.at(-1)?.newFans||0)}
+                    +{fmt(growthValue(growth.monthly?.at(-1)))}
                   </span>
                 </div>
               </div>
@@ -854,7 +892,7 @@ export default function AnalyticsDashboard({ isMobile }) {
                     marginLeft:-10, marginRight:-10,
                     paddingLeft:10, paddingRight:10,
                   }}>
-                    {["#","","Track","Plays","Buys","Fans","Completion"].map((h,i)=>(
+                    {["#","","Track","Plays","Buys","Listeners","Completion"].map((h,i)=>(
                       <div key={i} style={{ fontSize:7, color:C.dim, letterSpacing:2, textTransform:"uppercase", textAlign:i>2?"right":"left" }}>{h}</div>
                     ))}
                   </div>
@@ -943,7 +981,7 @@ export default function AnalyticsDashboard({ isMobile }) {
 
           {/* Fan growth */}
           <Card orbColor="rgba(162,89,255,0.08)">
-            <Label style={{ marginBottom:14 }}>Fan Growth · Last 12 Months</Label>
+            <Label style={{ marginBottom:14 }}>New Listeners · Last 12 Months</Label>
             <GrowthChart data={growth.monthly} />
           </Card>
         </div>
@@ -992,7 +1030,7 @@ export default function AnalyticsDashboard({ isMobile }) {
                     marginLeft:-10, marginRight:-10,
                     paddingLeft:10, paddingRight:10,
                   }}>
-                    {["#","","Track","Plays","Buys","Fans","Completion"].map((h,i)=>(
+                    {["#","","Track","Plays","Buys","Listeners","Completion"].map((h,i)=>(
                       <div key={i} style={{ fontSize:7, color:C.dim, letterSpacing:2, textTransform:"uppercase", textAlign:i>2?"right":"left" }}>{h}</div>
                     ))}
                   </div>
@@ -1015,6 +1053,7 @@ export default function AnalyticsDashboard({ isMobile }) {
           error={revenueError}
           onRetry={loadRevenue}
           isMobile={isMobile}
+          rangeLabel={rl}
         />
       )}
 
@@ -1025,6 +1064,7 @@ export default function AnalyticsDashboard({ isMobile }) {
           error={funnelsError}
           onRetry={loadFunnels}
           isMobile={isMobile}
+          rangeLabel={rl}
         />
       )}
 
@@ -1035,6 +1075,7 @@ export default function AnalyticsDashboard({ isMobile }) {
           error={timingError}
           onRetry={loadTiming}
           isMobile={isMobile}
+          rangeLabel={rl}
         />
       )}
     </div>
@@ -1042,7 +1083,7 @@ export default function AnalyticsDashboard({ isMobile }) {
 }
 
 // ── Revenue tab: per-release attribution + subscription snapshot ────────────
-function RevenueTab({ data, loading, error, onRetry, isMobile }) {
+function RevenueTab({ data, loading, error, onRetry, isMobile, rangeLabel = "lifetime" }) {
   if (loading) return (
     <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>Loading revenue…</div>
   );
@@ -1068,7 +1109,7 @@ function RevenueTab({ data, loading, error, onRetry, isMobile }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-        <KPI label="Gross · 90d" value={fmtRevenue(overview.totalGrossCents)} glow={C.greenGlow} />
+        <KPI label={`Gross · ${rangeLabel}`} value={fmtRevenue(overview.totalGrossCents)} glow={C.greenGlow} />
         <KPI label="MRR" value={fmtRevenue(subscriptions.mrrCents)} glow={C.accentGlow} />
         <KPI label="Active Subs" value={fmt(subscriptions.activeCount)} glow={C.purpleGlow} />
         <KPI label="Trialing" value={fmt(subscriptions.trialingCount)} />
@@ -1077,7 +1118,7 @@ function RevenueTab({ data, loading, error, onRetry, isMobile }) {
       </div>
 
       <Card style={{ padding:"16px 20px" }}>
-        <Label style={{ marginBottom:12 }}>Revenue by release · 90d</Label>
+        <Label style={{ marginBottom:12 }}>Revenue by release · {rangeLabel}</Label>
         {!isMobile && (
           <div style={{
             display:"grid",
@@ -1110,7 +1151,7 @@ function RevenueTab({ data, loading, error, onRetry, isMobile }) {
 }
 
 // ── Funnels tab: acquisition funnel, cohort retention, first-touch attribution ──
-function FunnelsTab({ data, loading, error, onRetry, isMobile }) {
+function FunnelsTab({ data, loading, error, onRetry, isMobile, rangeLabel = "lifetime" }) {
   if (loading) return (
     <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>Loading funnels…</div>
   );
@@ -1139,7 +1180,7 @@ function FunnelsTab({ data, loading, error, onRetry, isMobile }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <Card style={{ padding:"16px 20px" }}>
-        <Label style={{ marginBottom:14 }}>Acquisition funnel · 90d</Label>
+        <Label style={{ marginBottom:14 }}>Acquisition funnel · {rangeLabel}</Label>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {steps.map((s,i)=>{
             const prev = i>0 ? steps[i-1].value : null;
@@ -1200,7 +1241,7 @@ function FunnelsTab({ data, loading, error, onRetry, isMobile }) {
       </Card>
 
       <Card style={{ padding:"16px 20px" }}>
-        <Label style={{ marginBottom:12 }}>First-touch attribution · 90d</Label>
+        <Label style={{ marginBottom:12 }}>First-touch attribution · {rangeLabel}</Label>
         {!isMobile && (
           <div style={{ display:"grid", gridTemplateColumns:"1fr 90px 90px 100px", gap:12, paddingBottom:10, borderBottom:`1px solid ${C.border}` }}>
             {["Source / Medium / Campaign","Signups","Buys","Revenue"].map((h,i)=>(
@@ -1236,7 +1277,7 @@ function hourLabel(h) {
   return h < 12 ? `${h}a` : `${h-12}p`;
 }
 
-function TimingTab({ data, loading, error, onRetry, isMobile }) {
+function TimingTab({ data, loading, error, onRetry, isMobile, rangeLabel = "lifetime" }) {
   const [regionKey, setRegionKey] = useState("__global__");
 
   if (loading) return (
@@ -1254,12 +1295,12 @@ function TimingTab({ data, loading, error, onRetry, isMobile }) {
 
   const { cells:globalCells=[], peakHour:globalPeakHour, peakDay:globalPeakDay, regions=[] } = data;
 
-  // "Global (UTC)" plus one option per world region (US split into its own
+  // "All listeners (Central)" plus one option per world region (US split into its own
   // internal timezones, everywhere else grouped — see the migration for the
   // full country-to-region mapping). Each region's hours/days are already its
   // own real local time, DST included, computed server-side.
   const options = [
-    { key:"__global__", label:"Global (UTC)", cells:globalCells, peakHour:globalPeakHour, peakDay:globalPeakDay, tzLabel:"UTC" },
+    { key:"__global__", label:"All listeners (Central)", cells:globalCells, peakHour:globalPeakHour, peakDay:globalPeakDay, tzLabel:"Central time" },
     ...regions.map(r=>({ key:r.region, label:r.region, cells:r.cells, peakHour:r.peakHour, peakDay:r.peakDay, tzLabel:`${r.region} local time` })),
   ];
   const selected = options.find(o=>o.key===regionKey) || options[0];
@@ -1287,22 +1328,22 @@ function TimingTab({ data, loading, error, onRetry, isMobile }) {
           <div style={{ fontSize:22, fontWeight:900, color:C.text, marginTop:6 }}>
             {peakHour ? `${hourLabel(peakHour.hour)}–${hourLabel((peakHour.hour+1)%24)}` : "—"}
           </div>
-          <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{peakHour ? `${fmt(peakHour.plays)} plays · 90d` : "No data yet"}</div>
+          <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{peakHour ? `${fmt(peakHour.plays)} plays · ${rangeLabel}` : "No data yet"}</div>
         </Card>
         <Card style={{ padding:"16px 18px", flex:1, minWidth:160 }} orbColor={C.purpleGlow}>
           <Label>Peak Day</Label>
           <div style={{ fontSize:22, fontWeight:900, color:C.text, marginTop:6 }}>
             {peakDay ? DAY_NAMES[peakDay.day] : "—"}
           </div>
-          <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{peakDay ? `${fmt(peakDay.plays)} plays · 90d` : "No data yet"}</div>
+          <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{peakDay ? `${fmt(peakDay.plays)} plays · ${rangeLabel}` : "No data yet"}</div>
         </Card>
       </div>
 
       <Card style={{ padding:"16px 20px", overflowX:"auto" }}>
-        <Label style={{ marginBottom:4 }}>Listening activity by hour &amp; day · 90d</Label>
+        <Label style={{ marginBottom:4 }}>Listening activity by hour &amp; day · {rangeLabel}</Label>
         <div style={{ fontSize:10, color:C.dim, marginBottom:14 }}>
           {regionKey==="__global__"
-            ? "All times UTC — pick a region above for its own local time"
+            ? "All times Central (your time zone) — pick a region above for its own local time"
             : `Local time in ${tzLabel} (daylight saving applied automatically)`}
         </div>
         {cells.length===0 ? (
@@ -1337,7 +1378,7 @@ function TimingTab({ data, loading, error, onRetry, isMobile }) {
 
       {regions.length>0 && (
         <Card style={{ padding:"16px 20px" }}>
-          <Label style={{ marginBottom:12 }}>Plays by region · 90d</Label>
+          <Label style={{ marginBottom:12 }}>Plays by region · {rangeLabel}</Label>
           {regions.map(r=>(
             <div key={r.region} onClick={()=>setRegionKey(r.region)} style={{
               display:"flex", justifyContent:"space-between", alignItems:"center",

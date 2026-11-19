@@ -120,9 +120,9 @@ test("the funnels route is admin-gated under its own rate-limit key and calls al
   const src = read("src/app/api/admin/analytics/funnels/route.js");
   assert.match(src, /if \(!user \|\| !isAdminUser\(user\)\) \{\s*return NextResponse\.json\(\{ error: "Unauthorized" \}, \{ status: 401 \}\);/);
   assert.match(src, /routeKey: "admin\.analytics\.funnels",/);
-  assert.match(src, /admin\.rpc\("get_funnel_stats", \{ since: ninetyDaysAgo \}\)\.maybeSingle\(\)/);
+  assert.match(src, /admin\.rpc\("get_funnel_stats", \{ since \}\)\.maybeSingle\(\)/);
   assert.match(src, /admin\.rpc\("get_cohort_retention", \{ months_back: 6 \}\)/);
-  assert.match(src, /admin\.rpc\("get_attribution_breakdown", \{ since: ninetyDaysAgo \}\)/);
+  assert.match(src, /admin\.rpc\("get_attribution_breakdown", \{ since \}\)/);
 });
 
 // ── Funnels UI tab: additive, lazy, isolated from the other tabs ───────────

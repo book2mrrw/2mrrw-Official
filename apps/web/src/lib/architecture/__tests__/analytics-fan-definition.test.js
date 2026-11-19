@@ -5,47 +5,47 @@ import test from "node:test";
 
 const root = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
+const migration = (needle) => {
+  const dir = path.join(root, "supabase/migrations");
+  const files = fs.readdirSync(dir).filter((f) => f.includes(needle));
+  assert.equal(files.length, 1, `expected exactly one migration matching "${needle}"`);
+  return fs.readFileSync(path.join(dir, files[0]), "utf8");
+};
 
-// ── /api/admin/analytics/route.js: fan = streamed at least once ────────────
+// A fan is someone who listened — never merely an account that signed up.
+// The counting itself is proven on real Postgres in
+// scripts/analytics-contract-tests/metrics-v2.test.mjs; these pin the wiring.
 
-test("the account-panel analytics route fetches play events and builds a streamedUserIds set, instead of trusting every profile as a fan", () => {
+test("the account-panel route takes fans, demographics and growth from the analytics SQL, never from raw profiles", () => {
   const src = read("src/app/api/admin/analytics/route.js");
-  assert.match(src, /admin\.from\("media_stream_events"\)\.select\("user_id, created_at"\)\.eq\("event_type", "play"\)\.not\("user_id", "is", null\)\.limit\(100000\)/);
-  const fnAt = src.indexOf("const streamedUserIds = new Set(");
-  const body = src.slice(fnAt, fnAt + 1200);
-  assert.match(body, /const streamedUserIds = new Set\(\(playEventsResult\.data \|\| \[\]\)\.map\(\(e\) => e\.user_id\)\);/);
+  assert.match(src, /admin\.rpc\("analytics_overview", window\)/);
+  assert.match(src, /admin\.rpc\("analytics_fan_demographics", window\)/);
+  assert.match(src, /admin\.rpc\("analytics_listener_growth", \{ p_tz: ARTIST_TIME_ZONE \}\)/);
+  assert.doesNotMatch(src, /from\("profiles"\)/, "counting raw profiles would make every signup a fan");
+  assert.doesNotMatch(src, /from\("media_stream_events"\)/, "no raw-event loads: counts come from the tested SQL");
 });
 
-test("profiles are filtered to streamedUserIds before any demographic/geography tally, and totalFans derives from that filtered list, not the raw profiles table", () => {
-  const src = read("src/app/api/admin/analytics/route.js");
-  assert.match(src, /const profiles = \(profilesResult\.data \|\| \[\]\)\.filter\(\(p\) => streamedUserIds\.has\(p\.id\)\);/);
-  const totalFansAt = src.indexOf("const totalFans = profiles.length;");
-  assert.ok(totalFansAt > -1, "totalFans must read from the already-filtered profiles array");
+test("demographics only cover signed-in people with counted listening (no admins, no previews)", () => {
+  const sql = migration("analytics_metrics_v2");
+  assert.match(sql, /with fans as \(\s*select distinct fan_id from public\.analytics_fan_events\s*where fan_id is not null and event_type in \('play', 'qualified', 'complete'\)/);
+  assert.match(sql, /where not e\.is_internal\s*and coalesce\(e\.access_tier, 'full'\) = 'full'/);
 });
 
-test("the profiles query now selects id, required to join against streamedUserIds", () => {
-  const src = read("src/app/api/admin/analytics/route.js");
-  assert.match(src, /admin\.from\("profiles"\)\.select\("id, gender, age_range, city, state, country, created_at, role"\)/);
+test("listener growth buckets by first counted listen, not signup date", () => {
+  const sql = migration("analytics_metrics_v2");
+  const fnAt = sql.indexOf("create or replace function public.analytics_listener_growth");
+  const body = sql.slice(fnAt, sql.indexOf("$$;", fnAt));
+  assert.match(body, /min\(created_at\) as first_at/);
+  assert.match(body, /from public\.analytics_fan_events/);
+  assert.doesNotMatch(body, /profiles/, "signup dates must not drive growth");
 });
 
-test("the Fan Growth chart buckets by first-play month (firstPlayMonthByUser), not signup month — consistent with fan meaning streamed, not signed up", () => {
-  const src = read("src/app/api/admin/analytics/route.js");
-  const fnAt = src.indexOf("const firstPlayMonthByUser = new Map();");
-  assert.ok(fnAt > -1);
-  const usageAt = src.indexOf("for (const iso of firstPlayMonthByUser.values())");
-  assert.ok(usageAt > fnAt, "the month-bucketing loop must actually consume firstPlayMonthByUser");
-  assert.doesNotMatch(src, /if \(p\.created_at\) \{\s*\n\s*const m = p\.created_at\.slice\(0, 7\);/,
-    "the old signup-date month bucketing must be gone, not left alongside the new one");
-});
-
-// ── UI labels no longer claim "signups"/"accounts" for a streamed-based count ──
-
-test("every Total Fans KPI label now reads 'Streamed at least once' instead of the stale 'All-time signups'/'All-time accounts' text", () => {
+test("labels say what the numbers are: Fans are signed-in listeners; no 'signups'/'accounts' claims", () => {
   const dashboard = read("src/components/account/AnalyticsDashboard.js");
   const globalMapPage = read("src/app/admin/analytics/page.js");
   assert.doesNotMatch(dashboard, /All-time accounts/);
   assert.doesNotMatch(globalMapPage, /All-time signups/);
-  const dashboardMatches = [...dashboard.matchAll(/sub="Streamed at least once"/g)];
-  assert.equal(dashboardMatches.length, 2, "both the Overview and Audience tabs' Total Fans tiles must carry the corrected label");
-  assert.match(globalMapPage, /sub="Streamed at least once"/);
+  assert.match(dashboard, /label=\{`Fans · \$\{rl\}`\}\s+value=\{fmt\(overview\.totalFans\)\}\s+sub="Signed-in listeners"/);
+  assert.match(dashboard, /label=\{`Listeners · \$\{rl\}`\} value=\{fmt\(overview\.totalListeners\)\} sub="Unique, signed in or not"/);
+  assert.match(globalMapPage, /label="Listeners" value=\{fmt\(ov\.total_fans\)\} sub="Heard at least once"/);
 });

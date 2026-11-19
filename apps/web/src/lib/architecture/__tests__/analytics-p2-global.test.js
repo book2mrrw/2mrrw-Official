@@ -88,85 +88,36 @@ test("the geo backfill route is admin-gated, batched, and re-runnable (only ever
   assert.match(src, /const \{ count: remaining \}/, "must report how many profiles are still left so the admin knows whether to call it again");
 });
 
-// ── /api/admin/analytics/global: unified schema, revenue attribution, growth window ──
+// ── /api/admin/analytics/global: SQL-counted geography, revenue, growth ──
+// Behavior (no double counting, listeners per level, revenue placement,
+// growth windows) is proven in src/lib/analytics/__tests__/geo-report.test.js
+// and on real Postgres in scripts/analytics-contract-tests/metrics-v2.test.mjs.
 
-test("by_country replaces the old fans_by_country/streams_by_code split with one row per country carrying every metric", () => {
+test("the global route counts geography in SQL (analytics_geo), never by loading raw event rows", () => {
   const src = read("src/app/api/admin/analytics/global/route.js");
-  assert.match(src, /class Aggregator \{/);
-  assert.match(src, /country\(identity, displayName, a2\) \{/);
-  assert.match(src, /fans: 0, streams: 0, revenueCents: 0, male: 0, female: 0, ages: \{\}/);
+  assert.match(src, /admin\.rpc\("analytics_geo", \{ p_from: range\.from, p_to: range\.to \}\)/);
+  assert.doesNotMatch(src, /from\("media_stream_events"\)/);
+  assert.doesNotMatch(src, /\.limit\(100000\)/);
 });
 
-test("revenue is attributed via the buyer's own profile, since purchases carries no location of its own", () => {
-  const src = read("src/app/api/admin/analytics/global/route.js");
-  const sectionAt = src.indexOf("// ─── Revenue");
-  const body = src.slice(sectionAt, sectionAt + 900);
-  assert.match(body, /const buyer = profileByUserId\.get\(pu\.user_id\);/);
-  assert.match(body, /if \(!buyer\?\.country\) continue;/);
-  assert.match(body, /c\.revenueCents \+= cents;/);
-});
-
-test("GROWTH is always a fixed last-30-days vs. prior-30-days comparison, independent of since/until", () => {
+test("GROWTH is always the last 30 days against the 30 before, independent of since/until", () => {
   const src = read("src/app/api/admin/analytics/global/route.js");
   assert.match(src, /const GROWTH_WINDOW_MS = 30 \* DAY_MS;/);
-  assert.match(src, /const growthCurrentStart = new Date\(now\.getTime\(\) - GROWTH_WINDOW_MS\);/);
-  assert.match(src, /const growthPrevStart = new Date\(growthCurrentStart\.getTime\(\) - GROWTH_WINDOW_MS\);/);
-  // Fans (a "fan" is a profile who streamed at least once, keyed by media_stream_events.created_at,
-  // not since/until at all) — growth buckets are two independent Set-membership checks, so a
-  // returning fan (active in both 30d windows) counts in both, not mutually exclusive.
-  assert.match(src, /const streamedInGrowthCurrent = new Set\(\s*\n\s*playEvents\.filter\(\(s\) => inRange\(s\.created_at, growthCurrentStart, now\)\)\.map\(\(s\) => s\.user_id\)\s*\n\s*\);/);
-  assert.match(src, /const streamedInGrowthPrev = new Set\(\s*\n\s*playEvents\.filter\(\(s\) => inRange\(s\.created_at, growthPrevStart, growthCurrentStart\)\)\.map\(\(s\) => s\.user_id\)\s*\n\s*\);/);
-  const fansSectionAt = src.indexOf("// ─── Fans");
-  const fansBody = src.slice(fansSectionAt, src.indexOf("// ─── Streams"));
-  assert.match(fansBody, /if \(streamedInGrowthCurrent\.has\(p\.id\)\) apply\(growthCurrentAgg\);/);
-  assert.match(fansBody, /if \(streamedInGrowthPrev\.has\(p\.id\)\) apply\(growthPrevAgg\);/);
+  assert.match(src, /admin\.rpc\("analytics_geo", \{ p_from: windows\.currentFrom, p_to: windows\.currentTo \}\)/);
+  assert.match(src, /admin\.rpc\("analytics_geo", \{ p_from: windows\.previousFrom, p_to: windows\.previousTo \}\)/);
 });
 
-test("omitting since/until behaves exactly like the pre-existing all-time default — every fan who has ever streamed counts in the current bucket", () => {
+test("since/until are parsed by the shared range helper (invalid values degrade to lifetime, never a 500)", () => {
   const src = read("src/app/api/admin/analytics/global/route.js");
-  assert.match(src, /const streamedInWindow = new Set\(\s*\n\s*playEvents\.filter\(\(s\) => \(!since && !until\) \|\| inRange\(s\.created_at, since, until\)\)\.map\(\(s\) => s\.user_id\)\s*\n\s*\);/);
-  const fansSectionAt = src.indexOf("// ─── Fans");
-  const fansBody = src.slice(fansSectionAt, src.indexOf("// ─── Streams"));
-  assert.match(fansBody, /if \(streamedInWindow\.has\(p\.id\)\) apply\(currentAgg\);/);
+  assert.match(src, /const range = analyticsRange\(new URL\(req\.url\)\.searchParams\);/);
 });
 
-test("a fan is a registered profile who has streamed at least once — not merely signed up — and every fan count is scoped to that", () => {
-  const src = read("src/app/api/admin/analytics/global/route.js");
-  assert.match(src, /const playEvents = streams\.filter\(\(s\) => s\.event_type === "play" && s\.user_id\);/);
-  assert.match(src, /total_fans: streamedInWindow\.size,/);
-  assert.doesNotMatch(src, /profiles\.length/, "total_fans must never fall back to a raw signup count");
-});
-
-test("since/until are optional ISO date query params parsed defensively — an invalid value degrades to null (all-time), not a 500", () => {
-  const src = read("src/app/api/admin/analytics/global/route.js");
-  const fnAt = src.indexOf("function parseDateParam(value)");
-  const body = src.slice(fnAt, fnAt + 200);
-  assert.match(body, /if \(!value\) return null;/);
-  assert.match(body, /Number\.isNaN\(d\.getTime\(\)\) \? null : d/);
-});
-
-test("streams and fans are unified under one country identity — an ISO alpha-2 code when resolvable, so the old NAME_TO_A2 cross-reference dance is gone from this route", () => {
-  const src = read("src/app/api/admin/analytics/global/route.js");
-  assert.match(src, /function countryIdentity\(displayName\) \{\s*return NAME_TO_A2\[displayName\] \|\| displayName;\s*\}/);
-  // media_stream_events.country is already an a2 code — confirm the route treats it as the identity directly, no lookup needed
-  const streamsSectionAt = src.indexOf("// ─── Streams");
-  const streamsBody = src.slice(streamsSectionAt, src.indexOf("// ─── Revenue"));
-  assert.match(streamsBody, /const a2 = s\.country;/);
-  assert.match(streamsBody, /agg\.country\(a2, displayName, a2\)/);
-});
-
-test("by_city aggregates a resolved lat/lng as the average of any geocoded profiles in that bucket, null when none are geocoded yet", () => {
-  const src = read("src/app/api/admin/analytics/global/route.js");
-  const fnAt = src.indexOf("function finalizeCities(agg)");
-  const body = src.slice(fnAt, fnAt + 400);
-  assert.match(body, /lat: geoCount > 0 \? latSum \/ geoCount : null,/);
-  assert.match(body, /lng: geoCount > 0 \? lngSum \/ geoCount : null,/);
-});
-
-test("the route still selects and forwards purchases.amount_cents — previously fetched and silently discarded, now the source of revenueCents", () => {
-  const src = read("src/app/api/admin/analytics/global/route.js");
-  assert.match(src, /\.select\("user_id, amount_cents, status, created_at"\)/);
-  assert.match(src, /const cents = Number\(pu\.amount_cents\) \|\| 0;/);
+test("revenue is placed by the buyer's own profile, since purchases carry no location of their own", () => {
+  const src = read("src/lib/analytics/geo-report.js");
+  assert.match(src, /const buyer = profileById\.get\(pu\.user_id\);/);
+  assert.match(src, /c\.revenueCents \+= cents;/);
+  const route = read("src/app/api/admin/analytics/global/route.js");
+  assert.match(route, /\.select\("user_id, amount_cents, purchased_at"\)\.eq\("status", "completed"\)/);
 });
 
 // ── shared geo/country-code extraction (no duplicated data) ─────────────────
@@ -181,8 +132,8 @@ test("CITY_COORDS and the country-code tables are extracted to shared lib module
   const geocoder = read("src/lib/geo/geocode-profile.js");
   assert.match(geocoder, /import \{ CITY_COORDS \} from "@\/lib\/geo\/city-coords";/);
 
-  const globalRoute = read("src/app/api/admin/analytics/global/route.js");
-  assert.match(globalRoute, /import \{ NAME_TO_A2, A2_TO_NAME \} from "@\/lib\/geo\/country-codes";/);
+  const geoReport = read("src/lib/analytics/geo-report.js");
+  assert.match(geoReport, /import \{ A2_TO_NAME, NAME_TO_A2 \} from "@\/lib\/geo\/country-codes";/);
 });
 
 // ── frontend: metric switcher, date-range controls, precise city dots ──────

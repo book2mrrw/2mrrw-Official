@@ -15,12 +15,10 @@ const readOnlyMigration = (needle) => {
 // ── Tracks tab: one row per real song, with the right cover art ────────────
 
 test("the Tracks tab expands albums into their individual songs instead of one collapsed album row", () => {
-  const src = read("src/app/api/admin/analytics/route.js");
-  const sectionAt = src.indexOf("const albumProducts = products.filter");
-  const body = src.slice(sectionAt, sectionAt + 3200);
-  assert.match(body, /if \(p\.product_type === "album"\) continue; \/\/ replaced by its individual songs below/);
-  assert.match(body, /for \(const song of songsByProductId\.get\(album\.id\) \|\| \[\]\) \{/);
-  assert.match(body, /title: song\.title,/, "each album-song row must use the individual song's own title, not the album's");
+  // Behavior: src/lib/analytics/__tests__/overview-report.test.js
+  const src = read("src/lib/analytics/overview-report.js");
+  assert.match(src, /for \(const song of songsByAlbum\.get\(p\.id\) \|\| \[\]\) \{/);
+  assert.match(src, /title: song\.title,/, "each album-song row must use the individual song's own title, not the album's");
 });
 
 test("cover art always calls the real R2 visual-discovery endpoint, not just when video metadata happens to be recorded", () => {
@@ -29,36 +27,31 @@ test("cover art always calls the real R2 visual-discovery endpoint, not just whe
   assert.doesNotMatch(src, /coverUrl:\s*p\.cover_url/, "must not read the raw column directly — many releases only resolve artwork via canonical paths");
   const fnAt = src.indexOf("function resolveCoverUrl(row)");
   const fnBody = src.slice(fnAt, fnAt + 900);
-  // mapProductRow (catalog-db.js) only calls visualDiscoveryUrl when it already
-  // knows a video exists — this route's own resolver must call it unconditionally,
-  // since the endpoint itself resolves whichever asset (video or image) is real.
   assert.doesNotMatch(fnBody, /hasVideo|isSingle/,
     "must not gate discovery behind a video-presence check — that gate is exactly what left albums with blank covers");
   assert.match(fnBody, /return visualDiscoveryUrl\(releaseTypeFolder, row\.slug, \{/);
-
-  const singleAt = src.indexOf("for (const p of products) {");
-  const singleBody = src.slice(singleAt, singleAt + 700);
-  assert.match(singleBody, /coverUrl: resolveCoverUrl\(p\),/);
-  const albumAt = src.indexOf("for (const album of albumProducts) {");
-  const albumBody = src.slice(albumAt, albumAt + 700);
-  assert.match(albumBody, /const coverUrl = resolveCoverUrl\(album\);/,
+  assert.match(src, /products: products\.map\(\(p\) => \(\{ \.\.\.p, coverUrl: resolveCoverUrl\(p\) \}\)\),/);
+  const report = read("src/lib/analytics/overview-report.js");
+  const songsAt = report.indexOf("for (const song of songsByAlbum.get(p.id) || [])");
+  assert.match(report.slice(songsAt, songsAt + 400), /coverUrl: p\.coverUrl \?\? null,/,
     "every song inside an album must inherit the parent album's own resolved cover, not try to resolve its own");
 });
 
-test("album songs use get_track_play_stats (correctly keyed by product_id+track_slug) instead of the legacy product_slug-keyed get_play_stats, which always showed zero for a multi-track release's own product row", () => {
+test("songs come from analytics_track_stats, keyed by product_id + song slug (album songs never collapse into the album)", () => {
   const src = read("src/app/api/admin/analytics/route.js");
-  assert.match(src, /admin\.rpc\("get_track_play_stats", \{ since: ninetyDaysAgo \}\)/);
-  const albumAt = src.indexOf("for (const album of albumProducts) {");
-  const albumBody = src.slice(albumAt, albumAt + 700);
-  assert.match(albumBody, /const stat = trackPlayStats\[`\$\{album\.id\}:\$\{song\.slug\}`\];/);
+  assert.match(src, /admin\.rpc\("analytics_track_stats", window\)/);
+  const report = read("src/lib/analytics/overview-report.js");
+  assert.match(report, /const statKey = \(productId, songSlug\) => `\$\{productId\}:\$\{songSlug \?\? ""\}`;/);
+  assert.match(report, /take\(p\.id, song\.slug\)/);
 });
 
-test("owning an album attributes its purchases/listeners to every song inside it, matching real access — buying the album grants every track", () => {
-  const src = read("src/app/api/admin/analytics/route.js");
-  const albumAt = src.indexOf("for (const album of albumProducts) {");
-  const albumBody = src.slice(albumAt, albumAt + 700);
-  assert.match(albumBody, /const purchases = purchaseCounts\[album\.slug\] \|\| 0;/);
-  assert.match(albumBody, /const listeners = listenerCounts\[album\.slug\] \|\| 0;/);
+test("an album purchase is counted once, on the album row — never copied onto every song, which multiplied album sales", () => {
+  // Owner-visible numbers: one album sale = 1 in the Buys column. Behavior:
+  // src/lib/analytics/__tests__/overview-report.test.js.
+  const report = read("src/lib/analytics/overview-report.js");
+  assert.match(report, /purchases: null, \/\/ an album is bought as a whole — counted once, on the album row/);
+  assert.match(report, /title: `\$\{p\.title\} \(album\)`/);
+  assert.match(report, /purchases: purchaseCounts\[p\.slug\] \|\| 0, kind: "album",/);
 });
 
 test("only real audio product types (single/feature/album) are queried for the Tracks tab — merch/vault/tickets never belonged in a track list", () => {
@@ -148,10 +141,10 @@ test("the RPC is granted to service_role", () => {
   assert.match(sql, /grant execute on function public\.get_regional_listening_patterns\(timestamptz\) to service_role;/);
 });
 
-test("the timing route calls both the global (UTC) and regional RPCs, and summarizes each region's own peak hour/day independently", () => {
+test("the timing route calls both the global (Central time) and regional RPCs, and summarizes each region's own peak hour/day independently", () => {
   const src = read("src/app/api/admin/analytics/timing/route.js");
-  assert.match(src, /admin\.rpc\("get_listening_time_patterns", \{ since: ninetyDaysAgo \}\)/);
-  assert.match(src, /admin\.rpc\("get_regional_listening_patterns", \{ since: ninetyDaysAgo \}\)/);
+  assert.match(src, /admin\.rpc\("get_listening_time_patterns", \{ since \}\)/);
+  assert.match(src, /admin\.rpc\("get_regional_listening_patterns", \{ since \}\)/);
   assert.match(src, /return \{ region, cells: regionCells, totalPlays, \.\.\.summarize\(regionCells\) \};/);
 });
 
@@ -169,10 +162,9 @@ test("the Global Map page's fetch explicitly requests no-store, so clicking Refr
 
 test("every tab's fetch in AnalyticsDashboard (overview/tracks, revenue, funnels, timing) explicitly requests no-store, and every one of their routes serves no-store back", () => {
   const dashboard = read("src/components/account/AnalyticsDashboard.js");
-  assert.match(dashboard, /fetch\("\/api\/admin\/analytics", \{ credentials:"include", cache:"no-store" \}\)/);
-  assert.match(dashboard, /fetch\("\/api\/admin\/analytics\/revenue", \{ credentials:"include", cache:"no-store" \}\)/);
-  assert.match(dashboard, /fetch\("\/api\/admin\/analytics\/funnels", \{ credentials:"include", cache:"no-store" \}\)/);
-  assert.match(dashboard, /fetch\("\/api\/admin\/analytics\/timing", \{ credentials:"include", cache:"no-store" \}\)/);
+  for (const path of ["analytics", "analytics\\/revenue", "analytics\\/funnels", "analytics\\/timing"]) {
+    assert.match(dashboard, new RegExp(`fetch\\(\`\\/api\\/admin\\/${path}\\?range=\\$\\{range\\}\`, \\{ credentials:"include", cache:"no-store" \\}\\)`));
+  }
 
   for (const routeFile of [
     "src/app/api/admin/analytics/route.js",

@@ -3,6 +3,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { analyticsRange, sinceOrEpoch } from "@/lib/analytics/range";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +28,12 @@ export async function GET(req) {
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
   const admin = getAdminClient();
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  // Lifetime by default (?range= / ?since=&until= narrow it).
+  const range = analyticsRange(new URL(req.url).searchParams);
 
   const [releaseRevenueResult, trackPlayResult, subscriptionResult] = await Promise.all([
-    admin.rpc("get_release_revenue_stats", { since: ninetyDaysAgo }),
-    admin.rpc("get_track_play_stats", { since: ninetyDaysAgo }),
+    admin.rpc("get_release_revenue_stats", { since: sinceOrEpoch(range) }),
+    admin.rpc("analytics_track_stats", { p_from: range.from, p_to: range.to }),
     admin.rpc("get_subscription_stats").maybeSingle(),
   ]);
 
@@ -44,13 +46,17 @@ export async function GET(req) {
     itemsSold: Number(row.items_sold) || 0,
   }));
 
+  // Same song definition as the Tracks tab (analytics_track_stats):
+  // completion = completes / plays, admins and previews excluded.
   const tracks = (trackPlayResult.data || []).map((row) => ({
     productId: row.product_id,
-    slug: row.track_slug,
-    title: row.display_title,
-    albumSlug: row.album_slug,
+    slug: row.song_slug || row.release_slug,
+    title: row.title,
+    albumSlug: row.release_type === "album" ? row.release_slug : null,
     plays: Number(row.plays) || 0,
-    completionRate: row.avg_completion != null ? Math.round(Number(row.avg_completion) * 100) : null,
+    qualifiedPlays: Number(row.qualified_plays) || 0,
+    listeners: Number(row.listeners) || 0,
+    completionRate: row.completion_rate != null ? Math.round(Number(row.completion_rate) * 100) : null,
   }));
 
   const subscriptionRow = subscriptionResult.data;

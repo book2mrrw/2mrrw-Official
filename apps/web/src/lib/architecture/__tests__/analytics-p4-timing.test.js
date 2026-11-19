@@ -49,7 +49,7 @@ test("the timing route is admin-gated under its own rate-limit key", () => {
   const src = read("src/app/api/admin/analytics/timing/route.js");
   assert.match(src, /if \(!user \|\| !isAdminUser\(user\)\) \{\s*return NextResponse\.json\(\{ error: "Unauthorized" \}, \{ status: 401 \}\);/);
   assert.match(src, /routeKey: "admin\.analytics\.timing",/);
-  assert.match(src, /admin\.rpc\("get_listening_time_patterns", \{ since: ninetyDaysAgo \}\)/);
+  assert.match(src, /admin\.rpc\("get_listening_time_patterns", \{ since \}\)/);
 });
 
 test("the route derives peakHour and peakDay by summing across the other axis, not just taking the single busiest cell", () => {
@@ -75,17 +75,17 @@ test("the Timing tab is added without touching the other tab definitions, and fe
   assert.ok(effectAt > -1, "timing must fetch only when its own tab is opened, matching the Revenue/Funnels tabs' lazy pattern");
 
   const originalLoadAt = src.indexOf("const load = useCallback(() => {");
-  const originalLoadBody = src.slice(originalLoadAt, src.indexOf("}, []);", originalLoadAt));
+  const originalLoadBody = src.slice(originalLoadAt, src.indexOf("}, [range]);", originalLoadAt));
   assert.doesNotMatch(originalLoadBody, /timing/i, "the original overview/audience/tracks load must be completely untouched by the new tab");
 });
 
-test("TimingTab defaults to Global (UTC) and labels the heatmap accordingly, so the UI never implies local time for the default view", () => {
+test("TimingTab defaults to all listeners in Central time (the artist's zone) and labels the heatmap accordingly, so the UI never implies a different time zone", () => {
   const src = read("src/components/account/AnalyticsDashboard.js");
   const fnAt = src.indexOf("function TimingTab(");
   const body = src.slice(fnAt, fnAt + 5000);
   assert.match(body, /const \[regionKey, setRegionKey\] = useState\("__global__"\);/);
-  assert.match(body, /\{ key:"__global__", label:"Global \(UTC\)", cells:globalCells, peakHour:globalPeakHour, peakDay:globalPeakDay, tzLabel:"UTC" \}/);
-  assert.match(body, /All times UTC — pick a region above for its own local time/);
+  assert.match(body, /\{ key:"__global__", label:"All listeners \(Central\)", cells:globalCells, peakHour:globalPeakHour, peakDay:globalPeakDay, tzLabel:"Central time" \}/);
+  assert.match(body, /All times Central \(your time zone\) — pick a region above for its own local time/);
 });
 
 test("TimingTab renders a 7x24 grid keyed by (day, hour) with no crash on an empty cells list", () => {

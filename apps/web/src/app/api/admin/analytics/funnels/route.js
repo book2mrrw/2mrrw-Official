@@ -3,6 +3,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { analyticsRange, sinceOrEpoch } from "@/lib/analytics/range";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +29,13 @@ export async function GET(req) {
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
   const admin = getAdminClient();
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  // Lifetime by default (?range= / ?since=&until= narrow it).
+  const since = sinceOrEpoch(analyticsRange(new URL(req.url).searchParams));
 
   const [funnelResult, cohortResult, attributionResult] = await Promise.all([
-    admin.rpc("get_funnel_stats", { since: ninetyDaysAgo }).maybeSingle(),
+    admin.rpc("get_funnel_stats", { since }).maybeSingle(),
     admin.rpc("get_cohort_retention", { months_back: 6 }),
-    admin.rpc("get_attribution_breakdown", { since: ninetyDaysAgo }),
+    admin.rpc("get_attribution_breakdown", { since }),
   ]);
 
   const funnelRow = funnelResult.data || { signups: 0, streamed: 0, purchased: 0 };

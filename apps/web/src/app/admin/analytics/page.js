@@ -66,8 +66,8 @@ function monthLabel(key) { const [,m] = key.split("-"); return MONTHS_SHORT[pars
 // ─── Metric accessor: reads the right field off a by_country/by_city row for
 // whichever metric is currently selected ────────────────────────────────────
 const METRICS = {
-  fans:    { label: "Fans",    color: "0,255,255", get: (row) => row.fans },
-  streams: { label: "Streams", color: "162,89,255", get: (row) => row.streams },
+  fans:    { label: "Listeners", color: "0,255,255", get: (row) => row.fans },
+  streams: { label: "Plays",   color: "162,89,255", get: (row) => row.streams },
   revenue: { label: "Revenue", color: "34,197,94",  get: (row) => row.revenueCents },
 };
 
@@ -511,11 +511,11 @@ function CountryPanel({ country, data, onClose }) {
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div style={{ background: C.surface2, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 9, letterSpacing: 3, color: C.dim, textTransform: "uppercase", marginBottom: 6 }}>Fans</div>
+          <div style={{ fontSize: 9, letterSpacing: 3, color: C.dim, textTransform: "uppercase", marginBottom: 6 }}>Listeners</div>
           <div style={{ fontSize: 24, fontWeight: 900, color: C.accent, fontVariantNumeric: "tabular-nums" }}>{fmt(country.fans)}</div>
         </div>
         <div style={{ background: C.surface2, borderRadius: 10, padding: "12px 14px", border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 9, letterSpacing: 3, color: C.dim, textTransform: "uppercase", marginBottom: 6 }}>Streams</div>
+          <div style={{ fontSize: 9, letterSpacing: 3, color: C.dim, textTransform: "uppercase", marginBottom: 6 }}>Plays</div>
           <div style={{ fontSize: 24, fontWeight: 900, color: C.purple, fontVariantNumeric: "tabular-nums" }}>
             {country.streams > 0 ? fmt(country.streams) : <span style={{ fontSize: 14, color: C.dim }}>Accumulating</span>}
           </div>
@@ -595,7 +595,7 @@ function GlobalSummaryPanel({ data }) {
       <div>
         <Label>Top Markets</Label>
         {top.length === 0 ? (
-          <div style={{ fontSize: 13, color: C.dim }}>Fan geography appears here as your audience grows.</div>
+          <div style={{ fontSize: 13, color: C.dim }}>Listener geography appears here as your audience grows.</div>
         ) : top.map((c, i) => (
           <div key={c.a2 || c.country} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <div style={{ fontSize: 10, color: C.dim, width: 18, textAlign: "right", flexShrink: 0 }}>{i + 1}</div>
@@ -620,9 +620,9 @@ function GlobalSummaryPanel({ data }) {
       )}
 
       <div>
-        <Label>Streams by Country</Label>
+        <Label>Plays by Country</Label>
         {topByStreams.length === 0 ? (
-          <div style={{ fontSize: 12, color: C.dim }}>Stream location data accumulates as fans play music.</div>
+          <div style={{ fontSize: 12, color: C.dim }}>Play locations accumulate as listeners play music.</div>
         ) : topByStreams.map((c) => (
           <div key={c.a2 || c.country} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
             {c.a2 && <span style={{ fontSize: 13, flexShrink: 0 }}>{flag(c.a2)}</span>}
@@ -650,7 +650,7 @@ function GeographyTable({ data, onCountryClick }) {
 
   if (!rows.length) return null;
 
-  const SORT_OPTS = [{ key: "fans", label: "Fans" }, { key: "streams", label: "Streams" }, { key: "revenue", label: "Revenue" }];
+  const SORT_OPTS = [{ key: "fans", label: "Listeners" }, { key: "streams", label: "Plays" }, { key: "revenue", label: "Revenue" }];
 
   return (
     <Card style={{ padding: "20px 24px" }}>
@@ -669,7 +669,7 @@ function GeographyTable({ data, onCountryClick }) {
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "32px 28px 1fr 90px 90px 90px 100px", gap: 10, paddingBottom: 10, borderBottom: `1px solid ${C.border}`, marginBottom: 4 }}>
-        {["#","","Country","Fans","% Total","Streams","Revenue"].map((h,i) => (
+        {["#","","Country","Listeners","% Total","Plays","Revenue"].map((h,i) => (
           <div key={i} style={{ fontSize: 9, color: C.dim, letterSpacing: 2, textTransform: "uppercase", textAlign: i > 2 ? "right" : "left" }}>{h}</div>
         ))}
       </div>
@@ -897,18 +897,18 @@ export default function AdminGlobalAnalytics() {
           <>
             {/* KPI strip */}
             <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
-              <KPITile label="Total Fans" value={fmt(ov.total_fans)} sub="Streamed at least once" color={C.accent}
+              <KPITile label="Listeners" value={fmt(ov.total_fans)} sub="Heard at least once" color={C.accent}
                 style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
               <KPITile label="Countries" value={fmt(ov.unique_countries)} sub="Markets reached" color={C.purple}
                 style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
               <KPITile label="Cities" value={fmt(ov.unique_cities)} sub="Locations recorded" color={C.gold}
                 style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
-              <KPITile label="Streams" value={fmt(ov.total_streams)} sub="Geo-tagged plays" color={C.purple}
+              <KPITile label="Plays" value={fmt(ov.total_streams)} sub="Listens started, located" color={C.purple}
                 style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
               <KPITile label="Revenue" value={fmtRevenue(ov.total_revenue_cents)} sub="In this range" color={C.green}
                 style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
               <KPITile
-                label="This Month" value={`+${fmt(data.monthly_growth?.at(-1)?.fans || 0)}`} sub="New fans" color={C.accent}
+                label="This Month" value={`+${fmt(data.monthly_growth?.at(-1)?.fans || 0)}`} sub="New listeners" color={C.accent}
                 style={{ minWidth: isMobile ? "100%" : 140 }} />
             </div>
 
@@ -958,13 +958,13 @@ export default function AdminGlobalAnalytics() {
 
             {/* Fan growth timeline */}
             <Card style={{ marginBottom: 18 }}>
-              <Label>Fan Growth — Last 12 Months</Label>
+              <Label>New Listeners — Last 12 Months</Label>
               <GrowthChart data={data.monthly_growth} height={isMobile ? 110 : 140} />
               <div style={{ display: "flex", gap: isMobile ? 16 : 32, flexWrap: "wrap", marginTop: 14 }}>
                 {[
                   { label: "This month", value: `+${fmt(data.monthly_growth?.at(-1)?.fans || 0)}`, color: C.accent },
                   { label: "Countries", value: ov.unique_countries || 0, color: C.purple },
-                  { label: "Total fanbase", value: fmt(ov.total_fans), color: C.text },
+                  { label: "Total listeners", value: fmt(ov.total_fans), color: C.text },
                 ].map(item => (
                   <div key={item.label}>
                     <span style={{ fontSize: 11, color: C.muted }}>{item.label}  </span>

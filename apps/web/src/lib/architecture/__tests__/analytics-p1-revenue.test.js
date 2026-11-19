@@ -142,8 +142,8 @@ test("the revenue route is admin-gated and rate-limited under its own routeKey, 
 
 test("the revenue route calls all three new RPCs in parallel", () => {
   const src = read("src/app/api/admin/analytics/revenue/route.js");
-  assert.match(src, /admin\.rpc\("get_release_revenue_stats", \{ since: ninetyDaysAgo \}\)/);
-  assert.match(src, /admin\.rpc\("get_track_play_stats", \{ since: ninetyDaysAgo \}\)/);
+  assert.match(src, /admin\.rpc\("get_release_revenue_stats", \{ since: sinceOrEpoch\(range\) \}\)/);
+  assert.match(src, /admin\.rpc\("analytics_track_stats", \{ p_from: range\.from, p_to: range\.to \}\)/);
   assert.match(src, /admin\.rpc\("get_subscription_stats"\)\.maybeSingle\(\)/);
 
   // get_track_play_stats is legitimately reused by /api/admin/analytics too
@@ -173,7 +173,7 @@ test("revenue data fetches lazily only once the Revenue tab is opened, with its 
   const effectAt = src.indexOf('useEffect(()=>{\n    if (tab==="revenue"');
   assert.ok(effectAt > -1, "the revenue fetch must be gated on tab===\"revenue\", not fired unconditionally on mount");
   const originalLoadAt = src.indexOf("const load = useCallback(() => {");
-  const originalLoadBody = src.slice(originalLoadAt, src.indexOf("}, []);", originalLoadAt));
+  const originalLoadBody = src.slice(originalLoadAt, src.indexOf("}, [range]);", originalLoadAt));
   assert.doesNotMatch(originalLoadBody, /revenue/i, "the original overview/audience/tracks load must be completely untouched by the new tab");
 });
 
