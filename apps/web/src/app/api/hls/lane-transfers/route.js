@@ -6,10 +6,10 @@ export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store, max-age=0" };
 
 /**
- * The video lanes' storage links and content keys (lib/hls/lane-transfers.js).
+ * The media lanes' storage links and content keys (lib/hls/lane-transfers.js).
  * Their only credential is the job lease they hold: { lane, job_id,
  * worker_id, lease_token, generation, uploads? }; { published: true } after a
- * vault video's commit refreshes its manifest cache.
+ * song's or vault video's commit refreshes its manifest cache.
  */
 export async function POST(req) {
   let body;

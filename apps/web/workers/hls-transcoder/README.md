@@ -4,7 +4,7 @@ One image, one entry point per lane:
 
 | Lane | Entry point | Queue | Content |
 |---|---|---|---|
-| audio | `src/workers/audio-worker.js` | `hls_transcode_jobs` (audio) | songs (its 2MRRW-Cloud successor is released separately) |
+| audio | `src/workers/audio-worker.js` | `hls_transcode_jobs` (audio) | songs |
 | video | `src/workers/video-worker.js` | `hls_transcode_jobs` (video) | music videos, short films, documentaries (Audio Visualz) |
 | vault-video | `src/workers/vault-video-worker.js` | `hls_transcode_jobs` (vault) | vault videos |
 | track-visual | `src/workers/track-visual-worker.js` | `track_visual_jobs` | per-track looping visuals |
@@ -58,14 +58,15 @@ job holds: a read link for its source, write links under that attempt's own
 folder, that job's content key (the key viewers' players already get) and, for
 a music video, its folder details. No service-role key, no R2 key, no
 `HLS_MASTER_SECRET` ever reaches a host, so moving to another host is copying
-`hls-lanes.env`. The audio lane (`audio-worker.js`) still uses the older keyed
-settings until its own successor ships.
+`hls-lanes.env`.
 
-## Leases: the video and vault lanes (`src/media-lane.js`)
+## Leases: the audio, video and vault lanes (`src/media-lane.js`)
 
-Both claim through `hls_claim_media_job` (migration
-`20261119120000_hls_media_lane_leases.sql`), not the audio lane's
-`hls_claim_next_job`:
+All three claim through `hls_claim_media_job` (migrations
+`20261119120000_hls_media_lane_leases.sql`, `20261119170000_hls_audio_media_lease.sql`),
+never the legacy `hls_claim_next_job` (still used by Fly's old audio worker
+until it is stopped; the two split the queue and never take each other's
+jobs):
 
 - every claim gets a fresh lease token and counts as an attempt (three in all);
 - the lease is renewed every 30 s; a job nobody renewed for five minutes is
@@ -74,7 +75,8 @@ Both claim through `hls_claim_media_job` (migration
 - every write names the lease and is refused once the job has moved on, so a
   worker that lost its job can never publish over the one that took it; a
   music video publishes renditions, ready, promotion and completion in one
-  transaction (`hls_commit_video_job`), vault through `hls_commit_transcode_job`;
+  transaction (`hls_commit_video_job`); songs and vault videos through
+  `hls_commit_transcode_job` (a song at audio profile 3, `src/transcoder.js`);
 - each attempt uploads under its own generation folder and works in its own
   scratch directory (named by its lease); a host's boot removes the scratch
   of every lease no longer held. An abandoned attempt's partial uploads stay

@@ -1,8 +1,8 @@
 /**
- * Storage and encryption for the video lanes — music videos / short films /
- * documentaries (hls_transcode_jobs job_type 'video'), vault videos
- * ('vault_video') and track visuals (track_visual_jobs) — with no credential
- * on the hosts that encode them.
+ * Storage and encryption for the media lanes — songs (hls_transcode_jobs
+ * job_type 'audio'), music videos / short films / documentaries ('video'),
+ * vault videos ('vault_video') and track visuals (track_visual_jobs) — with no
+ * credential on the hosts that encode them.
  *
  * A worker proves the job it holds with the lease its lane's claim issued
  * (hls_claim_media_job / claim_track_visual_job). For that job alone, and
@@ -21,7 +21,9 @@ import { deriveAudioVisualHLSKey, deriveAudioVisualHLSIV } from "@/lib/audio-vis
 import { audioVisualR2FolderPath } from "@/lib/audio-visual/r2-paths";
 import { invalidateManifestCache } from "@/lib/server/hls-manifest-cache";
 
-export const LANES = new Set(["video", "vault_video", "track_visual"]);
+export const LANES = new Set(["audio", "video", "vault_video", "track_visual"]);
+// Lanes whose published manifest the website caches (hls_manifests).
+const MANIFEST_LANES = new Set(["audio", "vault_video"]);
 export const OBJECT_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const CONTENT_TYPES = new Set(["video/mp2t", "video/mp4", "application/x-mpegURL"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -65,10 +67,18 @@ async function heldJob(db, { lane, jobId, workerId, leaseToken, generation }) {
   }
 
   const job = await one(db.from("hls_transcode_jobs")
-    .select("id, job_type, status, worker_id, claim_token, generation, slug, source_key, hls_prefix, asset_version_id")
+    .select("id, job_type, status, worker_id, claim_token, generation, slug, track_slug, source_key, hls_prefix, asset_version_id")
     .eq("id", jobId));
   if (!job || job.job_type !== lane || job.status !== "processing" || job.worker_id !== workerId
       || job.claim_token !== leaseToken || Number(job.generation) !== Number(generation)) return null;
+
+  if (lane === "audio") {
+    // A song's own versioned prefix and the key /api/library/hls/key serves its listeners.
+    if (!String(job.hls_prefix || "").startsWith("hls/")) return null;
+    const trackSlug = job.track_slug ?? null;
+    const [key, iv] = await Promise.all([deriveHLSKey(job.slug, trackSlug), deriveHLSIV(job.slug, trackSlug)]);
+    return { sourceKey: job.source_key, prefix: job.hls_prefix, encryption: { key: hex(key), iv: hex(iv) }, context: { slug: job.slug, track_slug: trackSlug } };
+  }
 
   if (lane === "vault_video") {
     if (!String(job.hls_prefix || "").startsWith("hls/vault/")) return null;
@@ -155,23 +165,23 @@ export async function laneTransfers(request, { db } = {}) {
 }
 
 /**
- * A vault video just published by this worker: refresh the website's manifest
- * cache now rather than after its TTL. Only for a job this worker completed in
- * the last fifteen minutes; a cache refresh is all it can cause.
+ * A song or vault video just published by this worker: refresh the website's
+ * manifest cache now rather than after its TTL. Only for a job this worker
+ * completed in the last fifteen minutes; a cache refresh is all it can cause.
  */
 export async function lanePublished(request, { db, now = Date.now() } = {}) {
   const jobId = String(request?.job_id ?? "");
   const workerId = String(request?.worker_id ?? "");
-  if (request?.lane !== "vault_video" || !UUID.test(jobId) || !workerId.trim() || !Number.isInteger(Number(request?.generation))) {
-    return reply(400, { error: "lane vault_video, job_id, worker_id and generation are required" });
+  if (!MANIFEST_LANES.has(request?.lane) || !UUID.test(jobId) || !workerId.trim() || !Number.isInteger(Number(request?.generation))) {
+    return reply(400, { error: "lane (audio or vault_video), job_id, worker_id and generation are required" });
   }
   const job = await one((db ?? getAdminClient()).from("hls_transcode_jobs")
-    .select("job_type, status, worker_id, generation, slug, completed_at").eq("id", jobId));
+    .select("job_type, status, worker_id, generation, slug, track_slug, completed_at").eq("id", jobId));
   const fresh = job?.completed_at && now - Date.parse(job.completed_at) < PUBLISHED_WINDOW_MS;
-  if (!job || job.job_type !== "vault_video" || job.status !== "complete" || job.worker_id !== workerId
+  if (!job || job.job_type !== request.lane || job.status !== "complete" || job.worker_id !== workerId
       || Number(job.generation) !== Number(request.generation) || !fresh) {
     return reply(403, { error: "not a job this worker just published" });
   }
-  await invalidateManifestCache(job.slug, null);
+  await invalidateManifestCache(job.slug, job.track_slug ?? null);
   return reply(200, { refreshed: true });
 }

@@ -98,3 +98,10 @@ test("lane functions are called by name with named arguments; a claim returns it
   await assert.rejects(() => rpc("drop table x; --", {}, { query: query([]) }), /not a lane function/);
   await assert.rejects(() => rpc("hls_claim_media_job", { "x) or 1=1 --": 1 }, { query: query([]) }), /bad argument names/);
 });
+
+test("a source that no longer exists fails as INPUT_NOT_FOUND, once, without retries", async () => {
+  const net = fakeNet((url) => (url.endsWith("/api/hls/lane-transfers") ? json(200, OPENED) : new Response("NoSuchKey", { status: 404 })));
+  const lane = laneSession({ lane: "audio", job: JOB, fetchFn: net.fetchFn, env: {} });
+  await assert.rejects(() => lane.downloadSource(path.join(os.tmpdir(), "never-written")), (err) => err.failureCategory === "INPUT_NOT_FOUND");
+  assert.equal(net.calls.filter((c) => c.url.includes("?get")).length, 1);
+});

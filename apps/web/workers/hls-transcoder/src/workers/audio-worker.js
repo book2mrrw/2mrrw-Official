@@ -1,71 +1,39 @@
 /**
- * Explicit audio worker entry point — the "app" Fly.io process group.
+ * Audio worker entry point: songs (job_type 'audio').
  *
- * Lane identity is fixed here, at the top of this file, not derived from an
- * env var or a shared command's runtime branch: this process requests
- * job_type='audio' from the database claim query and nothing else, and
- * dispatches every claimed job to processAudioTranscodeJob() and nothing
- * else. There is no fallback path to video processing anywhere in this file.
+ * Lane identity is fixed here: this process claims job_type='audio' through
+ * the leased lane claim (media-lane.js, hls_claim_media_job) and nothing else,
+ * and encodes every claimed job with transcoder.js — today's audio encoder —
+ * through audio-lane.js, and nothing else. It never imports the video
+ * processor.
  *
- * transcoder.js (today's transcodeOneBitrate/transcode()) is imported
- * as-is and never edited by this file — this is purely the lane's
- * entry-point/orchestration layer around that existing, unchanged encoder.
+ * Keyless: the database only through the lanes' own login (lane-db.js); the
+ * master, the write links and the song's content key only through the
+ * website, per lease (lane-transfers.js). This host holds no service-role key,
+ * no storage key and no master secret.
  */
 
 import os from "os";
 import crypto from "crypto";
-import { logger } from "../logger.js";
-import { markJobComplete, updatePosterKey } from "../db.js";
-import { transcode } from "../transcoder.js";
-import { extractPoster } from "../poster.js";
-import { runWorker } from "../worker-runtime.js";
+import { processAudioTranscodeJob } from "../audio-lane.js";
+import { runMediaLane } from "../media-lane.js";
 import { dropPrivilegesIfRoot } from "../drop-privileges.js";
+import { rpc, isLeaseLive } from "../lane-db.js";
+import { laneSession } from "../lane-transfers.js";
 
-// No mounted volume to chown here — the audio lane never touches /data.
-dropPrivilegesIfRoot();
+// /data is the audio lane's scratch volume on an owned host (VIDEO_SCRATCH_ROOT);
+// chowned before dropping privileges, like the video lanes. Skipped where absent.
+dropPrivilegesIfRoot(["/data"]);
 
 const JOB_TYPE = "audio";
-
-// Bitrates that indicate a video job (not audio-only). Dead in practice now
-// that job_type is explicit and validated at creation — an audio-typed
-// job's bitrates are always AUDIO_RENDITIONS values, which never overlap
-// with these. Left as-is; this file preserves the audio path's behavior
-// byte-for-byte from before the explicit-entry-point split.
-const VIDEO_BITRATES = new Set(["4000k", "2000k", "1000k", "720k"]);
-
-const WORKER_ID = `fly-audio-${os.hostname()}-${crypto.randomBytes(4).toString("hex")}`;
+const WORKER_ID = `audio-${os.hostname()}-${crypto.randomBytes(4).toString("hex")}`;
 const IDLE_POLL_MS = parseInt(process.env.IDLE_POLL_MS || "5000", 10);
 
-async function processAudioTranscodeJob(job) {
-  const manifest = await transcode({ job });
-  await markJobComplete(job, manifest);
-  logger.info("job complete", { jobId: job.id, slug: job.slug, trackSlug: job.track_slug });
-
-  const isVideoJob = job.bitrates?.some((b) => VIDEO_BITRATES.has(b));
-  if (isVideoJob && !job.track_slug) {
-    try {
-      const posterKey = await extractPoster({
-        sourceKey:       job.source_key,
-        slug:            job.slug,
-        releaseType:     job.release_type,
-        durationSeconds: manifest.duration_seconds,
-      });
-      await updatePosterKey(job.slug, null, posterKey, "ready");
-      logger.info("poster ready", { jobId: job.id, slug: job.slug, posterKey });
-    } catch (posterErr) {
-      logger.warn("poster extraction failed (non-fatal)", {
-        jobId:   job.id,
-        slug:    job.slug,
-        message: posterErr?.message,
-      });
-      await updatePosterKey(job.slug, null, null, "needs_poster").catch(() => {});
-    }
-  }
-}
-
-runWorker({
-  jobType:   JOB_TYPE,
-  workerId:  WORKER_ID,
-  processFn: processAudioTranscodeJob,
+runMediaLane({
+  jobType: JOB_TYPE,
+  workerId: WORKER_ID,
+  rpc,
+  isLeaseLive,
+  processFn: (job, { lease }) => processAudioTranscodeJob(job, { rpc, lease, lane: laneSession({ lane: JOB_TYPE, job }) }),
   idlePollMs: IDLE_POLL_MS,
 });

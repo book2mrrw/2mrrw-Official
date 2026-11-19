@@ -46,10 +46,12 @@ test("setgid happens before setuid — dropping uid first would forfeit permissi
   assert.ok(setgidAt > -1 && setuidAt > -1 && setgidAt < setuidAt);
 });
 
-test("the video worker chowns and drops into /data; the audio worker drops privileges without touching it", () => {
+test("the video and audio workers chown their /data scratch, then drop privileges", () => {
+  // Since the audio lane left Fly (2026-11-19) it, too, works in a lease-named
+  // scratch directory on its own /data volume (skipped where none is mounted).
   const audioSrc = read("workers/hls-transcoder/src/workers/audio-worker.js");
   const videoSrc = read("workers/hls-transcoder/src/workers/video-worker.js");
-  assert.match(audioSrc, /dropPrivilegesIfRoot\(\);/);
+  assert.match(audioSrc, /dropPrivilegesIfRoot\(\["\/data"\]\);/);
   assert.match(videoSrc, /dropPrivilegesIfRoot\(\["\/data"\]\);/);
 });
 

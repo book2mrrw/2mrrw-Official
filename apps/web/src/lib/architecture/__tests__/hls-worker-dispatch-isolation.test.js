@@ -25,31 +25,25 @@ test("video-worker.js never imports transcoder.js — today's audio encoder", ()
   assert.match(src, /const JOB_TYPE = "video";/);
 });
 
-test("each entry point requests its own type and nothing else's: audio from runWorker, the video lanes from their leased loop", () => {
-  const audioSrc = read("workers/hls-transcoder/src/workers/audio-worker.js");
-  const videoSrc = read("workers/hls-transcoder/src/workers/video-worker.js");
-  const vaultSrc = read("workers/hls-transcoder/src/workers/vault-video-worker.js");
-  assert.match(audioSrc, /runWorker\(\{\s*\n\s*jobType:\s*JOB_TYPE,/);
-  assert.match(videoSrc, /runMediaLane\(\{\s*\n\s*jobType:\s*JOB_TYPE,/);
-  assert.match(vaultSrc, /runMediaLane\(\{\s*\n\s*jobType:\s*JOB_TYPE,/);
-  // The audio lane keeps its own claim contract; the video lanes never use it.
-  assert.doesNotMatch(audioSrc, /runMediaLane|media-lane/);
-  assert.doesNotMatch(videoSrc, /runWorker|worker-runtime/);
-  assert.doesNotMatch(vaultSrc, /runWorker|worker-runtime/);
+test("each entry point requests its own type and nothing else's, all through the leased lane loop", () => {
+  for (const worker of ["audio-worker.js", "video-worker.js", "vault-video-worker.js"]) {
+    const src = read(`workers/hls-transcoder/src/workers/${worker}`);
+    assert.match(src, /runMediaLane\(\{\s*\n\s*jobType:\s*JOB_TYPE,/, `${worker} claims its own type`);
+    assert.doesNotMatch(src, /runWorker|worker-runtime/, `${worker} never uses the unleased loop`);
+  }
 });
 
-test("transcoder.js — today's audio encoder — is still imported only by the audio lane", () => {
-  const audioSrc = read("workers/hls-transcoder/src/workers/audio-worker.js");
-  assert.match(audioSrc, /from ["']\.\.\/transcoder\.js["']/);
+test("transcoder.js — today's audio encoder — is reached only by the audio lane", () => {
+  assert.match(read("workers/hls-transcoder/src/workers/audio-worker.js"), /from ["']\.\.\/audio-lane\.js["']/);
+  assert.match(read("workers/hls-transcoder/src/audio-lane.js"), /from ["']\.\/transcoder\.js["']/);
 });
 
-test("the audio processor still calls transcoder.js's transcode() and markJobComplete, unchanged", () => {
-  const src = read("workers/hls-transcoder/src/workers/audio-worker.js");
-  const fnAt = src.indexOf("async function processAudioTranscodeJob(job) {");
-  assert.ok(fnAt > -1);
-  const body = src.slice(fnAt, fnAt + 300);
-  assert.match(body, /const manifest = await transcode\(\{ job \}\);/);
-  assert.match(body, /await markJobComplete\(job, manifest\);/);
+test("the audio processor encodes with transcoder.js and publishes only through the fenced commit named by its lease", () => {
+  const src = read("workers/hls-transcoder/src/audio-lane.js");
+  assert.match(src, /const manifest = await transcodeFn\(\{ job, lane \}\);/);
+  assert.match(src, /rpc\("hls_commit_transcode_job", \{ \.\.\.lease, p_manifest: manifest \}\)/);
+  assert.match(src, /if \(!published\?\.committed\) throw new LeaseLost\(job\.id\);/);
+  assert.doesNotMatch(src, /markJobComplete|from ["']\.\/db\.js["']/);
 });
 
 test("worker-runtime.js is the shared claim/heartbeat/failure loop and carries zero media-specific policy", () => {
@@ -94,13 +88,13 @@ test("the video lanes hold no key: the database only through their own login, st
   // Keyless since 2026-11-19: no service-role key (db.js), no storage key
   // (r2.js), no master secret on the hosts of these lanes — the lane login
   // (lane-db.js) and per-lease website links and keys (lane-transfers.js).
-  for (const worker of ["video-worker.js", "vault-video-worker.js", "track-visual-worker.js"]) {
+  for (const worker of ["audio-worker.js", "video-worker.js", "vault-video-worker.js", "track-visual-worker.js"]) {
     const src = read(`workers/hls-transcoder/src/workers/${worker}`);
     assert.match(src, /from ["']\.\.\/lane-db\.js["']/, `${worker} uses the lane login`);
     assert.match(src, /import \{ laneSession \} from ["']\.\.\/lane-transfers\.js["']/, `${worker} uses the website per lease`);
     assert.doesNotMatch(src, /from ["']\.\.\/(db|r2)\.js["']/, `${worker} imports no keyed client`);
   }
-  for (const file of ["video-transcoder.js", "vault-video-transcoder.js", "track-visual-transcoder.js"]) {
+  for (const file of ["transcoder.js", "audio-lane.js", "video-transcoder.js", "vault-video-transcoder.js", "track-visual-transcoder.js"]) {
     const src = read(`workers/hls-transcoder/src/${file}`);
     assert.doesNotMatch(src, /from ["']\.\/(db|r2)\.js["']/, `${file} imports no keyed client`);
     assert.doesNotMatch(src, /process\.env\.(HLS_MASTER_SECRET|TRACK_VISUAL_MASTER_SECRET|SUPABASE_SECRET_KEY|R2_SECRET_ACCESS_KEY)/, `${file} reads no secret`);

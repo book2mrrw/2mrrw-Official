@@ -2,36 +2,35 @@
  * Audio-only AAC-LC / encrypted MPEG-TS worker.
  * Snapshot source once, encode every tier with common static attenuation,
  * verify decoded true peaks, then upload the entire accepted ladder.
+ *
+ * Keyless (lane-transfers.js): the master's read link, write links under the
+ * job's own versioned prefix and the song's content key — the key
+ * /api/library/hls/key serves its listeners — come from the website for this
+ * job's lease. The host holds no storage key and no master secret.
  */
 
 import path from "path";
 import fs from "fs";
-import os from "os";
 import crypto from "crypto";
-import { pipeline } from "stream/promises";
 import { runAudioFfmpeg, measureTruePeak, initialHeadroomGain, nextHeadroomGain, TRUE_PEAK_CEILING_DBTP, MAX_HEADROOM_PASSES } from "./audio-headroom.js";
 import { measureAudioRendition } from "./audio-rendition-metadata.js";
 import { logger } from "./logger.js";
-import { downloadStream, upload } from "./r2.js";
+import { createJobWorkDir, cleanupJobWorkDir } from "./engine/scratch-workspace.js";
+
+/**
+ * The audio profile this encoder produces: the headroom-verified AAC ladder
+ * with rendition metadata v1 — what production's manifests record as 3, and
+ * what the audio successor declares too. A job asking for a newer profile is
+ * refused rather than published under a profile it did not get.
+ */
+export const AUDIO_PROFILE_VERSION = 3;
 
 const SEG_DURATION = 6; // seconds
 
-/**
- * Derive the AES-128 key and IV for a track.
- * Must match derive-key.js used by /api/library/hls/key.
- * Both use HMAC-SHA256(HLS_MASTER_SECRET, purpose)[0:16].
- */
-function deriveKey(slug, trackSlug) {
-  const secret  = process.env.HLS_MASTER_SECRET;
-  if (!secret) throw new Error("HLS_MASTER_SECRET is required");
-
-  const canonical  = trackSlug ? `${slug}:${trackSlug}` : slug;
-  const keyInput   = `2mrrw:hls:${canonical}:key`;
-  const ivInput    = `2mrrw:hls:${canonical}:iv`;
-
-  const key = crypto.createHmac("sha256", secret).update(keyInput).digest().slice(0, 16);
-  const iv  = crypto.createHmac("sha256", secret).update(ivInput).digest().slice(0, 16);
-  return { key, iv };
+async function sha256File(file) {
+  const hash = crypto.createHash("sha256");
+  for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
+  return hash.digest("hex");
 }
 
 /**
@@ -114,19 +113,31 @@ async function transcodeOneBitrate({ sourcePath, gainDb, bitrate, slug, trackSlu
 }
 
 /** Encode and verify before returning metadata for publication. */
-export async function transcode({ job }) {
-  const { id: jobId, slug, track_slug: trackSlug, source_key: sourceKey,
+export async function transcode({ job, lane }) {
+  const { id: jobId, slug, track_slug: trackSlug, source_key: sourceKey, claim_token: claimToken,
           hls_prefix: prefix, bitrates = ["320k", "160k", "96k", "64k"] } = job;
+  if (Number(job.target_profile_version || AUDIO_PROFILE_VERSION) > AUDIO_PROFILE_VERSION) {
+    const err = new Error(`audio profile ${job.target_profile_version} is newer than this encoder's ${AUDIO_PROFILE_VERSION}`);
+    err.failureCategory = "VALIDATION_FAILURE";
+    throw err;
+  }
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `hls-${jobId}-`));
+  // This lease's prefix and the song's content key, from the website (a refused lease is LeaseLost).
+  const opened = await lane.open();
+  if (opened.prefix !== prefix) throw new Error(`audio job ${jobId}: the website's prefix ${opened.prefix} is not the job's ${prefix}`);
+
+  // One scratch directory per lease (media-lane.js sweeps dead ones at boot).
+  const tmpDir = createJobWorkDir(jobId, claimToken);
 
   try {
-    const { key, iv } = deriveKey(slug, trackSlug);
+    const key = Buffer.from(opened.encryption.key, "hex");
+    const iv = Buffer.from(opened.encryption.iv, "hex");
     const keyInfoFile = await writeKeyInfoFile(tmpDir, key, iv);
 
     // Download once: retries and tiers must encode identical bytes, never a changing source.
     const sourcePath = path.join(tmpDir, "source");
-    await pipeline(await downloadStream(sourceKey), fs.createWriteStream(sourcePath), { signal: AbortSignal.timeout(30 * 60 * 1000) });
+    await lane.downloadSource(sourcePath, { timeoutMs: 30 * 60 * 1000 });
+    const sourceSha256 = await sha256File(sourcePath);
     const sourcePeak = await measureTruePeak(sourcePath);
     let gainDb = initialHeadroomGain(sourcePeak);
     let verified = null;
@@ -145,12 +156,13 @@ export async function transcode({ job }) {
 
     const segmentCounts = {};
     const renditionMetadata = {};
+    const uploads = [];
     let durationSeconds = 0;
     // No upload begins until every rendition passes the decoded peak gate.
     for (const { bitrate, segmentPaths, durationSeconds: dur, metadata, decodedPeak } of verified) {
       for (let i = 0; i < segmentPaths.length; i++) {
         const segNum = String(i + 1).padStart(5, "0");
-        await upload(`${prefix}${bitrate}/seg_${segNum}.ts`, fs.readFileSync(segmentPaths[i]), "video/mp2t");
+        uploads.push({ key: `${prefix}${bitrate}/seg_${segNum}.ts`, file: segmentPaths[i], contentType: "video/mp2t" });
       }
       renditionMetadata[bitrate] = { ...metadata, headroom: {
         version: 1, gain_db: gainDb, ceiling_dbtp: TRUE_PEAK_CEILING_DBTP,
@@ -160,10 +172,12 @@ export async function transcode({ job }) {
       } };
       segmentCounts[bitrate] = segmentPaths.length;
       durationSeconds = Math.max(durationSeconds, dur);
-      logger.info("verified bitrate uploaded", { bitrate, gainDb, decodedPeak, segments: segmentPaths.length });
+      logger.info("verified bitrate", { bitrate, gainDb, decodedPeak, segments: segmentPaths.length });
     }
+    await lane.uploadFiles(uploads);
+    logger.info("verified ladder uploaded", { jobId, gainDb, segments: uploads.length });
 
-    // Manifest metadata returned to index.js for DB upsert
+    // The manifest audio-worker.js publishes through hls_commit_transcode_job.
     return {
       slug,
       track_slug:            trackSlug ?? null,
@@ -174,9 +188,12 @@ export async function transcode({ job }) {
       duration_seconds:      durationSeconds,
       segment_counts:        segmentCounts,
       rendition_metadata:    renditionMetadata,
+      segment_durations:     Object.fromEntries(Object.entries(renditionMetadata).map(([br, m]) => [br, m.segment_durations])),
+      source_metadata:       { source_key: sourceKey, sha256: sourceSha256 },
+      transcode_profile_version: AUDIO_PROFILE_VERSION,
     };
   } finally {
     // Always clean up temp files — segments can be 50–200 MB per bitrate
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanupJobWorkDir(jobId, claimToken);
   }
 }

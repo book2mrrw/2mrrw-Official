@@ -1,14 +1,14 @@
-# The video lanes on any Docker Compose host (2MRRW-Cloud): music videos /
-# short films / documentaries (video), vault videos (vault-video) and track
-# visuals (track-visual) — the same image and entry points as Fly's process
-# groups, each with its own scratch volume and the size Fly gives it. The
-# audio lane is released separately (2MRRW-Cloud audio successor).
+# The media lanes on any Docker Compose host (2MRRW-Cloud): songs (audio),
+# music videos / short films / documentaries (video), vault videos
+# (vault-video) and track visuals (track-visual) — the same image and entry
+# points as Fly's process groups, each with its own scratch volume and the
+# size Fly gave it. Keyless: one secret, the lanes' database login.
 #
 #   docker compose -f compose.video.yaml build
-#   docker compose -f compose.video.yaml up -d            # all three lanes
+#   docker compose -f compose.video.yaml up -d            # all four lanes
 #   docker compose -f compose.video.yaml up -d video      # or one
 #
-# video and vault-video run on leases (src/media-lane.js): a worker that loses
+# audio, video and vault-video run on leases (src/media-lane.js): a worker that loses
 # its lease exits 75 and `restart: unless-stopped` starts it fresh; `docker
 # compose stop` (SIGTERM) hands a running job straight back to the queue.
 name: 2mrrw-video-lanes
@@ -32,6 +32,15 @@ x-lane: &lane
     options: { max-size: 20m, max-file: "5" }
 
 services:
+  audio:
+    <<: *lane
+    command: ["node", "src/workers/audio-worker.js"]
+    environment:
+      VIDEO_SCRATCH_ROOT: /data
+    volumes: ["audio_scratch:/data"]
+    cpus: 2
+    mem_limit: 2g
+
   video:
     <<: *lane
     command: ["node", "src/workers/video-worker.js"]
@@ -63,6 +72,7 @@ services:
 # masters and published media stay in R2. Size the host disk for the largest
 # expected source plus its ladder (Fly: 500 GB video, 40 GB visual, 100 GB vault).
 volumes:
+  audio_scratch:
   video_scratch:
   vault_video_scratch:
   visual_scratch:

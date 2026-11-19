@@ -31,6 +31,14 @@ test("video staleness is heartbeat-based, not a fixed total-duration timeout", (
   assert.doesNotMatch(body, /started_at/, "video staleness must not key off total elapsed time");
 });
 
+test("leased jobs are their lane's to recover: both discovery queries skip anything with a claim token", () => {
+  const src = read("src/app/api/cron/hls-stale-jobs/route.js");
+  const audio = src.slice(src.indexOf('.eq("job_type", "audio")'), src.indexOf('.lt("started_at", audioStaleAfter)'));
+  const video = src.slice(src.indexOf('.eq("job_type", "video")'), src.indexOf('.lt("heartbeat_at", videoStaleAfter)'));
+  assert.match(audio, /\.is\("claim_token", null\)/);
+  assert.match(video, /\.is\("claim_token", null\)/);
+});
+
 test("both discovery queries run independently and are merged before the shared rescue/escalate logic runs", () => {
   const src = read("src/app/api/cron/hls-stale-jobs/route.js");
   assert.match(src, /const \[audioResult, videoResult\] = await Promise\.all\(\[/);

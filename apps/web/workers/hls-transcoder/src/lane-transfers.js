@@ -85,7 +85,12 @@ export function laneSession({ lane, job, fetchFn = fetch, env = process.env }) {
       return withRetries("download", async () => {
         const { source } = await call(lease);
         const res = await fetchFn(source.url, { signal: AbortSignal.timeout(timeoutMs) });
-        if (!res.ok || !res.body) throw failure(`source download ${res.status}`, res.status);
+        if (!res.ok || !res.body) {
+          const err = failure(`source download ${res.status}`, res.status);
+          // The job's own source is gone: no retry can fix that.
+          if (res.status === 404) err.failureCategory = "INPUT_NOT_FOUND";
+          throw err;
+        }
         await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(file));
         return fs.statSync(file).size;
       });

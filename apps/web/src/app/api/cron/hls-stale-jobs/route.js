@@ -17,6 +17,12 @@
  *           recovered promptly instead of waiting out a long fixed
  *           timeout sized for encodes, not crashes.
  *
+ * Leased jobs (a claim_token: claimed through hls_claim_media_job by the
+ * keyless lanes, workers/hls-transcoder/src/media-lane.js) are never touched
+ * here: their lane's own claim retries any lease nobody renewed for five
+ * minutes. Rescuing one here would cut off a healthy long encode (audio is
+ * judged on total age) and hand its job to a second worker.
+ *
  * Called by Vercel Cron (vercel.json) — must use GET.
  * Protected by CRON_SECRET header check; the header is automatically set by Vercel.
  *
@@ -62,12 +68,14 @@ export async function GET(req) {
       .select("id, slug, track_slug, attempt_count, worker_id")
       .eq("status", "processing")
       .eq("job_type", "audio")
+      .is("claim_token", null)
       .lt("started_at", audioStaleAfter),
     admin
       .from("hls_transcode_jobs")
       .select("id, slug, track_slug, attempt_count, worker_id")
       .eq("status", "processing")
       .eq("job_type", "video")
+      .is("claim_token", null)
       .lt("heartbeat_at", videoStaleAfter),
   ]);
 

@@ -94,7 +94,7 @@ test("a stale, foreign or finished lease gets nothing, and nothing is signed", a
     assert.deepEqual(signed, [], `${label}: nothing signed`);
   }
   reset(musicVideoTables());
-  for (const bad of [ask({ lane: "audio" }), ask({ job_id: "x" }), ask({ lease_token: undefined }), ask({ worker_id: " " }), ask({ generation: undefined })]) {
+  for (const bad of [ask({ lane: "podcast" }), ask({ job_id: "x" }), ask({ lease_token: undefined }), ask({ worker_id: " " }), ask({ generation: undefined })]) {
     assert.equal((await laneTransfers(bad)).status, 400);
   }
   assert.deepEqual(signed, []);
@@ -169,4 +169,31 @@ test("the route answers the worker, and is a machine route outside the consumer 
   assert.equal((await post("not json")).status, 400);
   assert.equal(classifyRouteAccess("/api/hls/lane-transfers", "POST"), RouteAccessClass.SERVICE_INTERNAL);
   assert.notEqual(classifyRouteAccess("/api/hls/lane-transfers", "GET"), RouteAccessClass.SERVICE_INTERNAL);
+});
+
+test("a song's lease writes under its own versioned prefix and gets the key its listeners are served", async () => {
+  for (const [track, canonical] of [[null, "w2d"], ["intro", "w2d:intro"]]) {
+    reset({ hls_transcode_jobs: [{
+      id: JOB, job_type: "audio", status: "processing", worker_id: "audio-host", claim_token: LEASE, generation: 4, slug: "w2d", track_slug: track,
+      source_key: "audio/masters/w2d.wav", hls_prefix: `hls/singles/w2d/${track ? `${track}/` : ""}versions/g4/`,
+    }] });
+    const prefix = `hls/singles/w2d/${track ? `${track}/` : ""}versions/g4/`;
+    const { status, body } = await laneTransfers({ lane: "audio", job_id: JOB, worker_id: "audio-host", lease_token: LEASE, generation: 4,
+      uploads: [{ key: `${prefix}320k/seg_00001.ts`, content_type: "video/mp2t" }] });
+    assert.equal(status, 200);
+    assert.equal(body.prefix, prefix);
+    assert.deepEqual(body.encryption, { key: hmac16(`2mrrw:hls:${canonical}:key`), iv: hmac16(`2mrrw:hls:${canonical}:iv`) });
+    assert.deepEqual(body.context, { slug: "w2d", track_slug: track });
+  }
+  reset({ hls_transcode_jobs: [{ id: JOB, job_type: "audio", status: "processing", worker_id: "audio-host", claim_token: null, generation: 4, slug: "w2d", hls_prefix: "hls/singles/w2d/versions/g4/" }] });
+  assert.equal((await laneTransfers({ lane: "audio", job_id: JOB, worker_id: "audio-host", lease_token: LEASE, generation: 4 })).status, 403,
+    "a legacy (token-less) claim gets nothing");
+});
+
+test("a published song refreshes its track's manifest cache", async () => {
+  const now = Date.parse("2026-11-19T12:00:00Z");
+  reset({ hls_transcode_jobs: [{ id: JOB, job_type: "audio", status: "complete", worker_id: "audio-host", generation: 4, slug: "love-hz", track_slug: "intro", completed_at: "2026-11-19T11:59:00Z" }] });
+  assert.equal((await lanePublished({ lane: "audio", job_id: JOB, worker_id: "audio-host", generation: 4 }, { now })).status, 200);
+  assert.deepEqual(refreshed, [["love-hz", "intro"]]);
+  assert.equal((await lanePublished({ lane: "vault_video", job_id: JOB, worker_id: "audio-host", generation: 4 }, { now })).status, 403, "the lane must match the job");
 });
