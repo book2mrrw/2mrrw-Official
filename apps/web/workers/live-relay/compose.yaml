@@ -1,0 +1,55 @@
+# Live relay on any Docker Compose host (2MRRW-Cloud): the same image and
+# mediamtx.yml as on Fly. Caddy is the HTTPS front door Fly's proxy used to be
+# (automatic Let's Encrypt for LIVE_RELAY_DOMAIN); browsers send WebRTC media
+# straight to the relay on 8189 (UDP, TCP fallback). Host-specific settings
+# come from the env file as MTX_* overrides (see live-relay.env.example).
+name: 2mrrw-live-relay
+
+services:
+  relay:
+    image: 2mrrw/live-relay:${LIVE_RELAY_IMAGE_TAG:-local}
+    build: .
+    env_file: ${LIVE_RELAY_ENV_FILE:-./live-relay.env}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports:
+      - "8189:8189/udp"
+      - "8189:8189/tcp"
+    networks: [edge]
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "5" }
+
+  caddy:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    env_file: ${LIVE_RELAY_ENV_FILE:-./live-relay.env}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and the ACME account; safe to lose (Caddy re-issues).
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on: [relay]
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "5" }
+
+networks:
+  edge:
+    # Fixed so the relay can trust exactly Caddy's address range
+    # (MTX_WEBRTCTRUSTEDPROXIES), as it trusted Fly's proxy range before.
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+
+volumes:
+  caddy_data:
+  caddy_config:

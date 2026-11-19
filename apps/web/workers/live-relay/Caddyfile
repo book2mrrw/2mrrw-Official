@@ -1,0 +1,5 @@
+# HTTPS for the relay's WebRTC/WHIP endpoint (what Fly's proxy did on 443).
+{$LIVE_RELAY_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy relay:8889
+}
