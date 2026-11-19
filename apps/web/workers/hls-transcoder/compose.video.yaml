@@ -1,0 +1,68 @@
+# The video lanes on any Docker Compose host (2MRRW-Cloud): music videos /
+# short films / documentaries (video), vault videos (vault-video) and track
+# visuals (track-visual) — the same image and entry points as Fly's process
+# groups, each with its own scratch volume and the size Fly gives it. The
+# audio lane is released separately (2MRRW-Cloud audio successor).
+#
+#   docker compose -f compose.video.yaml build
+#   docker compose -f compose.video.yaml up -d            # all three lanes
+#   docker compose -f compose.video.yaml up -d video      # or one
+#
+# video and vault-video run on leases (src/media-lane.js): a worker that loses
+# its lease exits 75 and `restart: unless-stopped` starts it fresh; `docker
+# compose stop` (SIGTERM) hands a running job straight back to the queue.
+name: 2mrrw-video-lanes
+
+x-lane: &lane
+  image: 2mrrw/hls-transcoder:${HLS_TRANSCODER_IMAGE_TAG:-local}
+  build: .
+  env_file: ${HLS_LANES_ENV_FILE:-./hls-lanes.env}
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=1g
+  # Starts as root only to take ownership of its scratch volume, then drops to
+  # the worker user (src/drop-privileges.js), as on Fly.
+  cap_drop: [ALL]
+  cap_add: [CHOWN, FOWNER, SETUID, SETGID]
+  security_opt: ["no-new-privileges:true"]
+  stop_grace_period: 2m
+  logging:
+    driver: json-file
+    options: { max-size: 20m, max-file: "5" }
+
+services:
+  video:
+    <<: *lane
+    command: ["node", "src/workers/video-worker.js"]
+    environment:
+      VIDEO_SCRATCH_ROOT: /data
+    volumes: ["video_scratch:/data"]
+    cpus: 4
+    mem_limit: 8g
+
+  vault-video:
+    <<: *lane
+    command: ["node", "src/workers/vault-video-worker.js"]
+    environment:
+      VIDEO_SCRATCH_ROOT: /data
+    volumes: ["vault_video_scratch:/data"]
+    cpus: 4
+    mem_limit: 8g
+
+  track-visual:
+    <<: *lane
+    command: ["node", "src/workers/track-visual-worker.js"]
+    environment:
+      TRACK_VISUAL_SCRATCH: /visual-scratch
+    volumes: ["visual_scratch:/visual-scratch"]
+    cpus: 4
+    mem_limit: 8g
+
+# Disposable work space (sources and rendition candidates), never canonical:
+# masters and published media stay in R2. Size the host disk for the largest
+# expected source plus its ladder (Fly: 500 GB video, 40 GB visual, 100 GB vault).
+volumes:
+  video_scratch:
+  vault_video_scratch:
+  visual_scratch:

@@ -50,9 +50,9 @@ test("av-master completion creates a NEW audio_visual_asset_versions row (never 
   const body = complete.slice(fnAt, fnAt + 1200);
   assert.match(body, /\.from\("audio_visual_asset_versions"\)\s*\.insert\(\{ audio_visual_id: videoId, master_r2_key: key, status: "uploaded" \}\)/);
   assert.doesNotMatch(body, /\.update\(/, "av-master must never update an existing asset version row");
-  assert.match(body, /job_type: "video"/);
-  assert.match(body, /asset_version_id: assetVersion\.id/);
-  assert.match(body, /status: "pending"/);
+  // The row itself (job_type 'video', pending, slug and hls/ prefix the job
+  // table requires) is built and tested in src/lib/audio-visual/video-job.js.
+  assert.match(body, /\.from\("hls_transcode_jobs"\)\.insert\(\s*videoTranscodeJobRow\(\{ assetVersionId: assetVersion\.id, sourceKey: key, queuedBy: user\.id \}\)/);
 });
 
 test("av-cover-video completion merges into the existing metadata jsonb rather than overwriting it, and enforces the same duration cap as the contract", () => {

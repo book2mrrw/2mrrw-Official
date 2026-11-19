@@ -1,10 +1,10 @@
 /**
- * Explicit vault video worker entry point — the "vault-video" Fly.io process
- * group.
+ * Explicit vault video worker entry point (Compose service "vault-video").
  *
- * Lane identity is fixed here, at the top of this file: this process requests
- * job_type='vault_video' from the database claim query and nothing else, and
- * dispatches every claimed job to processVaultVideoJob() and nothing else.
+ * Lane identity is fixed here, at the top of this file: this process claims
+ * job_type='vault_video' through the leased lane claim (media-lane.js,
+ * hls_claim_media_job) and nothing else, and dispatches every claimed job to
+ * processVaultVideoJob() and nothing else.
  * There is no path from here to the audio lane's transcoder.js or to the Audio
  * Visualz video-transcoder.js.
  */
@@ -12,7 +12,8 @@
 import os from "os";
 import crypto from "crypto";
 import { processVaultVideoJob } from "../vault-video-transcoder.js";
-import { runWorker } from "../worker-runtime.js";
+import { runMediaLane } from "../media-lane.js";
+import { db } from "../db.js";
 import { dropPrivilegesIfRoot } from "../drop-privileges.js";
 
 // A long-form encode needs real scratch space, so this lane runs with the
@@ -20,12 +21,13 @@ import { dropPrivilegesIfRoot } from "../drop-privileges.js";
 dropPrivilegesIfRoot(["/data"]);
 
 const JOB_TYPE = "vault_video";
-const WORKER_ID = `fly-vault-video-${os.hostname()}-${crypto.randomBytes(4).toString("hex")}`;
+const WORKER_ID = `vault-video-${os.hostname()}-${crypto.randomBytes(4).toString("hex")}`;
 const IDLE_POLL_MS = parseInt(process.env.IDLE_POLL_MS || "5000", 10);
 
-runWorker({
+runMediaLane({
   jobType: JOB_TYPE,
   workerId: WORKER_ID,
+  db,
   processFn: processVaultVideoJob,
   idlePollMs: IDLE_POLL_MS,
 });

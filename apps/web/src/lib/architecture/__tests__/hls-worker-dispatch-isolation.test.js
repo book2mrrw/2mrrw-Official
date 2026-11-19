@@ -25,11 +25,17 @@ test("video-worker.js never imports transcoder.js — today's audio encoder", ()
   assert.match(src, /const JOB_TYPE = "video";/);
 });
 
-test("both entry points request their own type from runWorker and nothing else's", () => {
+test("each entry point requests its own type and nothing else's: audio from runWorker, the video lanes from their leased loop", () => {
   const audioSrc = read("workers/hls-transcoder/src/workers/audio-worker.js");
   const videoSrc = read("workers/hls-transcoder/src/workers/video-worker.js");
+  const vaultSrc = read("workers/hls-transcoder/src/workers/vault-video-worker.js");
   assert.match(audioSrc, /runWorker\(\{\s*\n\s*jobType:\s*JOB_TYPE,/);
-  assert.match(videoSrc, /runWorker\(\{\s*\n\s*jobType:\s*JOB_TYPE,/);
+  assert.match(videoSrc, /runMediaLane\(\{\s*\n\s*jobType:\s*JOB_TYPE,/);
+  assert.match(vaultSrc, /runMediaLane\(\{\s*\n\s*jobType:\s*JOB_TYPE,/);
+  // The audio lane keeps its own claim contract; the video lanes never use it.
+  assert.doesNotMatch(audioSrc, /runMediaLane|media-lane/);
+  assert.doesNotMatch(videoSrc, /runWorker|worker-runtime/);
+  assert.doesNotMatch(vaultSrc, /runWorker|worker-runtime/);
 });
 
 test("transcoder.js — today's audio encoder — is still imported only by the audio lane", () => {
@@ -80,7 +86,7 @@ test("the video processor is a real, wired pipeline now (Slice 15) — no longer
   const mod = await import("../../../../workers/hls-transcoder/src/video-transcoder.js");
   await assert.rejects(
     () => mod.processVideoTranscodeJob({ id: "test-job-id" }, {}),
-    /dbClient, downloadStreamFn, and uploadFn are all required/
+    /dbClient, downloadStreamFn, uploadFn, rpc and lease are all required/
   );
 });
 
@@ -88,7 +94,8 @@ test("video-worker.js is the one real place that imports db.js/r2.js for the vid
   const src = read("workers/hls-transcoder/src/workers/video-worker.js");
   assert.match(src, /import \{ db \} from ["']\.\.\/db\.js["']/);
   assert.match(src, /import \{ downloadStream, upload \} from ["']\.\.\/r2\.js["']/);
-  assert.match(src, /processVideoTranscodeJob\(job, \{ dbClient: db, downloadStreamFn: downloadStream, uploadFn: upload \}\)/);
+  // ...plus the lease the job was claimed under and the fenced lane functions.
+  assert.match(src, /processVideoTranscodeJob\(job, \{\s*dbClient: db, downloadStreamFn: downloadStream, uploadFn: upload, rpc, lease,\s*\}\)/);
 });
 
 test("the old shared index.js entry point is gone, not just unreferenced", () => {

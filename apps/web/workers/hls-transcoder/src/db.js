@@ -4,6 +4,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { notifyManifestPublished } from "./manifest-cache.js";
 
 const { SUPABASE_URL } = process.env;
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
@@ -90,28 +91,7 @@ export async function markJobComplete(job, manifest) {
   // Notify the web app to invalidate the L1+L2 manifest cache immediately so
   // the next /api/library/hls request serves the real manifest instead of waiting
   // up to 24h for the TTL to expire.
-  const appUrl = process.env.APP_URL;
-  const workerToken = process.env.HLS_WORKER_API_TOKEN;
-  if (appUrl && workerToken) {
-    try {
-      const response = await fetch(`${appUrl}/api/admin/hls/complete`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${workerToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          slug: manifest.slug,
-          trackSlug: manifest.track_slug ?? null,
-        }),
-      });
-      if (!response.ok) {
-        console.warn("[worker] cache invalidation notify rejected", response.status);
-      }
-    } catch (err) {
-      console.warn("[worker] cache invalidation notify failed", err?.message);
-    }
-  }
+  await notifyManifestPublished({ slug: manifest.slug, trackSlug: manifest.track_slug ?? null });
 }
 
 export async function updatePosterKey(slug, trackSlug, posterKey, status = "ready") {

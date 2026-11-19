@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { processVideoTranscodeJob } from "../video-transcoder.js";
+import { LeaseLost, leaseOf } from "../media-lane.js";
 
 // This suite covers SEQUENCING and ERROR-HANDLING only — every engine this
 // orchestrator wires together (SourceAnalyzer, RenditionPlanner, CodecEngine,
@@ -71,9 +72,24 @@ function baseJob(overrides = {}) {
     source_key: "uploads/video/master.mov",
     asset_version_id: "version-1",
     job_type: "video",
-    attempt_count: 0,
+    attempt_count: 1,
+    worker_id: "video-host-1",
+    claim_token: "lease-1",
+    generation: 3,
     ...overrides,
   };
+}
+
+/** The lane functions, recorded; each answers as a held lease would unless told otherwise. */
+function fakeRpc(answers = {}) {
+  const calls = [];
+  const rpc = async (name, args) => {
+    calls.push({ name, args });
+    if (name in answers) return answers[name];
+    return name === "hls_commit_video_job" ? { committed: true, generation: 3 } : true;
+  };
+  rpc.calls = calls;
+  return rpc;
 }
 
 function baseDeps(overrides = {}) {
@@ -86,6 +102,8 @@ function baseDeps(overrides = {}) {
     }),
     downloadStreamFn: fakeDownloadStreamFn(),
     uploadFn: async () => {},
+    rpc: fakeRpc(),
+    lease: leaseOf(baseJob()),
     ...overrides,
   };
 }
@@ -112,11 +130,13 @@ test("rejects a job with no asset_version_id before touching the database at all
   );
 });
 
-test("requires dbClient, downloadStreamFn, and uploadFn — never silently defaults to the real db.js/r2.js singletons", async () => {
+test("requires dbClient, downloadStreamFn, uploadFn, rpc and lease — never silently defaults to the real db.js/r2.js singletons", async () => {
   await assert.rejects(
     () => processVideoTranscodeJob(baseJob(), {}),
-    /dbClient, downloadStreamFn, and uploadFn are all required/
+    /dbClient, downloadStreamFn, uploadFn, rpc and lease are all required/
   );
+  const { rpc, ...withoutRpc } = baseDeps();
+  await assert.rejects(() => processVideoTranscodeJob(baseJob(), withoutRpc), /are all required/);
 });
 
 test("a missing asset version row fails as INPUT_NOT_FOUND, not a generic error", async () => {
@@ -134,7 +154,7 @@ test("a missing asset version row fails as INPUT_NOT_FOUND, not a generic error"
   );
 });
 
-test("happy path: plans one rendition, quality-gates it, packages it, uploads it, generates Peek, promotes the version, and completes the job", async () => {
+test("happy path: plans one rendition, quality-gates it, packages it, uploads it under its generation, generates Peek, and publishes everything in one fenced commit", async () => {
   const dbClient = fakeDbClient({
     audio_visual_asset_versions: { data: { id: "version-1", audio_visual_id: "video-1" }, error: null },
     audio_visuals: { data: { peek_start_seconds: 1, peek_duration_seconds: 6, slug: "test-video", video_type: "music_video", seriez_id: null }, error: null },
@@ -143,10 +163,11 @@ test("happy path: plans one rendition, quality-gates it, packages it, uploads it
   });
 
   const uploadedKeys = [];
-  const promoted = [];
+  const rpc = fakeRpc();
 
   const deps = baseDeps({
     dbClient,
+    rpc,
     uploadFn: async (key) => { uploadedKeys.push(key); },
     runSourceAnalyzerFn: async () => ({ width: 1920, height: 1080, durationSeconds: 30, hdrMode: "sdr" }),
     validateSourceAnalysisFn: () => ({ passed: true, failures: [] }),
@@ -169,19 +190,56 @@ test("happy path: plans one rendition, quality-gates it, packages it, uploads it
     encryptRenditionSegmentsFn: async () => ({ encryptedFiles: ["init.mp4", "seg_00001.m4s"], keyHex: "a".repeat(32), ivHex: "b".repeat(32) }),
     rewritePlaylistForEncryptionFn: (text) => text.replace("#EXT-X-MAP", "#EXT-X-KEY:METHOD=AES-128,URI=\"placeholder\"\n#EXT-X-MAP"),
     generatePeekClipFn: async ({ outputPath }) => { fs.writeFileSync(outputPath, "peek"); return { outputPath }; },
-    promoteAssetVersionFn: async ({ audioVisualId, assetVersionId }) => { promoted.push({ audioVisualId, assetVersionId }); },
   });
 
   await processVideoTranscodeJob(baseJob(), deps);
 
-  assert.ok(uploadedKeys.some((k) => k.includes("2MRRW Studios/Audio Visualz/test-video/renditions/version-1/avc-1080p/")));
-  assert.ok(uploadedKeys.some((k) => k === "2MRRW Studios/Audio Visualz/test-video/peek/version-1.mp4"));
-  assert.deepEqual(promoted, [{ audioVisualId: "video-1", assetVersionId: "version-1" }]);
-  assert.ok(dbClient.calls.includes("audio_visual_renditions"));
-  assert.ok(dbClient.calls.includes("hls_transcode_jobs"));
+  const folder = "2MRRW Studios/Audio Visualz/test-video/renditions/version-1/g3/";
+  assert.ok(uploadedKeys.some((k) => k.startsWith(`${folder}avc-1080p/`)), "renditions upload under this attempt's generation");
+  assert.ok(uploadedKeys.includes(`${folder}peek.mp4`));
+  assert.deepEqual(rpc.calls.map((c) => c.name), ["hls_video_job_encoding", "hls_commit_video_job"]);
+  const lease = { p_job_id: "job-1", p_worker_id: "video-host-1", p_claim_token: "lease-1", p_generation: 3 };
+  for (const call of rpc.calls) assert.deepEqual({ ...call.args, p_analysis: undefined, p_renditions: undefined, p_peek_r2_key: undefined },
+    { ...lease, p_analysis: undefined, p_renditions: undefined, p_peek_r2_key: undefined }, `${call.name} names the lease`);
+  const commit = rpc.calls[1].args;
+  assert.equal(commit.p_peek_r2_key, `${folder}peek.mp4`);
+  assert.deepEqual(commit.p_renditions.map((r) => [r.codec_family, r.resolution_label, r.hls_prefix, r.vmaf_score]),
+    [["avc", "1080p", `${folder}avc-1080p/`, 95]]);
+  assert.ok(!dbClient.calls.includes("audio_visual_renditions") && !dbClient.calls.includes("hls_transcode_jobs"),
+    "nothing is published outside the fenced commit");
 });
 
-test("a source validation failure marks the asset version failed and re-throws with the engine's own failureCategory, without ever reaching rendition encoding", async () => {
+test("a refused commit means another worker holds the job: LeaseLost, and the job is not reported failed", async () => {
+  const deps = baseDeps({
+    rpc: fakeRpc({ hls_commit_video_job: { committed: false, reason: "superseded" } }),
+    runSourceAnalyzerFn: async () => ({ width: 1280, height: 720, durationSeconds: 10, hdrMode: "sdr" }),
+    validateSourceAnalysisFn: () => ({ passed: true, failures: [] }),
+    runDecodeSanityCheckFn: async () => ({ passed: true, exitCode: 0, stderrOutput: "" }),
+    runSceneComplexityAnalyzerFn: async () => ({}),
+    runStoragePreflightFn: async () => ({ verdict: "ok" }),
+    planRenditionsFn: () => ([]),
+    generatePeekClipFn: async ({ outputPath }) => { fs.writeFileSync(outputPath, "peek"); },
+  });
+  await assert.rejects(() => processVideoTranscodeJob(baseJob(), deps), (err) => err instanceof LeaseLost);
+});
+
+test("a lease lost before encoding stops the job before any rendition is made", async () => {
+  let encoded = false;
+  const deps = baseDeps({
+    rpc: fakeRpc({ hls_video_job_encoding: false }),
+    runSourceAnalyzerFn: async () => ({ width: 1280, height: 720, durationSeconds: 10, hdrMode: "sdr" }),
+    validateSourceAnalysisFn: () => ({ passed: true, failures: [] }),
+    runDecodeSanityCheckFn: async () => ({ passed: true, exitCode: 0, stderrOutput: "" }),
+    runSceneComplexityAnalyzerFn: async () => ({}),
+    runStoragePreflightFn: async () => ({ verdict: "ok" }),
+    planRenditionsFn: () => ([{ codecFamily: "avc", resolutionLabel: "720p", requiresToneMap: false }]),
+    runQualityGatedEncodeFn: async () => { encoded = true; return {}; },
+  });
+  await assert.rejects(() => processVideoTranscodeJob(baseJob(), deps), (err) => err instanceof LeaseLost);
+  assert.equal(encoded, false);
+});
+
+test("a source validation failure re-throws with the engine's own failureCategory, writes nothing itself, and never reaches rendition encoding", async () => {
   let updatedStatus = null;
   const dbClient = fakeDbClient({
     audio_visual_asset_versions: { data: { id: "version-1", audio_visual_id: "video-1" }, error: null },
@@ -215,7 +273,9 @@ test("a source validation failure marks the asset version failed and re-throws w
     }
   );
   assert.equal(plannedCalled, false, "must never reach rendition planning after a source validation failure");
-  assert.equal(updatedStatus, "failed");
+  // The lane records the failure through its fenced hls_fail_media_job (media-lane.js).
+  assert.equal(updatedStatus, null);
+  assert.deepEqual(deps.rpc.calls, []);
 });
 
 test("an insufficient storage preflight fails as RESOURCE_EXHAUSTION before any rendition is encoded", async () => {
@@ -255,7 +315,7 @@ test("a rendition that never meets quality thresholds propagates OUTPUT_VALIDATI
     runStoragePreflightFn: async () => ({ verdict: "ok" }),
     runQualityGatedEncodeFn: async () => { throw qualityErr; },
     generatePeekClipFn: async () => { peekCalled = true; },
-    promoteAssetVersionFn: async () => { promoteCalled = true; },
+    rpc: Object.assign(async (name, args) => { if (name === "hls_commit_video_job") promoteCalled = true; return true; }, { calls: [] }),
   });
 
   await assert.rejects(

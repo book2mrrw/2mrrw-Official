@@ -28,6 +28,7 @@ import { headR2ObjectKey } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { ADMIN_UPLOAD_CONTRACTS } from "@/lib/media/admin-upload-contract";
 import { emitServerEvent } from "@/lib/observability/server-events";
+import { videoTranscodeJobRow } from "@/lib/audio-visual/video-job";
 
 export const dynamic = "force-dynamic";
 
@@ -115,13 +116,9 @@ export async function POST(req) {
         .single();
       if (versionErr) throw versionErr;
 
-      const { error: jobErr } = await admin.from("hls_transcode_jobs").insert({
-        job_type: "video",
-        asset_version_id: assetVersion.id,
-        source_key: key,
-        status: "pending",
-        queued_by: user.id,
-      });
+      const { error: jobErr } = await admin.from("hls_transcode_jobs").insert(
+        videoTranscodeJobRow({ assetVersionId: assetVersion.id, sourceKey: key, queuedBy: user.id })
+      );
       if (jobErr) throw jobErr;
 
       console.info(`[admin/audio-visual/upload/complete] master queued videoId=${videoId} assetVersionId=${assetVersion.id}`);

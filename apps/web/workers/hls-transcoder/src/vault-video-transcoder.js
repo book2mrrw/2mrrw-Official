@@ -14,6 +14,12 @@
  * consumer is what lets /api/vault/video/{manifest,variant,key} work with no
  * changes at all.
  *
+ * Leases (media-lane.js): the job publishes through the fenced
+ * hls_commit_transcode_job named by its lease, so a worker that lost the job
+ * can never publish over the one that took it; uploads go to the job's own
+ * generation prefix (hls_prefix ends versions/g{generation}/), so two attempts
+ * never write the same object.
+ *
  * Ladder values are duplicated from src/lib/vault/vault-video-contract.js by
  * hand, for the same reason derive-key.js duplicates the app's key derivation:
  * the web app and this worker are separate deployables with no shared module
@@ -22,13 +28,14 @@
 
 import path from "path";
 import fs from "fs";
-import os from "os";
 import crypto from "crypto";
 import { spawn } from "node:child_process";
 import { pipeline } from "stream/promises";
 import { logger } from "./logger.js";
 import { downloadStream, upload } from "./r2.js";
-import { markJobComplete } from "./db.js";
+import { notifyManifestPublished } from "./manifest-cache.js";
+import { LeaseLost } from "./media-lane.js";
+import { createJobWorkDir, cleanupJobWorkDir } from "./engine/scratch-workspace.js";
 import { ladderForSourceHeight, SEGMENT_SECONDS } from "./vault-video-ladder.js";
 
 const SEG_DURATION = SEGMENT_SECONDS;
@@ -158,8 +165,9 @@ async function encodeRung({ sourcePath, rung, tmpDir, keyInfoFile, fps, slug }) 
 /**
  * @param {object} job a claimed hls_transcode_jobs row (job_type='vault_video')
  */
-export async function processVaultVideoJob(job) {
-  const { id: jobId, slug, source_key: sourceKey, hls_prefix: prefix } = job;
+export async function processVaultVideoJob(job, { rpc, lease } = {}) {
+  if (!rpc || !lease) throw new Error("processVaultVideoJob: rpc and lease are required");
+  const { id: jobId, slug, source_key: sourceKey, hls_prefix: prefix, claim_token: claimToken } = job;
   if (!slug) {
     const err = new Error(`vault video job ${jobId} has no slug`);
     err.failureCategory = "VALIDATION_FAILURE";
@@ -173,7 +181,8 @@ export async function processVaultVideoJob(job) {
     throw err;
   }
 
-  const tmpDir = fs.mkdtempSync(path.join(process.env.SCRATCH_DIR || os.tmpdir(), `vault-video-${jobId}-`));
+  // One scratch directory per lease (media-lane.js sweeps dead ones at boot).
+  const tmpDir = createJobWorkDir(jobId, claimToken);
   try {
     const sourcePath = path.join(tmpDir, "source");
     await pipeline(
@@ -212,19 +221,26 @@ export async function processVaultVideoJob(job) {
     // hls_manifests is exactly what the Vault's playback routes read. The
     // release_type marks the row as this pipeline's, which is what lets those
     // routes refuse a manifest that is not ours.
-    await markJobComplete(job, {
-      slug,
-      track_slug: null,
-      release_type: "vault",
-      hls_prefix: prefix,
-      bitrates,
-      segment_duration_secs: SEG_DURATION,
-      duration_seconds: durationSeconds || source.durationSeconds,
-      segment_counts: segmentCounts,
+    // release_type comes from the job row ('vault'), set by the commit itself.
+    const published = await rpc("hls_commit_transcode_job", {
+      ...lease,
+      p_manifest: {
+        slug,
+        track_slug: null,
+        hls_prefix: prefix,
+        bitrates,
+        segment_duration_secs: SEG_DURATION,
+        duration_seconds: durationSeconds || source.durationSeconds,
+        segment_counts: segmentCounts,
+        media_kind: "video",
+        transcode_profile_version: job.target_profile_version,
+      },
     });
+    if (!published?.committed) throw new LeaseLost(jobId);
+    await notifyManifestPublished({ slug, trackSlug: null });
 
     logger.info("vault video complete", { jobId, slug, rungs: bitrates, durationSeconds });
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    cleanupJobWorkDir(jobId, claimToken);
   }
 }

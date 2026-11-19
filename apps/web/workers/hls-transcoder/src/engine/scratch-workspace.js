@@ -61,3 +61,28 @@ export async function cleanupOrphanedJobDirs(isJobStillActive) {
 
   return { scanned: jobIds.length, removed };
 }
+
+/**
+ * Boot-time sweep for the leased video lanes (media-lane.js), whose attempt
+ * directories are named by lease token: remove every attempt whose lease
+ * `isLeaseLive(jobId, attemptId)` says nobody holds any more — a crash, a lost
+ * lease or a hand-back left it behind — and then any job directory left empty.
+ * A lease another worker sharing this volume still holds is kept.
+ */
+export async function cleanupDeadAttempts(isLeaseLive) {
+  const root = scratchRoot();
+  if (!fs.existsSync(root)) return { removed: [] };
+
+  const removed = [];
+  for (const job of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!job.isDirectory()) continue;
+    const jobDir = path.join(root, job.name);
+    for (const attempt of fs.readdirSync(jobDir, { withFileTypes: true })) {
+      if (attempt.isDirectory() && await isLeaseLive(job.name, attempt.name)) continue;
+      fs.rmSync(path.join(jobDir, attempt.name), { recursive: true, force: true });
+      removed.push(`${job.name}/${attempt.name}`);
+    }
+    if (fs.readdirSync(jobDir).length === 0) fs.rmdirSync(jobDir);
+  }
+  return { removed };
+}
