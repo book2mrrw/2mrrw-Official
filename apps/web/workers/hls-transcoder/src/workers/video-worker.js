@@ -8,11 +8,10 @@
  * nothing else. There is no fallback path to audio processing anywhere in
  * this file — it never imports transcoder.js.
  *
- * video-transcoder.js's dbClient/downloadStreamFn/uploadFn/rpc/lease are
- * required, never-defaulted params (see its own header) — this is the one
- * real place that imports db.js/r2.js and closes over them, so
- * video-transcoder.js itself stays safe to import in a test file with no env
- * vars set.
+ * Keyless: the database only through the lane's own login (lane-db.js), and
+ * storage plus content keys only through the website, per lease
+ * (lane-transfers.js). Never db.js or r2.js: this host holds no service-role
+ * key, no storage key and no master secret.
  */
 
 import os from "os";
@@ -20,8 +19,8 @@ import crypto from "crypto";
 import { processVideoTranscodeJob } from "../video-transcoder.js";
 import { runMediaLane } from "../media-lane.js";
 import { dropPrivilegesIfRoot } from "../drop-privileges.js";
-import { db } from "../db.js";
-import { downloadStream, upload } from "../r2.js";
+import { rpc, isLeaseLive } from "../lane-db.js";
+import { laneSession } from "../lane-transfers.js";
 
 // /data is the mounted scratch volume — owned by root the first time a fresh
 // volume is attached, so this must chown it before dropping privileges.
@@ -34,9 +33,10 @@ const IDLE_POLL_MS = parseInt(process.env.IDLE_POLL_MS || "5000", 10);
 runMediaLane({
   jobType: JOB_TYPE,
   workerId: WORKER_ID,
-  db,
-  processFn: (job, { lease, rpc }) => processVideoTranscodeJob(job, {
-    dbClient: db, downloadStreamFn: downloadStream, uploadFn: upload, rpc, lease,
+  rpc,
+  isLeaseLive,
+  processFn: (job, { lease }) => processVideoTranscodeJob(job, {
+    rpc, lease, lane: laneSession({ lane: JOB_TYPE, job }),
   }),
   idlePollMs: IDLE_POLL_MS,
 });

@@ -86,16 +86,27 @@ test("the video processor is a real, wired pipeline now (Slice 15) — no longer
   const mod = await import("../../../../workers/hls-transcoder/src/video-transcoder.js");
   await assert.rejects(
     () => mod.processVideoTranscodeJob({ id: "test-job-id" }, {}),
-    /dbClient, downloadStreamFn, uploadFn, rpc and lease are all required/
+    /rpc, lease and lane are all required/
   );
 });
 
-test("video-worker.js is the one real place that imports db.js/r2.js for the video lane, closing over them for video-transcoder.js", () => {
-  const src = read("workers/hls-transcoder/src/workers/video-worker.js");
-  assert.match(src, /import \{ db \} from ["']\.\.\/db\.js["']/);
-  assert.match(src, /import \{ downloadStream, upload \} from ["']\.\.\/r2\.js["']/);
-  // ...plus the lease the job was claimed under and the fenced lane functions.
-  assert.match(src, /processVideoTranscodeJob\(job, \{\s*dbClient: db, downloadStreamFn: downloadStream, uploadFn: upload, rpc, lease,\s*\}\)/);
+test("the video lanes hold no key: the database only through their own login, storage and content keys only through the website", () => {
+  // Keyless since 2026-11-19: no service-role key (db.js), no storage key
+  // (r2.js), no master secret on the hosts of these lanes — the lane login
+  // (lane-db.js) and per-lease website links and keys (lane-transfers.js).
+  for (const worker of ["video-worker.js", "vault-video-worker.js", "track-visual-worker.js"]) {
+    const src = read(`workers/hls-transcoder/src/workers/${worker}`);
+    assert.match(src, /from ["']\.\.\/lane-db\.js["']/, `${worker} uses the lane login`);
+    assert.match(src, /import \{ laneSession \} from ["']\.\.\/lane-transfers\.js["']/, `${worker} uses the website per lease`);
+    assert.doesNotMatch(src, /from ["']\.\.\/(db|r2)\.js["']/, `${worker} imports no keyed client`);
+  }
+  for (const file of ["video-transcoder.js", "vault-video-transcoder.js", "track-visual-transcoder.js"]) {
+    const src = read(`workers/hls-transcoder/src/${file}`);
+    assert.doesNotMatch(src, /from ["']\.\/(db|r2)\.js["']/, `${file} imports no keyed client`);
+    assert.doesNotMatch(src, /process\.env\.(HLS_MASTER_SECRET|TRACK_VISUAL_MASTER_SECRET|SUPABASE_SECRET_KEY|R2_SECRET_ACCESS_KEY)/, `${file} reads no secret`);
+  }
+  const video = read("workers/hls-transcoder/src/workers/video-worker.js");
+  assert.match(video, /processVideoTranscodeJob\(job, \{\s*rpc, lease, lane: laneSession\(\{ lane: JOB_TYPE, job \}\),\s*\}\)/);
 });
 
 test("the old shared index.js entry point is gone, not just unreferenced", () => {

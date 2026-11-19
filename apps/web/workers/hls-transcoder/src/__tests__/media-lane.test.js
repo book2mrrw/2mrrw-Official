@@ -13,30 +13,19 @@ const LEASE = { p_job_id: "job-1", p_worker_id: "w1", p_claim_token: "lease-1", 
 function harness({ jobs = [JOB], answers = {}, live = [] } = {}) {
   const calls = [];
   const queue = [...jobs];
-  const db = {
-    rpc: async (name, args) => {
-      calls.push({ name, args });
-      if (name === "hls_claim_media_job") return { data: queue.shift() ?? { id: null }, error: null };
-      const answer = name in answers ? answers[name] : name === "hls_fail_media_job" ? { updated: true, status: "pending" } : true;
-      return { data: answer, error: null };
-    },
-    from: () => {
-      const filter = {};
-      const query = {
-        select: () => query,
-        eq: (column, value) => { filter[column] = value; return query; },
-        maybeSingle: async () => ({ data: live.some(([id, token]) => filter.id === id && filter.claim_token === token) ? { id: filter.id } : null, error: null }),
-      };
-      return query;
-    },
+  const rpc = async (name, args) => {
+    calls.push({ name, args });
+    if (name === "hls_claim_media_job") return queue.shift() ?? null;
+    return name in answers ? answers[name] : name === "hls_fail_media_job" ? { updated: true, status: "pending" } : true;
   };
+  const isLeaseLive = async (jobId, token) => live.some(([id, t]) => id === jobId && t === token);
   const signals = new EventEmitter();
   const exits = [];
   const start = (processFn) => runMediaLane({
-    jobType: "video", workerId: "w1", processFn, db, idlePollMs: 2, heartbeatMs: 5, exit: (code) => exits.push(code), signals,
+    jobType: "video", workerId: "w1", processFn, rpc, isLeaseLive, idlePollMs: 2, heartbeatMs: 5, exit: (code) => exits.push(code), signals,
   });
   const named = (name) => calls.filter((c) => c.name === name);
-  return { db, calls, named, signals, exits, start };
+  return { isLeaseLive, calls, named, signals, exits, start };
 }
 
 /** A job that runs until the test lets it finish (so no lease timer outlives the test). */
@@ -131,7 +120,7 @@ test("at boot, scratch of every attempt whose lease is gone is removed; a live o
   for (const dir of ["job-1/lease-old", "job-1/lease-live", "job-2/lease-gone"]) fs.mkdirSync(path.join(scratch, dir), { recursive: true });
   fs.writeFileSync(path.join(scratch, "job-2/lease-gone/master"), "x");
   const h = harness({ live: [["job-1", "lease-live"]] });
-  const { removed } = await sweepScratch(h.db);
+  const { removed } = await sweepScratch(h.isLeaseLive);
   assert.deepEqual(removed.sort(), ["job-1/lease-old", "job-2/lease-gone"]);
   assert.ok(fs.existsSync(path.join(scratch, "job-1/lease-live")));
   assert.ok(!fs.existsSync(path.join(scratch, "job-2")), "an emptied job directory goes too");

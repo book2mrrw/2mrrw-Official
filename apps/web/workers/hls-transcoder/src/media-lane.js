@@ -21,6 +21,8 @@
  *   lease runs out. A video encode can be hours; there is no draining it.
  * - Scratch: each attempt works in its own directory named by its lease token;
  *   at boot, every directory whose lease is no longer live is removed.
+ * - Credentials: none but the lane's own database login (lane-db.js); storage
+ *   links and content keys come per lease from the website (lane-transfers.js).
  */
 
 import { logger } from "./logger.js";
@@ -46,27 +48,20 @@ export function leaseOf(job) {
   return { p_job_id: job.id, p_worker_id: job.worker_id, p_claim_token: job.claim_token, p_generation: job.generation };
 }
 
-/** Call a lane function; a database error throws. */
-export function rpcWith(db) {
-  return async (name, args) => {
-    const { data, error } = await db.rpc(name, args);
-    if (error) throw new Error(`${name}: ${error.message}`);
-    return data;
-  };
-}
-
-/** A composite NULL arrives as { id: null, ... }: no job. */
+/** A composite NULL arrives as null or { id: null, ... }: no job. */
 function claimed(data) {
   const job = Array.isArray(data) ? data[0] : data;
   return job?.id ? job : null;
 }
 
 /** Boot-time scratch sweep: keep only attempts whose lease someone still holds. */
-export async function sweepScratch(db) {
+export async function sweepScratch(isLeaseLive) {
   return cleanupDeadAttempts(async (jobId, claimToken) => {
-    const { data, error } = await db.from("hls_transcode_jobs").select("id")
-      .eq("id", jobId).eq("status", "processing").eq("claim_token", claimToken).maybeSingle();
-    return !error && Boolean(data);
+    try {
+      return Boolean(await isLeaseLive(jobId, claimToken));
+    } catch {
+      return false;
+    }
   });
 }
 
@@ -76,13 +71,13 @@ export async function sweepScratch(db) {
  * @param {string} opts.workerId
  * @param {(job: object, ctx: { lease: object, rpc: Function }) => Promise<void>} opts.processFn
  *   publishes through fenced functions only and throws LeaseLost when one is refused
- * @param {object} opts.db Supabase client (service role)
+ * @param {(name: string, args: object) => Promise<any>} opts.rpc calls a lane function (lane-db.js)
+ * @param {(jobId: string, claimToken: string) => Promise<boolean>} opts.isLeaseLive
  */
 export function runMediaLane({
-  jobType, workerId, processFn, db, idlePollMs = 5000, heartbeatMs = HEARTBEAT_INTERVAL_MS,
+  jobType, workerId, processFn, rpc, isLeaseLive, idlePollMs = 5000, heartbeatMs = HEARTBEAT_INTERVAL_MS,
   exit = (code) => process.exit(code), signals = process,
 }) {
-  const rpc = rpcWith(db);
   let current = null;
   let stopping = false;
 
@@ -167,7 +162,7 @@ export function runMediaLane({
   }
 
   logger.info("worker started", { lane: jobType, workerId, idlePollMs });
-  return sweepScratch(db)
+  return sweepScratch(isLeaseLive)
     .then((swept) => { if (swept.removed.length) logger.info("scratch from dead attempts removed", { lane: jobType, removed: swept.removed }); })
     .catch((err) => logger.warn("scratch sweep failed", { lane: jobType, message: err.message }))
     .then(poll)

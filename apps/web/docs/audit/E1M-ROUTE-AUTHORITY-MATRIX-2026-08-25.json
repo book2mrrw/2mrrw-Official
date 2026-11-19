@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "generatedAt": "2026-11-18T12:42:59.894Z",
   "sourceRoot": "src/app/api",
-  "total": 189,
+  "total": 190,
   "counts": {
     "HUMAN_ADMIN": 66,
-    "SERVICE_ONLY": 21,
+    "SERVICE_ONLY": 22,
     "ADMIN_OR_SERVICE_CAPABILITY": 5,
     "AUTHENTICATED_USER": 32,
     "PUBLIC": 65,
@@ -1789,6 +1789,15 @@
       ],
       "authority": "SERVICE_ONLY",
       "evidence": "cover-art lane job lease (id + lease_token verified against cover_art_versions), not requireServiceCapability"
+    },
+    {
+      "route": "/api/hls/lane-transfers",
+      "file": "src/app/api/hls/lane-transfers/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "video-lane job lease (job_id + worker_id + lease_token + generation verified against hls_transcode_jobs / track_visual_jobs), not requireServiceCapability"
     }
   ]
 }

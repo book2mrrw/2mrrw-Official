@@ -36,12 +36,16 @@
  * before trusting it in production, the same way every prior slice was
  * confirmed.
  *
- * dbClient/downloadStreamFn/uploadFn/rpc/lease are REQUIRED deps, never defaulted to
- * the real db.js/r2.js singletons — exactly the reason publication-
- * authority.js's own header gives for the same choice: importing db.js (or
- * r2.js) throws at *import time* if the real env vars aren't set, which
- * would make this whole file unsafe to even import in a test file.
- * video-worker.js is the one real caller and passes the real modules in.
+ * Keyless (lane-transfers.js): the lane holds no storage key, no master
+ * secret and no service-role key. The website's lane session (`lane`) gives
+ * this job its master's read link, write links under this attempt's folder
+ * (`lane.prefix`), this version's content key (`lane.encryption`) and the
+ * video's details (`lane.context`); `rpc` calls the fenced lane functions as
+ * the lane's own database login (lane-db.js).
+ *
+ * rpc/lease/lane are REQUIRED deps, never defaulted, so this file stays safe
+ * to import in a test with no env vars set. video-worker.js is the one real
+ * caller and passes the real ones in.
  */
 import fs from "fs";
 import path from "path";
@@ -58,7 +62,6 @@ import { runQualityGatedEncode } from "./engine/quality-evaluator.js";
 import { validatePackagedOutput } from "./engine/output-validator.js";
 import { encryptRenditionSegments, rewritePlaylistForEncryption } from "./engine/packaging.js";
 import { generatePeekClip } from "./engine/peek-generator.js";
-import { audioVisualR2FolderPath } from "./engine/r2-paths.js";
 import { LeaseLost } from "./media-lane.js";
 
 // Starting quality-gate policy, not final — mirrors rendition-planner.js's
@@ -69,8 +72,8 @@ import { LeaseLost } from "./media-lane.js";
 const DEFAULT_QUALITY_THRESHOLDS = { minVmaf: 93, maxCambi: 8, minSsim: 0.95 };
 
 // Every engine-function default below is safe to import unconditionally
-// (no env-var-gated singleton behind any of them) — only dbClient/
-// downloadStreamFn/uploadFn are excluded and required from the caller.
+// (no env-var-gated singleton behind any of them) — only rpc/lease/lane are
+// excluded and required from the caller.
 const DEFAULT_ENGINE_DEPS = {
   runSourceAnalyzerFn: runSourceAnalyzer,
   validateSourceAnalysisFn: validateSourceAnalysis,
@@ -90,16 +93,12 @@ const DEFAULT_ENGINE_DEPS = {
   cleanupJobWorkDirFn: cleanupJobWorkDir,
 };
 
-// Nested under the confirmed "2MRRW Studios/{Content-Type Folder}/{slug}/"
-// (or .../Seriez/{seriezSlug}/{episodeSlug}/) convention — assetVersionId
-// keeps multiple master replacements' renditions from ever colliding under
-// the same slug folder, and g{generation} keeps two attempts at the same
-// version from ever writing the same object (hls_commit_video_job publishes
-// only the committing generation's folder).
-function attemptR2Folder(baseFolder, assetVersionId, generation) {
-  return `${baseFolder}renditions/${assetVersionId}/g${generation}/`;
-}
-
+// The attempt folder comes from the website (lane.prefix): the confirmed
+// "2MRRW Studios/{Content-Type Folder}/{slug}/" (or .../Seriez/{seriezSlug}/
+// {episodeSlug}/) convention + renditions/{assetVersionId}/g{generation}/.
+// assetVersionId keeps master replacements apart; g{generation} keeps two
+// attempts at one version from ever writing the same object
+// (hls_commit_video_job publishes only the committing generation's folder).
 function renditionR2Prefix(attemptFolder, rendition) {
   const hdrSuffix = rendition.requiresToneMap ? "-tonemap" : rendition.hdrMode && rendition.hdrMode !== "sdr" ? `-${rendition.hdrMode}` : "";
   return `${attemptFolder}${rendition.codecFamily}-${rendition.resolutionLabel}${hdrSuffix}/`;
@@ -110,25 +109,15 @@ function renditionOutputDir(scratchDir, rendition) {
   return path.join(scratchDir, `${rendition.codecFamily}-${rendition.resolutionLabel}${hdrSuffix}`);
 }
 
-async function downloadMasterToLocalFile(sourceKey, destPath, downloadStreamFn) {
-  const stream = await downloadStreamFn(sourceKey);
-  await new Promise((resolve, reject) => {
-    const out = fs.createWriteStream(destPath);
-    stream.pipe(out);
-    stream.on("error", reject);
-    out.on("error", reject);
-    out.on("finish", resolve);
-  });
-}
-
-async function uploadDirectory(localDir, r2Prefix, uploadFn) {
-  const entries = fs.readdirSync(localDir);
-  for (const name of entries) {
-    const localPath = path.join(localDir, name);
-    if (fs.statSync(localPath).isDirectory()) continue;
-    const contentType = name.endsWith(".m3u8") ? "application/x-mpegURL" : "video/mp4";
-    await uploadFn(`${r2Prefix}${name}`, fs.readFileSync(localPath), contentType);
-  }
+async function uploadDirectory(localDir, r2Prefix, lane) {
+  const items = fs.readdirSync(localDir)
+    .filter((name) => !fs.statSync(path.join(localDir, name)).isDirectory())
+    .map((name) => ({
+      key: `${r2Prefix}${name}`,
+      file: path.join(localDir, name),
+      contentType: name.endsWith(".m3u8") ? "application/x-mpegURL" : "video/mp4",
+    }));
+  await lane.uploadFiles(items);
 }
 
 function pickEncodeFn(rendition, sourceAnalysis, deps) {
@@ -171,14 +160,17 @@ async function processOneRendition({ rendition, masterPath, scratchDir, audioVis
   // Encryption stays keyed by audioVisualId (the stable UUID), never the
   // slug — a slug can be edited later (a title change, a dedup rename); the
   // encryption key for content already published must never shift under it.
-  await deps.encryptRenditionSegmentsFn({ sourceDir: outputDir, videoId: audioVisualId, assetVersionId });
+  await deps.encryptRenditionSegmentsFn({
+    sourceDir: outputDir, videoId: audioVisualId, assetVersionId,
+    key: Buffer.from(deps.lane.encryption.key, "hex"), iv: Buffer.from(deps.lane.encryption.iv, "hex"),
+  });
 
   const playlistPath = path.join(outputDir, "playlist.m3u8");
   const rewritten = deps.rewritePlaylistForEncryptionFn(fs.readFileSync(playlistPath, "utf8"), "placeholder", "0".repeat(32));
   fs.writeFileSync(playlistPath, rewritten);
 
   const hlsPrefix = renditionR2Prefix(attemptFolder, rendition);
-  await uploadDirectory(outputDir, hlsPrefix, deps.uploadFn);
+  await uploadDirectory(outputDir, hlsPrefix, deps.lane);
 
   return {
     asset_version_id: assetVersionId,
@@ -196,17 +188,17 @@ async function processOneRendition({ rendition, masterPath, scratchDir, audioVis
 /**
  * @param {object} job - a claimed hls_transcode_jobs row (job_type='video')
  * @param {object} params
- * @param {object} params.dbClient - required, never defaulted (see file header)
- * @param {Function} params.downloadStreamFn - required, never defaulted (see file header)
- * @param {Function} params.uploadFn - required, never defaulted (see file header)
+ * @param {Function} params.rpc - calls a fenced lane function (lane-db.js); required
+ * @param {object} params.lease - this job's lease, named by every fenced write; required
+ * @param {object} params.lane - this job's website session (lane-transfers.js); required
  * @param {object} [params] - every other engine-function override is test-only; real callers never need them
  */
 export async function processVideoTranscodeJob(job, params) {
-  if (!params?.dbClient || !params?.downloadStreamFn || !params?.uploadFn || !params?.rpc || !params?.lease) {
-    throw new Error("processVideoTranscodeJob: dbClient, downloadStreamFn, uploadFn, rpc and lease are all required (see file header for why they're never defaulted)");
+  if (!params?.rpc || !params?.lease || !params?.lane) {
+    throw new Error("processVideoTranscodeJob: rpc, lease and lane are all required (see file header for why they're never defaulted)");
   }
   const deps = { ...DEFAULT_ENGINE_DEPS, ...params };
-  const { id: jobId, source_key: sourceKey, asset_version_id: assetVersionId, generation, claim_token: claimToken } = job;
+  const { id: jobId, asset_version_id: assetVersionId, generation, claim_token: claimToken } = job;
 
   if (!assetVersionId) {
     const err = new Error(`processVideoTranscodeJob: job ${jobId} has no asset_version_id`);
@@ -214,48 +206,26 @@ export async function processVideoTranscodeJob(job, params) {
     throw err;
   }
 
-  const { data: assetVersion, error: avErr } = await deps.dbClient
-    .from("audio_visual_asset_versions")
-    .select("id, audio_visual_id")
-    .eq("id", assetVersionId)
-    .single();
-  if (avErr || !assetVersion) {
-    const err = new Error(`processVideoTranscodeJob: could not load asset version ${assetVersionId}: ${avErr?.message}`);
+  // The video's details, this attempt's folder and its content key, from the
+  // website for this lease (a refused lease is LeaseLost).
+  const opened = await deps.lane.open();
+  const audioVisual = opened?.context;
+  if (!audioVisual?.audio_visual_id || audioVisual.asset_version_id !== assetVersionId) {
+    const err = new Error(`processVideoTranscodeJob: no video found for asset version ${assetVersionId}`);
     err.failureCategory = "INPUT_NOT_FOUND";
     throw err;
   }
-  const audioVisualId = assetVersion.audio_visual_id;
-
-  const { data: audioVisual, error: videoErr } = await deps.dbClient
-    .from("audio_visuals")
-    .select("peek_start_seconds, peek_duration_seconds, slug, video_type, seriez_id")
-    .eq("id", audioVisualId)
-    .single();
-  if (videoErr || !audioVisual) {
-    const err = new Error(`processVideoTranscodeJob: could not load audio_visuals row ${audioVisualId}: ${videoErr?.message}`);
-    err.failureCategory = "INPUT_NOT_FOUND";
-    throw err;
+  const audioVisualId = audioVisual.audio_visual_id;
+  const attemptFolder = opened.prefix;
+  if (!String(attemptFolder).endsWith(`/${assetVersionId}/g${generation}/`)) {
+    throw new Error(`processVideoTranscodeJob: unexpected attempt folder ${attemptFolder}`);
   }
-
-  let seriezSlug = null;
-  if (audioVisual.seriez_id) {
-    const { data: seriez } = await deps.dbClient.from("audio_visual_seriez").select("slug").eq("id", audioVisual.seriez_id).single();
-    seriezSlug = seriez?.slug || null;
-  }
-  const baseFolder = audioVisualR2FolderPath({
-    videoType: audioVisual.video_type,
-    slug: audioVisual.slug,
-    seriezSlug,
-    episodeSlug: seriezSlug ? audioVisual.slug : null,
-  });
-
-  const attemptFolder = attemptR2Folder(baseFolder, assetVersionId, generation);
   // One scratch directory per lease (media-lane.js sweeps dead ones at boot).
   const scratchDir = deps.createJobWorkDirFn(jobId, claimToken);
   const masterPath = path.join(scratchDir, "master");
 
   try {
-    await downloadMasterToLocalFile(sourceKey, masterPath, deps.downloadStreamFn);
+    await deps.lane.downloadSource(masterPath);
 
     const sourceAnalysis = await deps.runSourceAnalyzerFn(masterPath);
     const sourceCheck = deps.validateSourceAnalysisFn(sourceAnalysis);
@@ -320,7 +290,7 @@ export async function processVideoTranscodeJob(job, params) {
       sourceHeight: sourceAnalysis.height,
     });
     const peekR2Key = `${attemptFolder}peek.mp4`;
-    await deps.uploadFn(peekR2Key, fs.readFileSync(peekLocalPath), "video/mp4");
+    await deps.lane.uploadFiles([{ key: peekR2Key, file: peekLocalPath, contentType: "video/mp4" }]);
 
     // Renditions, ready, promotion and job complete: one fenced transaction.
     // A failed attempt is recorded by media-lane.js (hls_fail_media_job),

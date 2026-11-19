@@ -116,8 +116,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
-# Copy source
+# Copy source, and Supabase's root certificate: the video lanes verify their
+# database connection against it (src/lane-db.js)
 COPY src/ ./src/
+COPY certs/ ./certs/
 
 # Non-root for security — dropped at the application layer (src/drop-privileges.js)
 # instead of via USER here, so the video lane can chown its freshly-mounted

@@ -98,16 +98,22 @@ export function decryptSegmentBuffer(cipherBuffer, key, iv) {
  * @param {string} params.sourceDir - directory containing CodecEngine's plain output
  * @param {string} params.videoId
  * @param {string} params.assetVersionId
+ * @param {Buffer} [params.key] - this version's content key as the website hands it
+ *   to the lane (lane-transfers.js); derived here only when absent
+ * @param {Buffer} [params.iv]
  * @param {Function} [params.readdirFn]
  * @param {Function} [params.readFileFn]
  * @param {Function} [params.writeFileFn]
  * @returns {Promise<{ encryptedFiles: string[], keyHex: string, ivHex: string }>}
  */
 export async function encryptRenditionSegments({
-  sourceDir, videoId, assetVersionId,
+  sourceDir, videoId, assetVersionId, key: givenKey, iv: givenIv,
   readdirFn = fs.readdir, readFileFn = fs.readFile, writeFileFn = fs.writeFile,
 }) {
-  const { key, iv } = deriveAudioVisualHLSKeyAndIV(videoId, assetVersionId);
+  const { key, iv } = givenKey && givenIv
+    ? { key: Buffer.from(givenKey), iv: Buffer.from(givenIv) }
+    : deriveAudioVisualHLSKeyAndIV(videoId, assetVersionId);
+  if (key.length !== 16 || iv.length !== 16) throw new Error("encryptRenditionSegments: key and iv must be 16 bytes");
   const entries = await readdirFn(sourceDir);
   const segmentFiles = entries.filter((name) => name === "init.mp4" || /^seg_\d+\.m4s$/.test(name)).sort();
 

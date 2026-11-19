@@ -64,6 +64,7 @@ const SERVICE_INTERNAL_API_METHODS = new Map([
   ["/api/admin/sync/catalog", new Set(["POST"])],
   ["/api/admin/sync/drop-notification", new Set(["POST"])],
   ["/api/cover-art/transfers", new Set(["POST"])],
+  ["/api/hls/lane-transfers", new Set(["POST"])],
   ["/api/cron/account-lifecycle", new Set(["GET"])],
   ["/api/cron/expire-gifts", new Set(["GET", "POST"])],
   ["/api/cron/finalize-draft-dumps", new Set(["GET"])],

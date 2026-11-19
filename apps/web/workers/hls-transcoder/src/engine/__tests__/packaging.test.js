@@ -200,3 +200,27 @@ test("rewritePlaylistForEncryption: a playlist with no #EXT-X-MAP line throws ra
     /no #EXT-X-MAP line found/
   );
 });
+
+// ── keyless lanes: the content key is handed in by the website ──
+
+test("encryptRenditionSegments: a handed-in content key is used as is, with no master secret on the host", async () => {
+  const written = new Map();
+  const io = {
+    readdirFn: async () => ["init.mp4", "seg_00001.m4s", "playlist.m3u8"],
+    readFileFn: async (file) => Buffer.from(`plain ${file.split("/").pop()}`),
+    writeFileFn: async (file, bytes) => { written.set(file.split("/").pop(), bytes); },
+  };
+  const key = Buffer.alloc(16, 7);
+  const iv = Buffer.alloc(16, 9);
+  const saved = process.env.HLS_MASTER_SECRET;
+  delete process.env.HLS_MASTER_SECRET;
+  try {
+    const out = await encryptRenditionSegments({ sourceDir: "/x", key, iv, ...io });
+    assert.deepEqual(out.encryptedFiles, ["init.mp4", "seg_00001.m4s"]);
+    assert.equal(out.keyHex, key.toString("hex"));
+    assert.equal(decryptSegmentBuffer(written.get("seg_00001.m4s"), key, iv).toString(), "plain seg_00001.m4s");
+    await assert.rejects(() => encryptRenditionSegments({ sourceDir: "/x", key: Buffer.alloc(8), iv, ...io }), /16 bytes/);
+  } finally {
+    process.env.HLS_MASTER_SECRET = saved;
+  }
+});

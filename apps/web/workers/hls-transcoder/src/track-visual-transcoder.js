@@ -1,9 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { pipeline } from 'node:stream/promises';
 import { runSourceAnalyzer } from './engine/source-analyzer.js';
 import { planTrackVisual, visualEncodeArgs } from './track-visual-policy.js';
 
@@ -40,20 +38,23 @@ export async function visualFfmpeg(args, { timeoutMs = 90 * 60 * 1000 } = {}) {
     p.on('close', code => { clearTimeout(timer); code === 0 && !timedOut ? resolve() : reject(new Error(`Visual encode failed: ${log}`)); });
   });
 }
-export async function transcodeTrackVisual({ job, download, upload, analyze = runSourceAnalyzer, run = visualFfmpeg }) {
+// Keyless (lane-transfers.js): the source's read link, write links under this
+// lease's folder and the visual's content key come from the website for this
+// lease; the host holds no storage key and no master secret.
+export async function transcodeTrackVisual({ job, lane, analyze = runSourceAnalyzer, run = visualFfmpeg }) {
   const version = job.version;
-  const secret = process.env.TRACK_VISUAL_MASTER_SECRET || process.env.HLS_MASTER_SECRET;
-  if (!secret) throw new Error('Visual encryption secret missing');
+  const opened = await lane.open();
+  const prefix = `track-visuals/renditions/${version.track_id}/${version.id}/${job.lease_token}/`;
+  if (opened.prefix !== prefix) throw new Error(`Visual folder ${opened.prefix} is not this lease's ${prefix}`);
   const dir = fs.mkdtempSync(path.join(process.env.TRACK_VISUAL_SCRATCH || os.tmpdir(), 'track-visual-'));
   try {
     const sourcePath = path.join(dir,'source');
-    await pipeline(await download(version.source_key), fs.createWriteStream(sourcePath), { signal: AbortSignal.timeout(10 * 60 * 1000) });
+    await lane.downloadSource(sourcePath, { timeoutMs: 10 * 60 * 1000 });
     if (fs.statSync(sourcePath).size !== Number(version.source_bytes)) throw new Error('Visual upload byte count changed');
     const source = await analyze(sourcePath);
     const plan = planTrackVisual(source);
-    const prefix = `track-visuals/renditions/${version.track_id}/${version.id}/${job.lease_token}/`;
-    const key = crypto.createHmac('sha256',secret).update(`2mrrw:track-visual:${version.id}:key`).digest().subarray(0,16);
-    const iv = crypto.createHmac('sha256',secret).update(`2mrrw:track-visual:${version.id}:iv`).digest().subarray(0,16);
+    const key = Buffer.from(opened.encryption.key, 'hex');
+    const iv = Buffer.from(opened.encryption.iv, 'hex');
     const keyFile = path.join(dir,'key.bin'); fs.writeFileSync(keyFile,key,{mode:0o600});
     const keyInfo = path.join(dir,'key.txt'); fs.writeFileSync(keyInfo,`placeholder\n${keyFile}\n${iv.toString('hex')}\n`);
     const renditions = [], uploads = [];
@@ -83,7 +84,7 @@ export async function transcodeTrackVisual({ job, download, upload, analyze = ru
       for (const name of segments) uploads.push({key:prefix+rendition.id+'/'+name,file:path.join(outputDir,name)});
     }
     // No publication or object upload until every decoded rendition passes.
-    for (const item of uploads) await upload(item.key,fs.readFileSync(item.file),'video/mp2t', {CacheControl:'public, max-age=31536000, immutable'});
+    await lane.uploadFiles(uploads.map(item => ({ key: item.key, file: item.file, contentType: 'video/mp2t' })));
     return {version:1,assetVersionId:version.id,duration:source.durationSeconds,iv:iv.toString('hex'),renditions};
   } finally { fs.rmSync(dir,{recursive:true,force:true}); }
 }

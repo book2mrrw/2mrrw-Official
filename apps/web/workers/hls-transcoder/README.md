@@ -39,7 +39,7 @@ To move to newer FFmpeg or libraries, change those pins together and rebuild.
 ## Running the video lanes on an owned host (2MRRW-Cloud)
 
 ```sh
-cp hls-lanes.env.example hls-lanes.env && chmod 600 hls-lanes.env   # fill it
+cp hls-lanes.env.example hls-lanes.env && chmod 600 hls-lanes.env   # one secret
 docker compose -f compose.video.yaml build
 docker compose -f compose.video.yaml up -d                 # or: up -d video
 docker compose -f compose.video.yaml logs -f video
@@ -49,10 +49,17 @@ docker compose -f compose.video.yaml logs -f video
 scratch volumes and sizes (4 CPUs / 8 GB each). Scratch is disposable;
 masters and published media stay in R2.
 
-**Secrets.** `HLS_MASTER_SECRET` and `TRACK_VISUAL_MASTER_SECRET` must be the
-website's exact values: they derive the AES keys of everything already
-published. Vercel and Fly cannot show them back, so they come from wherever
-they were first recorded. Never rotate them on a host alone.
+**Keyless.** A host holds one secret: the password of `hls_media_worker`, the
+lanes' own database login (migration `20261119150000_hls_media_worker_role.sql`),
+which can call the lane functions and touches no table (`src/lane-db.js`, TLS
+verified against `certs/`). Everything else is per job, from the website
+(`POST /api/hls/lane-transfers`, `src/lane-transfers.js`), for the lease the
+job holds: a read link for its source, write links under that attempt's own
+folder, that job's content key (the key viewers' players already get) and, for
+a music video, its folder details. No service-role key, no R2 key, no
+`HLS_MASTER_SECRET` ever reaches a host, so moving to another host is copying
+`hls-lanes.env`. The audio lane (`audio-worker.js`) still uses the older keyed
+settings until its own successor ships.
 
 ## Leases: the video and vault lanes (`src/media-lane.js`)
 

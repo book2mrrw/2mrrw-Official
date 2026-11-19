@@ -14,6 +14,11 @@
  * consumer is what lets /api/vault/video/{manifest,variant,key} work with no
  * changes at all.
  *
+ * Keyless (lane-transfers.js): the source's read link, write links under the
+ * job's prefix and the slug's content key — the same key the vault key route
+ * serves viewers — come from the website for this lease; the host holds no
+ * storage key and no master secret.
+ *
  * Leases (media-lane.js): the job publishes through the fenced
  * hls_commit_transcode_job named by its lease, so a worker that lost the job
  * can never publish over the one that took it; uploads go to the job's own
@@ -28,12 +33,8 @@
 
 import path from "path";
 import fs from "fs";
-import crypto from "crypto";
 import { spawn } from "node:child_process";
-import { pipeline } from "stream/promises";
 import { logger } from "./logger.js";
-import { downloadStream, upload } from "./r2.js";
-import { notifyManifestPublished } from "./manifest-cache.js";
 import { LeaseLost } from "./media-lane.js";
 import { createJobWorkDir, cleanupJobWorkDir } from "./engine/scratch-workspace.js";
 import { ladderForSourceHeight, SEGMENT_SECONDS } from "./vault-video-ladder.js";
@@ -41,18 +42,6 @@ import { ladderForSourceHeight, SEGMENT_SECONDS } from "./vault-video-ladder.js"
 const SEG_DURATION = SEGMENT_SECONDS;
 const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
 const FFPROBE = process.env.FFPROBE_PATH || "ffprobe";
-
-/**
- * Must match apps/web/src/lib/hls/derive-key.js exactly -- the key route
- * derives the same bytes from the same slug, and a mismatch decrypts to noise.
- */
-function deriveKey(slug) {
-  const secret = process.env.HLS_MASTER_SECRET;
-  if (!secret) throw new Error("HLS_MASTER_SECRET is required");
-  const key = crypto.createHmac("sha256", secret).update(`2mrrw:hls:${slug}:key`).digest().slice(0, 16);
-  const iv = crypto.createHmac("sha256", secret).update(`2mrrw:hls:${slug}:iv`).digest().slice(0, 16);
-  return { key, iv };
-}
 
 function writeKeyInfoFile(tmpDir, key, iv) {
   const keyFile = path.join(tmpDir, "enc.key");
@@ -165,9 +154,9 @@ async function encodeRung({ sourcePath, rung, tmpDir, keyInfoFile, fps, slug }) 
 /**
  * @param {object} job a claimed hls_transcode_jobs row (job_type='vault_video')
  */
-export async function processVaultVideoJob(job, { rpc, lease } = {}) {
-  if (!rpc || !lease) throw new Error("processVaultVideoJob: rpc and lease are required");
-  const { id: jobId, slug, source_key: sourceKey, hls_prefix: prefix, claim_token: claimToken } = job;
+export async function processVaultVideoJob(job, { rpc, lease, lane } = {}) {
+  if (!rpc || !lease || !lane) throw new Error("processVaultVideoJob: rpc, lease and lane are required");
+  const { id: jobId, slug, hls_prefix: prefix, claim_token: claimToken } = job;
   if (!slug) {
     const err = new Error(`vault video job ${jobId} has no slug`);
     err.failureCategory = "VALIDATION_FAILURE";
@@ -181,21 +170,23 @@ export async function processVaultVideoJob(job, { rpc, lease } = {}) {
     throw err;
   }
 
+  // This lease's write prefix and the slug's content key, from the website
+  // (a refused lease is LeaseLost).
+  const opened = await lane.open();
+  if (opened.prefix !== prefix) throw new Error(`vault video job ${jobId}: the website's prefix ${opened.prefix} is not the job's ${prefix}`);
+
   // One scratch directory per lease (media-lane.js sweeps dead ones at boot).
   const tmpDir = createJobWorkDir(jobId, claimToken);
   try {
     const sourcePath = path.join(tmpDir, "source");
-    await pipeline(
-      await downloadStream(sourceKey),
-      fs.createWriteStream(sourcePath),
-      { signal: AbortSignal.timeout(60 * 60 * 1000) }
-    );
+    await lane.downloadSource(sourcePath, { timeoutMs: 60 * 60 * 1000 });
 
     const source = await probeSource(sourcePath);
     const rungs = ladderForSourceHeight(source.height);
     logger.info("vault video source probed", { slug, ...source, rungs: rungs.map((r) => r.bitrate) });
 
-    const { key, iv } = deriveKey(slug);
+    const key = Buffer.from(opened.encryption.key, "hex");
+    const iv = Buffer.from(opened.encryption.iv, "hex");
     const keyInfoFile = writeKeyInfoFile(tmpDir, key, iv);
 
     // Encode everything before uploading anything: a half-uploaded ladder is a
@@ -207,16 +198,18 @@ export async function processVaultVideoJob(job, { rpc, lease } = {}) {
 
     const segmentCounts = {};
     const bitrates = [];
+    const uploads = [];
     let durationSeconds = 0;
     for (const { rung, dir, segments, durationSeconds: dur } of encoded) {
       for (let i = 0; i < segments.length; i++) {
         const name = `seg_${String(i + 1).padStart(5, "0")}.ts`;
-        await upload(`${prefix}${rung.bitrate}/${name}`, fs.readFileSync(path.join(dir, segments[i])), "video/mp2t");
+        uploads.push({ key: `${prefix}${rung.bitrate}/${name}`, file: path.join(dir, segments[i]), contentType: "video/mp2t" });
       }
       segmentCounts[rung.bitrate] = segments.length;
       bitrates.push(rung.bitrate);
       durationSeconds = Math.max(durationSeconds, dur);
     }
+    await lane.uploadFiles(uploads);
 
     // hls_manifests is exactly what the Vault's playback routes read. The
     // release_type marks the row as this pipeline's, which is what lets those
@@ -237,7 +230,7 @@ export async function processVaultVideoJob(job, { rpc, lease } = {}) {
       },
     });
     if (!published?.committed) throw new LeaseLost(jobId);
-    await notifyManifestPublished({ slug, trackSlug: null });
+    await lane.published();
 
     logger.info("vault video complete", { jobId, slug, rungs: bitrates, durationSeconds });
   } finally {
