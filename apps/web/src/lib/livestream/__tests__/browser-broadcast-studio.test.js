@@ -154,7 +154,10 @@ test("relay is warm, single-publisher, authenticated, and forwards to Twitch wit
   assert.match(relay, /authMethod: http/);
   assert.match(relay, /overridePublisher: false/);
   assert.match(relay, /runOnAvailable: \/relay-to-twitch\.sh/);
-  assert.match(forwarder, /-tune zerolatency/);
+  // H.264 from the studio goes to Twitch as it arrives (MediaMTX asks for a
+  // keyframe every 2 s); anything else is still re-encoded.
+  assert.match(forwarder, /if \[ "\$video_codec" = "h264" \]; then\s+set -- -c:v copy/);
+  assert.match(forwarder, /-c:v libx264 -preset veryfast -tune zerolatency/);
   assert.match(forwarder, /-c:a aac/);
   assert.match(forwarder, /LIVE_RELAY_SERVICE_SECRET/);
   assert.match(forwarder, /\/api\/live\/twitch-ingest/);

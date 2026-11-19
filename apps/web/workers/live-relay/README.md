@@ -2,7 +2,20 @@
 
 This is the always-warm media path used by the browser broadcast studio:
 
-`browser WebRTC/WHIP -> MediaMTX -> local FFmpeg H.264/AAC -> Twitch RTMPS`
+`browser WebRTC/WHIP -> MediaMTX -> local FFmpeg (H.264 copied, Opus -> AAC) -> Twitch RTMPS`
+
+**Video passes straight through.** The studio asks the browser for H.264 and
+starts it at broadcast bitrate (`src/lib/livestream/whip-publisher.js`), and
+MediaMTX asks the publisher for a keyframe every 2 seconds, Twitch's interval,
+so `relay-to-twitch.sh` copies the video and converts only the audio: the relay
+needs almost no CPU, and the smallest server carries 1080p. A publisher that
+sends anything but H.264 is re-encoded (libx264 veryfast, `TWITCH_VIDEO_BITRATE`),
+which needs about 2-3 dedicated cores at 1080p30. Measured 2026-11-19 with
+Chrome 158 publishing 1080p30 through MediaMTX 1.20.1: H.264 copied at
+1920x1080 from the first frame, keyframes every 2.0 s, AAC 48 kHz stereo.
+
+Viewers watch on Twitch (the site embeds its player): the relay carries one
+stream in and one out, whatever the audience size.
 
 The relay accepts one publisher on the exact `2mrrw-live` path. Publish access
 is delegated to the platform's short-lived HMAC grant endpoint. RTSP is bound

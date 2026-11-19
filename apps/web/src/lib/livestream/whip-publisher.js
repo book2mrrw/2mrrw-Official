@@ -45,12 +45,76 @@ function candidateFragment(offer, candidates) {
   return fragment;
 }
 
+// H.264 profiles in the order the relay can pass straight to Twitch: High,
+// Main, then Constrained Baseline / Baseline (what software encoders offer).
+const H264_PROFILE_ORDER = ["64", "4d", "42e0", "42c0", "4200"];
+
+function h264Rank(codec) {
+  const profile = /profile-level-id=([0-9a-f]{6})/i.exec(codec.sdpFmtpLine || "")?.[1]?.toLowerCase() || "";
+  const index = H264_PROFILE_ORDER.findIndex((prefix) => profile.startsWith(prefix));
+  return index === -1 ? H264_PROFILE_ORDER.length : index;
+}
+
+/**
+ * Ask the browser to encode video as H.264 (packetization-mode 1) when it can,
+ * so the relay passes the picture straight to Twitch instead of re-encoding
+ * every frame. Every other codec stays in the list as a fallback: a browser
+ * without H.264 still publishes, and the relay re-encodes it as before.
+ */
+export function preferH264(peer, capabilities = globalThis.RTCRtpSender?.getCapabilities?.("video")) {
+  const codecs = capabilities?.codecs;
+  if (!Array.isArray(codecs) || !peer?.getTransceivers) return false;
+  const h264 = codecs
+    .filter((codec) => /^video\/h264$/i.test(codec.mimeType) && /packetization-mode=1/.test(codec.sdpFmtpLine || ""))
+    .sort((a, b) => h264Rank(a) - h264Rank(b));
+  if (!h264.length) return false;
+  const ordered = [...h264, ...codecs.filter((codec) => !h264.includes(codec))];
+  let applied = false;
+  for (const transceiver of peer.getTransceivers()) {
+    if (transceiver.sender?.track?.kind !== "video" || !transceiver.setCodecPreferences) continue;
+    try {
+      transceiver.setCodecPreferences(ordered);
+      applied = true;
+    } catch { /* The browser keeps its own codec order. */ }
+  }
+  return applied;
+}
+
+// Chrome otherwise starts a WebRTC stream near 300 kbps and grows the picture
+// as its bandwidth estimate rises: start a broadcast at broadcast quality.
+const BROADCAST_KBPS = { start: 4000, min: 1000, max: 6000 };
+const VIDEO_CODECS = /^(H264|VP8|VP9|AV1)\/90000$/i;
+
+/**
+ * The relay's answer with Chrome's bitrate hints on every video codec
+ * (x-google-start/min/max-bitrate; other browsers ignore them). Repair
+ * streams (rtx) and audio are left as they are.
+ */
+export function withBroadcastBitrate(sdp, kbps = BROADCAST_KBPS) {
+  const lines = String(sdp || "").split("\r\n");
+  const videoPayloads = new Set();
+  for (const line of lines) {
+    const match = /^a=rtpmap:(\d+) (\S+)/.exec(line);
+    if (match && VIDEO_CODECS.test(match[2])) videoPayloads.add(match[1]);
+  }
+  const hint = `x-google-start-bitrate=${kbps.start};x-google-min-bitrate=${kbps.min};x-google-max-bitrate=${kbps.max}`;
+  return lines.map((line) => {
+    const match = /^a=fmtp:(\d+) (.*)$/.exec(line);
+    if (!match || !videoPayloads.has(match[1]) || /x-google-start-bitrate/.test(match[2])) return line;
+    return `a=fmtp:${match[1]} ${match[2]};${hint}`;
+  }).join("\r\n");
+}
+
 async function configureSender(sender, kind) {
   if (!sender?.getParameters || !sender?.setParameters) return;
   const params = sender.getParameters();
   if (!params.encodings?.length) params.encodings = [{}];
   params.encodings[0].maxBitrate = kind === "video" ? 6_000_000 : 160_000;
-  if (kind === "video") params.degradationPreference = "maintain-framerate";
+  // A broadcast keeps its picture size; under pressure the frame rate dips
+  // instead. A resolution that changes mid-stream reaches Twitch as-is when the
+  // relay passes video through (and froze at the first, smallest size when it
+  // re-encoded).
+  if (kind === "video") params.degradationPreference = "maintain-resolution";
   try { await sender.setParameters(params); } catch { /* Browser keeps its safe defaults. */ }
 }
 
@@ -104,6 +168,7 @@ export class WhipPublisher {
 
     const senders = this.stream.getTracks().map((track) => peer.addTrack(track, this.stream));
     await Promise.all(senders.map((sender) => configureSender(sender, sender.track?.kind)));
+    preferH264(peer);
 
     const offer = await peer.createOffer();
     this.offerData = parseOfferForTrickle(offer.sdp);
@@ -127,7 +192,7 @@ export class WhipPublisher {
     this.sessionUrl = new URL(location, this.url).toString();
     this.sessionEtag = response.headers.get("ETag");
     const answer = await response.text();
-    await peer.setRemoteDescription({ type: "answer", sdp: answer });
+    await peer.setRemoteDescription({ type: "answer", sdp: withBroadcastBitrate(answer) });
 
     const queued = this.queuedCandidates.splice(0);
     if (queued.length) await this.patchCandidates(queued);
