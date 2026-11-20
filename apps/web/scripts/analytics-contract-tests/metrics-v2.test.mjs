@@ -7,6 +7,7 @@ const { PGlite } = await import(process.env.PGLITE_MODULE || "@electric-sql/pgli
 const read = (name) => fs.readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), "utf8");
 const v1 = await read("20261119210000_analytics_event_schema_v1.sql");
 const v2 = await read("20261119220000_analytics_metrics_v2.sql");
+const v21 = await read("20261119223000_analytics_rates_from_v1_listens.sql");
 
 const BASE = `
   create role anon; create role authenticated; create role service_role bypassrls;
@@ -45,6 +46,7 @@ async function seeded() {
   await db.exec(BASE);
   await db.exec(v1);
   await db.exec(v2);
+  await db.exec(v21);
   await db.exec(`
     insert into auth.users values ('${FAN}'), ('${FAN2}');
     insert into public.products values
@@ -57,8 +59,8 @@ async function seeded() {
   `);
   const ev = (cols) => db.query(
     `insert into public.media_stream_events (user_id, device_id, product_id, product_slug, track_slug, event_type, listen_id,
-       listened_seconds, access_tier, is_internal, country, region, city, created_at)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,coalesce($10,false),$11,$12,$13,coalesce($14, now()))`,
+       listened_seconds, access_tier, is_internal, country, region, city, created_at, schema_version)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,coalesce($10,false),$11,$12,$13,coalesce($14, now()),1)`,
     [cols.user ?? null, cols.device ?? null, cols.product ?? null, cols.slug ?? null, cols.track ?? null, cols.type,
      cols.listen ?? null, cols.heard ?? null, cols.tier ?? null, cols.internal ?? null,
      cols.country ?? "US", cols.region ?? "TX", cols.city ?? "Austin", cols.at ?? null]);
@@ -186,6 +188,19 @@ test("listening times: global hours are Central time; regional patterns use the 
   assert.equal(pacific.reduce((s, r) => s + Number(r.plays), 0), 1, "a California play lands in US — Pacific");
   const all = regional.reduce((s, r) => s + Number(r.plays), 0);
   assert.equal(all, 4, "3 recent fan plays + the California play; the admin and preview plays are excluded, the 200-day-old play is outside the window");
+});
+
+test("rates ignore legacy history: extra legacy completes never produce a fake 100%, and v1-free songs show no rate", async () => {
+  const { db, rows } = await seeded();
+  // Legacy (schema 0): 1 play, 3 completes for the single — the pre-v1 admin/preview pattern.
+  await db.query(`insert into public.media_stream_events (product_id, product_slug, event_type) values ($1,'w2d','play'),($1,'w2d','complete'),($1,'w2d','complete'),($1,'w2d','complete')`, [SINGLE]);
+  const songs = await rows("select * from public.analytics_track_stats()");
+  const w2d = songs.find((s) => s.release_slug === "w2d");
+  assert.equal(Number(w2d.plays), 2, "counts still include history");
+  assert.equal(Number(w2d.completes), 3);
+  assert.equal(Number(w2d.completion_rate), 0, "only the v1 listen (no complete) is rated");
+  const albumLevel = songs.find((s) => s.release_slug === "love-hz-vol-1" && s.song_slug === null);
+  assert.equal(albumLevel.completion_rate, null, "legacy-only rows get no rate rather than a wrong one");
 });
 
 test("the browser can read neither the fan view nor any analytics function", async () => {
