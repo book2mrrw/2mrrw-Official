@@ -182,7 +182,9 @@ test("RevenueTab renders subscription KPIs and a per-release gross-revenue table
   const fnAt = src.indexOf("function RevenueTab(");
   assert.ok(fnAt > -1);
   const body = src.slice(fnAt);
-  assert.match(body, /fmtRevenue\(overview\.totalGrossCents\)/);
+  assert.match(body, /fmtRevenue\(overview\.grossSalesCents \?\? overview\.totalGrossCents\)/);
+  assert.match(body, /fmtRevenue\(overview\.netCents\)/);
+  assert.match(body, /fmtRevenue\(overview\.refundsCents\)/);
   assert.match(body, /fmtRevenue\(subscriptions\.mrrCents\)/);
   assert.match(body, /<Card /);
   assert.match(body, /<Label>/);

@@ -5,7 +5,7 @@ import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { visualDiscoveryUrl } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
-import { ARTIST_TIME_ZONE, analyticsRange } from "@/lib/analytics/range";
+import { ARTIST_TIME_ZONE, analyticsRange, isMissingFunction } from "@/lib/analytics/range";
 import { buildAnalyticsOverview } from "@/lib/analytics/overview-report";
 
 const PRODUCT_COLS_FOR_COVER =
@@ -78,20 +78,25 @@ export async function GET(req) {
 
   let purchasesQuery = admin.from("purchases")
     .select("items, status, amount_cents, purchase_type, purchased_at")
-    .eq("status", "completed");
+    // A refunded sale is still a sale in its own period; refunds are separate.
+    .in("status", ["completed", "refunded"]);
   if (range.from) purchasesQuery = purchasesQuery.gte("purchased_at", range.from);
   if (range.to) purchasesQuery = purchasesQuery.lt("purchased_at", range.to);
 
-  const [overviewRes, tracksRes, growthRes, demographicsRes, purchasesRes, productsRes] = await Promise.all([
+  const [overviewRes, tracksRes, growthRes, demographicsRes, purchasesRes, productsRes, revenueRes] = await Promise.all([
     admin.rpc("analytics_overview", window).maybeSingle(),
     admin.rpc("analytics_track_stats", window),
     admin.rpc("analytics_listener_growth", { p_tz: ARTIST_TIME_ZONE }),
     admin.rpc("analytics_fan_demographics", window),
     purchasesQuery.limit(10000),
     admin.from("products").select(PRODUCT_COLS_FOR_COVER).in("product_type", ["single", "feature", "album"]).limit(1000),
+    admin.rpc("analytics_revenue_summary", window).maybeSingle(),
   ]);
 
-  const failed = [overviewRes, tracksRes, growthRes, demographicsRes, purchasesRes, productsRes].find((r) => r.error);
+  // The revenue ledger function arrives with migration 20261119230000; until
+  // then revenue falls back to completed purchases instead of failing.
+  const ledgerMissing = isMissingFunction(revenueRes.error);
+  const failed = [overviewRes, tracksRes, growthRes, demographicsRes, purchasesRes, productsRes, ledgerMissing ? {} : revenueRes].find((r) => r.error);
   if (failed) {
     console.error("[admin/analytics] query failed:", failed.error?.message);
     return NextResponse.json({ error: "Analytics query failed" }, { status: 500 });
@@ -109,6 +114,7 @@ export async function GET(req) {
     growth: growthRes.data || [],
     demographics: demographicsRes.data || [],
     purchases: purchasesRes.data || [],
+    revenue: ledgerMissing ? null : revenueRes.data,
     products: products.map((p) => ({ ...p, coverUrl: resolveCoverUrl(p) })),
     songs: songsRes.data || [],
     range,

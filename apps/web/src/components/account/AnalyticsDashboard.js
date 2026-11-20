@@ -823,7 +823,7 @@ export default function AnalyticsDashboard({ isMobile }) {
             <KPITile isMobile={isMobile} label={`Plays · ${rl}`}     value={fmt(overview.totalPlays)}     sub="Listens started"          color="#ffffff"  glow="rgba(255,255,255,0.07)" />
             <KPITile isMobile={isMobile} label={`Qualified · ${rl}`} value={fmt(overview.qualifiedPlays)} sub="30 s+ actually heard"     color="#ffffff"  glow="rgba(255,255,255,0.07)" />
             <KPITile isMobile={isMobile} label={`Purchases · ${rl}`} value={fmt(overview.totalPurchases)} sub={overview.giftsClaimed ? `Paid orders · ${fmt(overview.giftsClaimed)} gifts` : "Paid orders"} color={C.gold} glow={C.goldGlow} />
-            <KPITile isMobile={isMobile} label={`Revenue · ${rl}`}   value={fmtRevenue(overview.totalRevenueCents)} sub="Gross sales"     color={C.green}  glow={C.greenGlow} />
+            <KPITile isMobile={isMobile} label={`Revenue · ${rl}`}   value={fmtRevenue(overview.netRevenueCents ?? overview.totalRevenueCents)} sub={overview.refundsCents ? `Net · gross ${fmtRevenue(overview.totalRevenueCents)}, refunds ${fmtRevenue(overview.refundsCents)}` : "Net of refunds"} color={C.green} glow={C.greenGlow} />
           </div>
           {range==="all" && overview.historyStartsAt && (
             <div style={{ fontSize:11, color:C.muted }}>
@@ -1083,6 +1083,17 @@ export default function AnalyticsDashboard({ isMobile }) {
 }
 
 // ── Revenue tab: per-release attribution + subscription snapshot ────────────
+// Small stat card for the Revenue tab. Module level, so React keeps it stable
+// across renders (an inline component would remount on every render).
+function KPI({ label, value, glow }) {
+  return (
+    <Card style={{ padding:"16px 18px", flex:1, minWidth:120 }} orbColor={glow}>
+      <Label>{label}</Label>
+      <div style={{ fontSize:22, fontWeight:900, color:C.text, marginTop:6 }}>{value}</div>
+    </Card>
+  );
+}
+
 function RevenueTab({ data, loading, error, onRetry, isMobile, rangeLabel = "lifetime" }) {
   if (loading) return (
     <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>Loading revenue…</div>
@@ -1099,17 +1110,12 @@ function RevenueTab({ data, loading, error, onRetry, isMobile, rangeLabel = "lif
 
   const { releases=[], subscriptions={}, overview={} } = data;
 
-  const KPI = ({ label, value, glow }) => (
-    <Card style={{ padding:"16px 18px", flex:1, minWidth:120 }} orbColor={glow}>
-      <Label>{label}</Label>
-      <div style={{ fontSize:22, fontWeight:900, color:C.text, marginTop:6 }}>{value}</div>
-    </Card>
-  );
-
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-        <KPI label={`Gross · ${rangeLabel}`} value={fmtRevenue(overview.totalGrossCents)} glow={C.greenGlow} />
+        <KPI label={`Net · ${rangeLabel}`} value={fmtRevenue(overview.netCents)} glow={C.greenGlow} />
+        <KPI label={`Gross sales · ${rangeLabel}`} value={fmtRevenue(overview.grossSalesCents ?? overview.totalGrossCents)} glow={C.greenGlow} />
+        <KPI label={`Refunds · ${rangeLabel}`} value={fmtRevenue(overview.refundsCents)} />
         <KPI label="MRR" value={fmtRevenue(subscriptions.mrrCents)} glow={C.accentGlow} />
         <KPI label="Active Subs" value={fmt(subscriptions.activeCount)} glow={C.purpleGlow} />
         <KPI label="Trialing" value={fmt(subscriptions.trialingCount)} />

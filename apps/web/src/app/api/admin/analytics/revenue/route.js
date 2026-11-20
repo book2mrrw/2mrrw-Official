@@ -3,7 +3,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
-import { analyticsRange, sinceOrEpoch } from "@/lib/analytics/range";
+import { analyticsRange, isMissingFunction, sinceOrEpoch } from "@/lib/analytics/range";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +31,19 @@ export async function GET(req) {
   // Lifetime by default (?range= / ?since=&until= narrow it).
   const range = analyticsRange(new URL(req.url).searchParams);
 
-  const [releaseRevenueResult, trackPlayResult, subscriptionResult] = await Promise.all([
+  const [releaseRevenueResult, trackPlayResult, subscriptionResult, summaryResult] = await Promise.all([
     admin.rpc("get_release_revenue_stats", { since: sinceOrEpoch(range) }),
     admin.rpc("analytics_track_stats", { p_from: range.from, p_to: range.to }),
     admin.rpc("get_subscription_stats").maybeSingle(),
+    admin.rpc("analytics_revenue_summary", { p_from: range.from, p_to: range.to }).maybeSingle(),
   ]);
+
+  const ledgerMissing = isMissingFunction(summaryResult.error); // before migration 20261119230000
+  const failed = [releaseRevenueResult, trackPlayResult, subscriptionResult, ledgerMissing ? {} : summaryResult].find((r) => r.error);
+  if (failed) {
+    console.error("[admin/analytics/revenue] query failed:", failed.error?.message);
+    return NextResponse.json({ error: "Revenue query failed" }, { status: 500 });
+  }
 
   const releases = (releaseRevenueResult.data || []).map((row) => ({
     productId: row.product_id,
@@ -75,7 +83,15 @@ export async function GET(req) {
     releases,
     tracks,
     subscriptions,
-    overview: { totalGrossCents, releaseCount: releases.length },
+    overview: {
+      totalGrossCents,
+      releaseCount: releases.length,
+      // Ledger: sales in their own period, refunds/disputes in theirs.
+      grossSalesCents: Number(summaryResult.data?.gross_sales_cents) || 0,
+      refundsCents: Number(summaryResult.data?.refunds_cents) || 0,
+      disputesCents: Number(summaryResult.data?.disputes_cents) || 0,
+      netCents: Number(summaryResult.data?.net_cents) || 0,
+    },
   }, {
     headers: { "Cache-Control": "private, no-store, must-revalidate" },
   });

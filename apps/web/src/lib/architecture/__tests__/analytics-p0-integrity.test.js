@@ -117,13 +117,17 @@ test("allocatePurchaseItemPrices falls back to an even split when no usable list
   assert.match(body, /unitPriceCents = Math\.floor\(totalAmountCents \/ list\.length\);/);
 });
 
-test("recordPurchaseItems is idempotent on webhook retries: delete-then-insert keyed by purchase_id", () => {
+test("recordPurchaseItems is idempotent on webhook retries: written once per purchase, never deleted and rewritten", () => {
+  // Line items are financial history (append-only in the database). Behavior:
+  // src/lib/commerce/__tests__/purchase-adjustments.test.js.
   const src = read("src/lib/commerce/fulfill-purchase.js");
   const fnAt = src.indexOf("async function recordPurchaseItems(admin");
-  const body = src.slice(fnAt, fnAt + 2200);
-  const deleteAt = body.indexOf('admin.from("purchase_items").delete().eq("purchase_id", purchaseId)');
+  const body = src.slice(fnAt, fnAt + 2400);
+  assert.doesNotMatch(body, /from\("purchase_items"\)\.delete\(\)/, "a retry must never delete recorded line items");
+  const existingAt = body.indexOf('.select("id", { count: "exact", head: true })');
+  const skipAt = body.indexOf("if (existing > 0) return;");
   const insertAt = body.indexOf('admin.from("purchase_items").insert(rows)');
-  assert.ok(deleteAt > -1 && insertAt > deleteAt, "a retry of the same webhook must replace, not duplicate, this purchase's line items");
+  assert.ok(existingAt > -1 && skipAt > existingAt && insertAt > skipAt, "a retry of the same webhook must not duplicate this purchase's line items");
 });
 
 test("recordPurchaseItems failures are logged and swallowed, never thrown — a revenue-reporting gap must not block entitlement granting", () => {

@@ -93,6 +93,14 @@ test("KPIs: listeners vs fans, paid orders vs gifts, gross revenue in range, lif
   assert.equal(overview.historyStartsAt, "2026-08-17T03:58:39Z");
 });
 
+test("with the ledger, money is gross in its sale period minus refunds in theirs", () => {
+  const { overview } = report({ revenue: { gross_sales_cents: 1298, refunds_cents: 299, disputes_cents: 0, net_cents: 999, paid_orders: 2, gifts: 1 } });
+  assert.equal(overview.totalRevenueCents, 1298);
+  assert.equal(overview.refundsCents, 299);
+  assert.equal(overview.netRevenueCents, 999);
+  assert.equal(overview.totalPurchases, 2);
+});
+
 test("audience and growth come from fan demographics and first listens", () => {
   const r = report();
   assert.deepEqual(r.demographics.gender, { male: 1, female: 0, unknown: 1 });

@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { emitServerEvent } from "@/lib/observability/server-events";
 import { fulfillCheckoutSession, fulfillPaymentIntent } from "@/lib/commerce/fulfill-purchase";
 import { revokeExtendedEntitlementsForPurchase } from "@/lib/commerce/revoke-entitlements";
+import { recordChargeRefunds, recordDispute } from "@/lib/commerce/purchase-adjustments";
 import {
   handleCheckoutEntitlements,
   revokeAllEntitlementsForDispute,
@@ -312,8 +313,17 @@ export async function handleStripeWebhook(req) {
         break;
       }
 
-      case "charge.refunded":
+      case "charge.refunded": {
+        // Money history first: each refund becomes its own dated, append-only
+        // adjustment (the sale itself is never rewritten). If Stripe cannot be
+        // reached this throws, the claim is released and Stripe retries.
+        await recordChargeRefunds(admin, getStripe(), event.data.object);
+        await revokePurchaseByPaymentIntent(resolvePaymentIntentId(event));
+        break;
+      }
+
       case "payment_intent.canceled": {
+        // Canceled before capture: no money moved, so no adjustment.
         const paymentIntentId = resolvePaymentIntentId(event);
         await revokePurchaseByPaymentIntent(paymentIntentId);
         break;
@@ -322,6 +332,8 @@ export async function handleStripeWebhook(req) {
       case "charge.dispute.created": {
         const paymentIntentId = resolvePaymentIntentId(event);
         const admin = getAdminClient();
+        // The disputed amount leaves the account now; record it before revoking.
+        await recordDispute(admin, event.data.object);
         const { data: purchase } = await admin
           .from("purchases")
           .select("id, user_id")
@@ -338,6 +350,14 @@ export async function handleStripeWebhook(req) {
           }
         }
         await revokePurchaseByPaymentIntent(paymentIntentId);
+        break;
+      }
+
+      case "charge.dispute.closed": {
+        // A won dispute returns the money; a lost one changes nothing further
+        // (it was withdrawn when the dispute opened). Access is unchanged here.
+        const dispute = event.data.object;
+        if (dispute?.status === "won") await recordDispute(admin, dispute, { reversal: true });
         break;
       }
 

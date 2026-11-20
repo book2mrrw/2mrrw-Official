@@ -103,3 +103,18 @@ test("the map asks SQL for the chosen window plus both fixed 30-day growth windo
   assert.equal(body.by_country[0].country, "United States");
   assert.equal(body.overview.total_streams, 9);
 });
+
+test("before the revenue-ledger migration, the dashboard falls back instead of failing", async () => {
+  reset();
+  const realRpc = admin.rpc;
+  admin.rpc = (name, args) => (name === "analytics_revenue_summary"
+    ? { maybeSingle: async () => ({ data: null, error: { code: "PGRST202", message: "Could not find the function public.analytics_revenue_summary" } }) }
+    : realRpc(name, args));
+  try {
+    const res = await get(overviewRoute);
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).overview.totalRevenueCents, 0, "falls back to completed purchases (none in this fixture)");
+  } finally {
+    admin.rpc = realRpc;
+  }
+});

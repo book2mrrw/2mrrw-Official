@@ -29,6 +29,14 @@ export function analyticsRange(searchParams, now = Date.now()) {
   return { key, from: days ? new Date(now - days * DAY_MS).toISOString() : null, to: null };
 }
 
+/**
+ * True when a SQL function does not exist yet (its migration is not applied):
+ * callers fall back instead of failing, so code can ship before its migration.
+ */
+export function isMissingFunction(error) {
+  return Boolean(error) && (error.code === "PGRST202" || error.code === "42883" || /could not find the function/i.test(String(error.message || "")));
+}
+
 /** For older SQL functions whose `since` cannot be null: lifetime = the epoch. */
 export function sinceOrEpoch(range) {
   return range.from || "1970-01-01T00:00:00.000Z";

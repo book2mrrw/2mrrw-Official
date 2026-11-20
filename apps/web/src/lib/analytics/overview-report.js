@@ -35,7 +35,7 @@ function lastMonths(count, now) {
 }
 
 export function buildAnalyticsOverview({
-  overview = {}, trackStats = [], growth = [], demographics = [], purchases = [],
+  overview = {}, trackStats = [], growth = [], demographics = [], purchases = [], revenue = null,
   products = [], songs = [], range = { key: "all" }, now = new Date(),
 } = {}) {
   // ── Purchases in range ────────────────────────────────────────────────────
@@ -147,10 +147,15 @@ export function buildAnalyticsOverview({
       listenSeconds: num(overview?.listen_seconds),
       downloads: num(overview?.downloads),
       downloadRemoves: num(overview?.download_removes),
-      totalPurchases: paidOrders,
-      giftsClaimed,
+      // Money comes from the append-only ledger when available: gross sales
+      // in their own period, refunds and disputes in theirs.
+      totalPurchases: revenue ? num(revenue.paid_orders) : paidOrders,
+      giftsClaimed: revenue ? num(revenue.gifts) : giftsClaimed,
       freeClaims,
-      totalRevenueCents: revenueCents,
+      totalRevenueCents: revenue ? num(revenue.gross_sales_cents) : revenueCents,
+      refundsCents: revenue ? num(revenue.refunds_cents) : 0,
+      disputesCents: revenue ? num(revenue.disputes_cents) : 0,
+      netRevenueCents: revenue ? num(revenue.net_cents) : revenueCents,
       fansWithDemographics,
       demographicsCoverage: totalFansProfiled > 0 ? Math.round((fansWithDemographics / totalFansProfiled) * 100) : 0,
       historyStartsAt: overview?.first_event_at ?? null,

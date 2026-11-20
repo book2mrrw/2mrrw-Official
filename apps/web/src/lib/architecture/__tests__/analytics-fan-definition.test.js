@@ -48,4 +48,6 @@ test("labels say what the numbers are: Fans are signed-in listeners; no 'signups
   assert.match(dashboard, /label=\{`Fans · \$\{rl\}`\}\s+value=\{fmt\(overview\.totalFans\)\}\s+sub="Signed-in listeners"/);
   assert.match(dashboard, /label=\{`Listeners · \$\{rl\}`\} value=\{fmt\(overview\.totalListeners\)\} sub="Unique, signed in or not"/);
   assert.match(globalMapPage, /label="Listeners" value=\{fmt\(ov\.total_fans\)\} sub="Heard at least once"/);
+  // Revenue on the Overview is net of refunds (ledger), with gross shown beside it.
+  assert.match(dashboard, /label=\{`Revenue · \$\{rl\}`\}\s+value=\{fmtRevenue\(overview\.netRevenueCents \?\? overview\.totalRevenueCents\)\}/);
 });

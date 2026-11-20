@@ -123,11 +123,12 @@ function allocatePurchaseItemPrices(items, totalAmountCents) {
  * this purchase, not a customer losing access to what they paid for, so it
  * is logged and swallowed rather than thrown.
  *
- * Idempotent: replaces any existing rows for this purchase_id first, so a
- * Stripe webhook retry (the purchases upsert above already tolerates this)
- * cannot create duplicate line items.
+ * Idempotent and append-only: line items are written once per purchase. A
+ * Stripe webhook retry finds them already recorded and leaves them alone —
+ * they are financial history (purchase_items rejects updates and deletes,
+ * migration 20261119230000), never deleted and rewritten.
  */
-async function recordPurchaseItems(admin, { purchaseId, items, totalAmountCents }) {
+export async function recordPurchaseItems(admin, { purchaseId, items, totalAmountCents }) {
   try {
     const list = Array.isArray(items) ? items : [];
     if (!list.length) return;
@@ -161,7 +162,12 @@ async function recordPurchaseItems(admin, { purchaseId, items, totalAmountCents 
       }));
     if (!rows.length) return;
 
-    await admin.from("purchase_items").delete().eq("purchase_id", purchaseId);
+    const { count: existing, error: existingError } = await admin
+      .from("purchase_items")
+      .select("id", { count: "exact", head: true })
+      .eq("purchase_id", purchaseId);
+    if (existingError) throw existingError;
+    if (existing > 0) return;
     const { error } = await admin.from("purchase_items").insert(rows);
     if (error) throw error;
   } catch (err) {
