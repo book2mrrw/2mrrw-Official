@@ -5,6 +5,8 @@ import test, { beforeEach } from "node:test";
 const store = new Map();
 const listeners = {};
 let online = true;
+let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)";
+let touchPoints = 5;
 let responses = [];
 const posts = [];
 globalThis.window = {
@@ -16,7 +18,7 @@ globalThis.window = {
   addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
 };
 globalThis.document = { visibilityState: "visible", addEventListener: () => {} };
-Object.defineProperty(globalThis, "navigator", { configurable: true, get: () => ({ onLine: online, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" }) });
+Object.defineProperty(globalThis, "navigator", { configurable: true, get: () => ({ onLine: online, userAgent, maxTouchPoints: touchPoints }) });
 globalThis.fetch = async (url, init) => {
   posts.push({ url, body: JSON.parse(init.body), keepalive: init.keepalive });
   const status = responses.length ? responses.shift() : 200;
@@ -33,6 +35,9 @@ beforeEach(() => {
   responses = [];
   online = true;
   delete globalThis.__2MRRW_APP_SHELL__;
+  delete globalThis.window.__2MRRW_NATIVE_AUDIO__;
+  userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)";
+  touchPoints = 5;
 });
 
 const single = { slug: "w2d", title: "W2D", source: "home_single_card" };
@@ -129,4 +134,40 @@ test("a failed flush keeps the whole queue in order", async () => {
   responses = [503];
   await client.flushOutbox();
   assert.deepEqual(client.readOutbox().map((e) => e.eventId), [a.eventId, b.eventId]);
+});
+
+test("device class splits mobile web from desktop (and tablets, including iPadOS posing as a Mac)", () => {
+  const cases = [
+    ["Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148", 5, "phone"],
+    ["Mozilla/5.0 (Linux; Android 15; Pixel 9) Mobile Safari/537.36", 5, "phone"],
+    ["Mozilla/5.0 (Linux; Android 14; SM-X710) Safari/537.36", 5, "tablet"],
+    ["Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)", 5, "tablet"],
+    ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15", 5, "tablet"],
+    ["Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15", 0, "desktop"],
+    ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0", 0, "desktop"],
+  ];
+  for (const [ua, touch, expected] of cases) {
+    userAgent = ua; touchPoints = touch;
+    assert.equal(client.analyticsDeviceClass(), expected, ua);
+  }
+  userAgent = cases[0][0];
+  assert.equal(client.buildClientEvent(single, "play").deviceClass, "phone");
+});
+
+test("in the app, when native records listening, the web sends no playback events (no double counting) — downloads still go", async () => {
+  globalThis.window.__2MRRW_NATIVE_AUDIO__ = { recordsPlaybackAnalytics: true, analyticsDeviceId: "native-install-1" };
+  for (const type of ["play", "qualified", "progress", "pause", "seek", "skip", "complete"]) {
+    client.sendPlaybackEvent(client.buildClientEvent(single, type));
+  }
+  client.sendPlaybackEvent(client.buildClientEvent(single, "download"));
+  await tick(); await tick();
+  assert.deepEqual(posts.map((p) => p.body.eventType), ["download"]);
+  assert.equal(posts[0].body.deviceId, "native-install-1", "web and native share the install id: one listener");
+});
+
+test("an app build without the native recorder keeps sending web playback events", async () => {
+  globalThis.window.__2MRRW_NATIVE_AUDIO__ = { createElement() {} };
+  client.sendPlaybackEvent(client.buildClientEvent(single, "play"));
+  await tick(); await tick();
+  assert.equal(posts.length, 1);
 });

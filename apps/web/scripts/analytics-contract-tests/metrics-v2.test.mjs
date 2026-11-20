@@ -8,6 +8,7 @@ const read = (name) => fs.readFile(new URL(`../../supabase/migrations/${name}`, 
 const v1 = await read("20261119210000_analytics_event_schema_v1.sql");
 const v2 = await read("20261119220000_analytics_metrics_v2.sql");
 const v21 = await read("20261119223000_analytics_rates_from_v1_listens.sql");
+const v3p = await read("20261119240000_analytics_platforms.sql");
 
 const BASE = `
   create role anon; create role authenticated; create role service_role bypassrls;
@@ -47,6 +48,7 @@ async function seeded() {
   await db.exec(v1);
   await db.exec(v2);
   await db.exec(v21);
+  await db.exec(v3p);
   await db.exec(`
     insert into auth.users values ('${FAN}'), ('${FAN2}');
     insert into public.products values
@@ -215,4 +217,26 @@ test("the browser can read neither the fan view nor any analytics function", asy
     const v = await rows(`select has_table_privilege('${role}', 'public.analytics_fan_events', 'select') as can`);
     assert.equal(v[0].can, false, `${role} must not read the fan view`);
   }
+});
+
+test("platforms: the fan view carries device_class after re-creation, and listening is split by where it happened", async () => {
+  const { db, rows } = await seeded();
+  await db.exec(`update public.media_stream_events set platform = 'ios', device_class = 'phone' where device_id = '${DEV_A}';
+                 update public.media_stream_events set platform = 'web', device_class = 'desktop' where device_id = '${DEV_B}'`);
+  const p = await rows("select * from public.analytics_platform_breakdown()");
+  const get = (pl, dc) => p.find((r) => r.platform === pl && r.device_class === dc);
+  assert.equal(Number(get("ios", "phone").plays), 2);
+  assert.equal(Number(get("ios", "phone").listeners), 1);
+  assert.equal(Number(get("ios", "phone").listen_seconds), 212);
+  assert.equal(Number(get("web", "desktop").plays), 1, "preview play from that device excluded");
+  assert.equal(Number(get("unknown", "unknown").plays), 1, "the legacy play is kept, labelled as before platform tracking");
+  const o = (await rows("select plays from public.analytics_overview()"))[0];
+  assert.equal(Number(o.plays), 4, "every other metric still works after the view was re-created");
+});
+
+test("device_class only accepts phone, tablet or desktop; the breakdown is closed to the browser", async () => {
+  const { db, rows } = await seeded();
+  await assert.rejects(db.query("insert into public.media_stream_events (product_slug, event_type, device_class) values ('x','play','fridge')"));
+  const r = await rows("select has_function_privilege('anon', 'public.analytics_platform_breakdown(timestamptz, timestamptz)', 'execute') a");
+  assert.equal(r[0].a, false);
 });

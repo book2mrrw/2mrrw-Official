@@ -158,3 +158,8 @@ test("schema errors that mean 'v1 not applied yet' are recognised; others are no
   assert.equal(isPreV1SchemaError({ code: "42P10", message: "there is no unique or exclusion constraint matching the ON CONFLICT specification" }), true);
   assert.equal(isPreV1SchemaError({ code: "08006", message: "connection failure" }), false);
 });
+
+test("device class is stored only when it is a known value", () => {
+  assert.equal(buildPlaybackEventRow({ body: { slug: "x", deviceClass: "tablet" } }).row.device_class, "tablet");
+  assert.equal(buildPlaybackEventRow({ body: { slug: "x", deviceClass: "fridge" } }).row.device_class, null);
+});

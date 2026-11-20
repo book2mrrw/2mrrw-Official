@@ -772,6 +772,7 @@ export default function AnalyticsDashboard({ isMobile }) {
     demographics={},
     geography={},
     growth={},
+    platforms=[],
   } = data;
   const sortedTracks = [...tracks].sort((a,b)=>((b[sortBy]??-1)-(a[sortBy]??-1)));
   const twoCol = !isMobile;
@@ -919,6 +920,19 @@ export default function AnalyticsDashboard({ isMobile }) {
             <KPITile isMobile={isMobile} label="States"          value={fmt(geography.topStates?.length||0)} sub="Represented"             color={C.gold}   glow={C.goldGlow} />
             <KPITile isMobile={isMobile} label="Cities"          value={fmt(geography.topCities?.length||0)} sub="Represented"             color={C.green}  glow={C.greenGlow} />
           </div>
+
+          {/* Where they listen: iPhone/Android app, mobile web, desktop web */}
+          {platforms.length > 0 && (
+            <Card>
+              <Label style={{ marginBottom:14 }}>Where they listen · {rl}</Label>
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {platforms.map((p, i) => (
+                  <HBar key={p.key} rank={i+1} label={p.label} count={p.plays} max={platforms[0].plays || 1}
+                    sub={`${fmt(p.listeners)} listeners · ${fmt(p.qualifiedPlays)} qualified`} />
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Gender + Age */}
           <div style={{ display:"grid", gridTemplateColumns:twoCol?"1fr 1fr":"1fr", gap:12 }}>

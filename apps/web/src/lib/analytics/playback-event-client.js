@@ -9,6 +9,7 @@
  */
 import { ANALYTICS_SCHEMA_VERSION, MAX_EVENTS_PER_REQUEST, createListenTracker } from "@/lib/analytics/playback-events";
 import { isAppShell } from "@/lib/platform/app-shell";
+import { nativeAudioPlatform } from "@/lib/playback/native-audio";
 
 const ENDPOINT = "/api/media/playback";
 const DEVICE_KEY = "2mrrw_analytics_device";
@@ -30,8 +31,14 @@ export function randomId() {
   return null; // server stores null rather than a weak id
 }
 
-/** Anonymous, first-party, per-install ID — no fingerprinting. */
+/**
+ * Anonymous, first-party, per-install ID — no fingerprinting. In the app the
+ * native layer owns it, so web and native events from one phone are one
+ * listener.
+ */
 export function analyticsDeviceId() {
+  const nativeId = nativeAudioPlatform()?.analyticsDeviceId;
+  if (typeof nativeId === "string" && nativeId) return nativeId;
   const store = storage();
   try {
     const existing = store?.getItem(DEVICE_KEY);
@@ -49,6 +56,33 @@ export function analyticsSessionId() {
   if (!sessionId) sessionId = randomId();
   return sessionId;
 }
+
+/**
+ * phone | tablet | desktop — splits mobile web from desktop web (and phones
+ * from tablets in the app). From the user agent plus touch support, since
+ * iPadOS reports a desktop Safari user agent.
+ */
+export function analyticsDeviceClass() {
+  if (typeof navigator === "undefined") return null;
+  const ua = navigator.userAgent || "";
+  const touchPoints = Number(navigator.maxTouchPoints) || 0;
+  if (/ipad|tablet|kindle|silk|playbook/i.test(ua) || (/macintosh/i.test(ua) && touchPoints > 1)) return "tablet";
+  if (/android/i.test(ua)) return /mobile/i.test(ua) ? "phone" : "tablet";
+  if (/iphone|ipod|mobile|windows phone/i.test(ua)) return "phone";
+  return "desktop";
+}
+
+/**
+ * True when the app's native player records listening itself (it keeps
+ * counting on the lock screen and in the background, where this web layer is
+ * suspended). The web layer then sends no playback events, so nothing is
+ * counted twice.
+ */
+export function nativeRecordsPlayback() {
+  return nativeAudioPlatform()?.recordsPlaybackAnalytics === true;
+}
+
+const PLAYBACK_EVENTS = new Set(["play", "qualified", "progress", "pause", "seek", "skip", "complete", "replay", "save"]);
 
 export function analyticsPlatform() {
   if (!isAppShell()) return "web";
@@ -119,6 +153,7 @@ export function buildClientEvent(track, eventType, details = {}) {
     deviceId: analyticsDeviceId(),
     sessionId: analyticsSessionId(),
     platform: analyticsPlatform(),
+    deviceClass: analyticsDeviceClass(),
     offline: isOffline(),
     clientRecordedAt: new Date().toISOString(),
     ...(details.extra || {}),
@@ -207,6 +242,7 @@ function installListeners() {
 export function sendPlaybackEvent(event, onFailure) {
   installListeners();
   if (!event?.slug) return;
+  if (PLAYBACK_EVENTS.has(event.eventType) && nativeRecordsPlayback()) return;
   if (isOffline()) {
     enqueueEvent(event);
     return;

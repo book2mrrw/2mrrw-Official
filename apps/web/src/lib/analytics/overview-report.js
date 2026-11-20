@@ -6,6 +6,27 @@
  */
 
 const num = (v) => Number(v) || 0;
+
+/** Where a listen happened, in the owner's words. */
+export const PLATFORM_LABELS = Object.freeze({
+  "ios:phone": "iPhone app", "ios:tablet": "iPad app", "ios:unknown": "iPhone/iPad app",
+  "android:phone": "Android app", "android:tablet": "Android tablet app", "android:unknown": "Android app",
+  "web:phone": "Mobile web", "web:tablet": "Tablet web", "web:desktop": "Desktop web", "web:unknown": "Web (device not recorded)",
+});
+
+export function platformRows(rows = []) {
+  return rows.map((r) => {
+    const key = `${r.platform || "unknown"}:${r.device_class || "unknown"}`;
+    return {
+      key,
+      label: PLATFORM_LABELS[key] || "Before platform tracking",
+      plays: num(r.plays),
+      qualifiedPlays: num(r.qualified_plays),
+      listeners: num(r.listeners),
+      listenSeconds: num(r.listen_seconds),
+    };
+  }).sort((a, b) => b.plays - a.plays || b.listeners - a.listeners);
+}
 const statKey = (productId, songSlug) => `${productId}:${songSlug ?? ""}`;
 
 function trackRow(base, s) {
@@ -35,7 +56,7 @@ function lastMonths(count, now) {
 }
 
 export function buildAnalyticsOverview({
-  overview = {}, trackStats = [], growth = [], demographics = [], purchases = [], revenue = null,
+  overview = {}, trackStats = [], growth = [], demographics = [], purchases = [], revenue = null, platforms = [],
   products = [], songs = [], range = { key: "all" }, now = new Date(),
 } = {}) {
   // ── Purchases in range ────────────────────────────────────────────────────
@@ -161,6 +182,7 @@ export function buildAnalyticsOverview({
       historyStartsAt: overview?.first_event_at ?? null,
     },
     demographics: { gender, ageRange },
+    platforms: platformRows(platforms),
     geography: { topStates, topCities, topCountries },
     growth: { monthly },
   };

@@ -8,6 +8,7 @@ register("data:text/javascript," + encodeURIComponent('export function resolve(s
 // The real /api/media/playback route against a fake database, session and limiter.
 let sessionUser = null;
 let schemaV1 = true;
+let deviceClassColumn = true;
 let limiterCalls = [];
 let db;
 
@@ -30,6 +31,7 @@ function fakeDb() {
         state.calls.push({ table, op: "upsert", opts });
         if (table === "media_playback_progress") { state.progress.push(rows); return { error: null }; }
         if (!schemaV1) return { error: { code: "PGRST204", message: "Could not find the 'access_tier' column of 'media_stream_events'" } };
+        if (!deviceClassColumn && rows.some((r) => "device_class" in r)) return { error: { code: "PGRST204", message: "Could not find the 'device_class' column of 'media_stream_events' in the schema cache" } };
         for (const row of rows) {
           if (row.event_id && state.events.some((e) => e.event_id === row.event_id)) continue; // ON CONFLICT DO NOTHING
           state.events.push(row);
@@ -71,8 +73,9 @@ function req(body, extraHeaders = {}) {
   });
 }
 
-function reset({ user = null, v1 = true } = {}) {
+function reset({ user = null, v1 = true, deviceClass = true } = {}) {
   db = fakeDb();
+  deviceClassColumn = deviceClass;
   sessionUser = user;
   schemaV1 = v1;
   limiterCalls = [];
@@ -168,4 +171,21 @@ test("a request without a slug is rejected", async () => {
   reset();
   const res = await POST(req({ eventType: "play" }));
   assert.equal(res.status, 400);
+});
+
+test("while device_class is pending its migration, every other v1 field is still stored", async () => {
+  reset({ deviceClass: false, user: { id: "fan-1" } });
+  await POST(req({ slug: "w2d", eventType: "qualified", eventId: EVENT_ID, platform: "ios", deviceClass: "phone", listenId: EVENT_ID }));
+  assert.equal(db.state.events.length, 1);
+  const row = db.state.events[0];
+  assert.equal(row.event_type, "qualified", "not downgraded to the legacy 'progress' row");
+  assert.equal(row.platform, "ios");
+  assert.equal(row.event_id, EVENT_ID);
+  assert.ok(!("device_class" in row));
+});
+
+test("device class is stored once its column exists", async () => {
+  reset();
+  await POST(req({ slug: "w2d", eventType: "play", deviceClass: "desktop", platform: "web" }));
+  assert.equal(db.state.events[0].device_class, "desktop");
 });

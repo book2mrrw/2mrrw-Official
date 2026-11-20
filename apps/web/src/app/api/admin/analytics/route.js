@@ -83,7 +83,7 @@ export async function GET(req) {
   if (range.from) purchasesQuery = purchasesQuery.gte("purchased_at", range.from);
   if (range.to) purchasesQuery = purchasesQuery.lt("purchased_at", range.to);
 
-  const [overviewRes, tracksRes, growthRes, demographicsRes, purchasesRes, productsRes, revenueRes] = await Promise.all([
+  const [overviewRes, tracksRes, growthRes, demographicsRes, purchasesRes, productsRes, revenueRes, platformsRes] = await Promise.all([
     admin.rpc("analytics_overview", window).maybeSingle(),
     admin.rpc("analytics_track_stats", window),
     admin.rpc("analytics_listener_growth", { p_tz: ARTIST_TIME_ZONE }),
@@ -91,12 +91,15 @@ export async function GET(req) {
     purchasesQuery.limit(10000),
     admin.from("products").select(PRODUCT_COLS_FOR_COVER).in("product_type", ["single", "feature", "album"]).limit(1000),
     admin.rpc("analytics_revenue_summary", window).maybeSingle(),
+    admin.rpc("analytics_platform_breakdown", window),
   ]);
 
   // The revenue ledger function arrives with migration 20261119230000; until
   // then revenue falls back to completed purchases instead of failing.
   const ledgerMissing = isMissingFunction(revenueRes.error);
-  const failed = [overviewRes, tracksRes, growthRes, demographicsRes, purchasesRes, productsRes, ledgerMissing ? {} : revenueRes].find((r) => r.error);
+  // Platform breakdown arrives with migration 20261119240000.
+  const platformsMissing = isMissingFunction(platformsRes.error);
+  const failed = [overviewRes, tracksRes, growthRes, demographicsRes, purchasesRes, productsRes, ledgerMissing ? {} : revenueRes, platformsMissing ? {} : platformsRes].find((r) => r.error);
   if (failed) {
     console.error("[admin/analytics] query failed:", failed.error?.message);
     return NextResponse.json({ error: "Analytics query failed" }, { status: 500 });
@@ -115,6 +118,7 @@ export async function GET(req) {
     demographics: demographicsRes.data || [],
     purchases: purchasesRes.data || [],
     revenue: ledgerMissing ? null : revenueRes.data,
+    platforms: platformsMissing ? [] : platformsRes.data || [],
     products: products.map((p) => ({ ...p, coverUrl: resolveCoverUrl(p) })),
     songs: songsRes.data || [],
     range,

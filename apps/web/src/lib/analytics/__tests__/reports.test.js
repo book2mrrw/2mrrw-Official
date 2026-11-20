@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAnalyticsOverview } from "@/lib/analytics/overview-report";
+import { buildAnalyticsOverview, platformRows } from "@/lib/analytics/overview-report";
 import { buildGeoReport } from "@/lib/analytics/geo-report";
 import { analyticsRange, sinceOrEpoch } from "@/lib/analytics/range";
 
@@ -165,4 +165,16 @@ test("map: growth compares the last 30 days with the 30 before, per country", ()
   });
   const ca = r.by_country.find((c) => c.a2 === "CA");
   assert.deepEqual([ca.growth.fans, ca.growth.prevFans, ca.growth.streams, ca.growth.prevStreams], [2, 1, 3, 1]);
+});
+
+test("platforms are named the way the owner thinks of them, busiest first", () => {
+  const rows = platformRows([
+    { platform: "web", device_class: "desktop", plays: 3, listeners: 2 },
+    { platform: "ios", device_class: "phone", plays: 9, qualified_plays: 6, listeners: 4 },
+    { platform: "web", device_class: "phone", plays: 5, listeners: 5 },
+    { platform: "android", device_class: "phone", plays: 1, listeners: 1 },
+    { platform: "unknown", device_class: "unknown", plays: 7, listeners: 0 },
+  ]);
+  assert.deepEqual(rows.map((r) => r.label), ["iPhone app", "Before platform tracking", "Mobile web", "Desktop web", "Android app"]);
+  assert.equal(rows[0].qualifiedPlays, 6);
 });

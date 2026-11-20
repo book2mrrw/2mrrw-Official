@@ -26,6 +26,7 @@ export const LEGACY_EVENT_TYPES = Object.freeze(["play", "progress", "complete",
 export const MEDIA_TYPES = Object.freeze(["audio", "video", "livestream", "vault"]);
 export const PLATFORMS = Object.freeze(["web", "ios", "android"]);
 export const ACCESS_TIERS = Object.freeze(["full", "preview", "admin"]);
+export const DEVICE_CLASSES = Object.freeze(["phone", "tablet", "desktop"]);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_CLIENT_SKEW_MS = 5 * 60 * 1000;            // client clock ahead of server
@@ -194,6 +195,7 @@ export function buildPlaybackEventRow({ body = {}, user = null, geo = {}, produc
     track_slug: cleanText(body.trackSlug, 160),
     listened_seconds: listened > 0 ? Math.round(Math.min(listened, 24 * 3600) * 100) / 100 : null,
     platform: PLATFORMS.includes(body.platform) ? body.platform : null,
+    device_class: DEVICE_CLASSES.includes(body.deviceClass) ? body.deviceClass : null,
     access_tier: accessTier,
     is_internal: isInternal,
     offline: body.offline === true,

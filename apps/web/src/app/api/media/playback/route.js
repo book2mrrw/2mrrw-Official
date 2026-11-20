@@ -65,6 +65,16 @@ async function storeRows(admin, built) {
     .upsert(rows, { onConflict: "event_id", ignoreDuplicates: true });
   if (!v1.error) return { error: null, schema: "v1" };
   if (!isPreV1SchemaError(v1.error)) return { error: v1.error, schema: "v1" };
+  // device_class arrives with migration 20261119240000: keep every other v1
+  // field rather than dropping to the legacy row while it is pending.
+  if (/device_class/.test(String(v1.error.message || ""))) {
+    const withoutClass = rows.map(({ device_class: _omit, ...rest }) => rest);
+    const retry = await admin
+      .from("media_stream_events")
+      .upsert(withoutClass, { onConflict: "event_id", ignoreDuplicates: true });
+    if (!retry.error) return { error: null, schema: "v1" };
+    if (!isPreV1SchemaError(retry.error)) return { error: retry.error, schema: "v1" };
+  }
   const legacyRows = built.map((b) => b.legacyRow).filter(Boolean);
   if (!legacyRows.length) return { error: null, schema: "legacy" };
   const legacy = await admin.from("media_stream_events").insert(legacyRows);
