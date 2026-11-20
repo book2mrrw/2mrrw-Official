@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, memo, useMemo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import ReleasePlayCount from "@/components/music/ReleasePlayCount";
 import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import {
   isUiHydrationTraceEnabled,
@@ -392,6 +393,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
             />
           </div>
         ) : null}
+        <ReleasePlayCount count={mediaItem.playCount} />
       </div>
     </PlaybackPrewarmCardShell>
   );

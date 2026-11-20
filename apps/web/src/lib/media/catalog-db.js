@@ -27,6 +27,7 @@ import { catalogCoverUrl } from "@/lib/media-urls";
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
 import { releaseAvailability } from "@/lib/releases/release-availability";
 import { getMusicVideosForReleaseIds } from "@/lib/audio-visual/release-video-lookup";
+import { getReleasePlayCounts, playCountFor } from "@/lib/analytics/release-play-counts";
 
 const PRODUCT_COLS = [
   "id", "release_id", "slug", "title", "product_type", "price_cents",
@@ -239,7 +240,11 @@ export async function getStorefrontSinglesPageFromDB({ offset = 0, limit = 20 } 
     (data || []).map((row) => row.release_id),
     admin
   );
-  const projected = (data || []).map((row) => mapProductRow(row, videosByReleaseId.get(row.release_id)));
+  const playCounts = await getReleasePlayCounts(admin);
+  const projected = (data || []).map((row) => ({
+    ...mapProductRow(row, videosByReleaseId.get(row.release_id)),
+    playCount: playCountFor(playCounts, row.id),
+  }));
   const suppressed = projected.filter(
     (release) => release.availability && !release.availability.visible
   );
@@ -361,10 +366,12 @@ export async function getStorefrontCatalogFromDB() {
     if (error) throw error;
     if (!data?.length) return { singles: [], features: [], albums: [], mixtapes: [] };
 
-    const videosByReleaseId = await getMusicVideosForReleaseIds(
-      data.map((row) => row.release_id),
-      admin
-    );
+    // Play counts ride along with the catalog so each card has its count at
+    // first render (see lib/analytics/release-play-counts.js).
+    const [videosByReleaseId, playCounts] = await Promise.all([
+      getMusicVideosForReleaseIds(data.map((row) => row.release_id), admin),
+      getReleasePlayCounts(admin),
+    ]);
 
     const multiTrackProducts = data
       .filter((row) => row.product_type === "album")
@@ -386,7 +393,7 @@ export async function getStorefrontCatalogFromDB() {
     const mixtapes = [];
 
     for (const row of data) {
-      const enriched = mapProductRow(row, videosByReleaseId.get(row.release_id));
+      const enriched = { ...mapProductRow(row, videosByReleaseId.get(row.release_id)), playCount: playCountFor(playCounts, row.id) };
       if (!enriched.lifecycle && !row.active) continue;
       if (enriched.availability && !enriched.availability.visible) continue;
       const releaseTypeFolder =

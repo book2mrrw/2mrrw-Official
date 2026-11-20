@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import ReleasePlayCount from "@/components/music/ReleasePlayCount";
 import dynamic from "next/dynamic";
 import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
 import MerchProductCard from "@/components/home/MerchProductCard";
@@ -490,6 +491,7 @@ function CatalogGrid({
                 <button className="catalog-adaptive-card__cart" onClick={()=>addToCart(mediaItem)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
               ) : null}
             </div>
+            <ReleasePlayCount count={mediaItem.playCount} />
           </div>
         </PlaybackPrewarmCardShell>
       );
